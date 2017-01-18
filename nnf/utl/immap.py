@@ -102,7 +102,7 @@ def immap(X, rows, cols, scale=None, offset=0):
     if (scale is not None):
         # Scale Operation
         if (np.isscalar(scale)):
-            newX = np.zeros((h*scale, w*scale, ch, im_count), X.dtype)
+            newX = np.zeros((im_count, h*scale, w*scale, ch), X.dtype)
         else:
             newX = np.zeros((im_count, scale[0], scale[1], ch), X.dtype)
 
@@ -110,21 +110,22 @@ def immap(X, rows, cols, scale=None, offset=0):
         en = offset + im_count
         if (en > n):
             en = n
-            im_count = en - offset + 1
+            im_count = en - offset
 
         for i in range(offset, en):
             # Scale the image (low dimension/resolution)
             newX[i - offset] = scipy.misc.imresize(X[i], scale)
 
     else:
-        # newX = np.zeros((im_count, h, w, ch), X.dtype)
+        newX = np.zeros((im_count, h, w, ch), X.dtype)
+
         # Set the end
         en = offset + im_count
         if (en > n):
             en = n
-            im_count = en - offset + 1
+            im_count = en - offset
 
-        newX = X[offset:en]
+        newX[0:im_count] = X[offset:en]
 
     # Building the grid
     _, dim_y, dim_x, _ = newX.shape
@@ -134,7 +135,7 @@ def immap(X, rows, cols, scale=None, offset=0):
     for i in range(0, rows):
         for j in range(0, cols):
             im_index = i * cols + j
-            if (im_index > im_count): break  # noqa: E701
+            if (im_index >= im_count): break  # noqa: E701
             image_map[(i * dim_y):((i + 1) * dim_y),  # noqa: E701
                       (j * dim_x):((j + 1) * dim_x), :] \
                         = newX[im_index, :, :, :]
