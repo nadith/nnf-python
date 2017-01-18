@@ -14,6 +14,9 @@ from nnf.db.Noise import Noise
 from nnf.pp.im_pre_process import im_pre_process
 from nnf.utl.rgb2gray import rgb2gray
 from nnf.db.Selection import Selection
+from nnf.db.Dataset import Dataset
+from nnf.core.iters.memory.DskmanMemDataIterator import DskmanMemDataIterator
+from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
 
 class DbSlice(object):
     """Perform slicing of nndb with the help of a selection structure.
@@ -191,199 +194,162 @@ class DbSlice(object):
            sel.tr_noise_rate is None):
             raise Exception('ARG_MISSING: specify sel.tr_noise_rate field')
 
-        # Fetch the counts
-        tr_n_per_class = 0 if (sel.tr_col_indices is None) else np.size(sel.tr_col_indices)
-        tr_out_n_per_class = 0 if (sel.tr_out_col_indices is None) else np.size(sel.tr_out_col_indices)
-        val_n_per_class = 0 if (sel.val_col_indices is None) else np.size(sel.val_col_indices)
-        val_out_n_per_class = 0 if (sel.val_out_col_indices is None) else np.size(sel.val_out_col_indices)
-        te_n_per_class = 0 if (sel.te_col_indices is None) else np.size(sel.te_col_indices)
-
         # Set defaults for class range (tr or tr, val, te)
-        cls_range = np.arange(nndb.cls_n) if (sel.class_range is None) else sel.class_range
+        sel.class_range = np.arange(nndb.cls_n) if (sel.class_range is None) else sel.class_range
+
+        # Initialize class ranges and column ranges
+        # DEPENDANCY -The order must be preserved as per the enum Dataset 
+        # REF_ORDER: [TR=0, VAL=1, TE=2, TR_OUT=3, VAL_OUT=4]
+        cls_ranges = [sel.class_range, 
+                        sel.val_class_range, 
+                        sel.te_class_range, 
+                        sel.class_range, 
+                        sel.val_class_range]
+
+        col_ranges = [sel.tr_col_indices, 
+                        sel.val_col_indices, 
+                        sel.te_col_indices, 
+                        sel.tr_out_col_indices, 
+                        sel.val_out_col_indices]
 
         # Set defaults for other class ranges (val, te)
-        val_cls_range = cls_range if (sel.val_class_range is None) else sel.val_class_range
-        te_cls_range =  cls_range if (sel.te_class_range is None) else sel.te_class_range
+        DbSlice._set_default_range(0, cls_ranges, col_ranges)
 
         # NOTE: TODO: Whitening the root db did not perform well
         # (co-variance is indeed needed)
 
-        # Initialize NNdb lists
-        nndbs_tr = DbSlice.init_nndb('Training', nndb.db.dtype, sel, nndb, tr_n_per_class, cls_range.size, True)  # noqa E501
-        nndbs_tr_out = DbSlice.init_nndb('Cannonical', nndb.db.dtype, sel, nndb, tr_out_n_per_class, cls_range.size, False)  # noqa E501
-        nndbs_val = DbSlice.init_nndb('Validation', nndb.db.dtype, sel, nndb, val_n_per_class, val_cls_range.size, True)  # noqa E501
-        nndbs_val_out = DbSlice.init_nndb('ValCannonical', nndb.db.dtype, sel, nndb, val_out_n_per_class, val_cls_range.size, False)  # noqa E501
-        nndbs_te = DbSlice.init_nndb('Testing', nndb.db.dtype, sel, nndb, te_n_per_class, te_cls_range.size, True)  # noqa E501
+        # Initialize NNdb dictionary of lists
+        # i.e dict_nndbs[Dataset.TR] => [NNdb_Patch_1, NNdb_Patch_2, ...]
+        dict_nndbs = DbSlice._create_dict_nndbs(col_ranges, cls_ranges, nndb)
         
-        # Fetch iterative range
-        data_range = DbSlice.get_data_range(cls_range, val_cls_range, te_cls_range, 
-                                                sel.tr_col_indices, sel.tr_out_col_indices,
-                                                sel.val_col_indices, sel.val_out_col_indices,
-                                                sel.te_col_indices, nndb)
-           
-        # Iterate over the cls_st indices
-        i_cls = 1
-
         # Patch count
         patch_loop_max_n = 1 if (sel.nnpatches is None) else len(sel.nnpatches)
 
-        # Initialize the indices
-        tr_idxs = np.zeros(patch_loop_max_n, 'uint16')
-        tr_out_idxs = np.zeros(patch_loop_max_n, 'uint16')
-        val_idxs = np.zeros(patch_loop_max_n, 'uint16')
-        val_out_idxs = np.zeros(patch_loop_max_n, 'uint16')
-        te_idxs = np.zeros(patch_loop_max_n, 'uint16')
+        # Initialize the sample countss
+        # Ordered by REF_ORDER defined above
+        sample_counts = [np.zeros(patch_loop_max_n, 'uint16'), 
+                        np.zeros(patch_loop_max_n, 'uint16'),
+                        np.zeros(patch_loop_max_n, 'uint16'),
+                        np.zeros(patch_loop_max_n, 'uint16'),
+                        np.zeros(patch_loop_max_n, 'uint16')]
 
-        # PERF: Noise required indices (avoid find in each iteration)
-        # nf = find(sel.tr_noise_mask == 1)
-        nf = np.where(sel.tr_noise_mask == 1)[0]
+        # Noise required indices
+        nf_indices = np.where(sel.tr_noise_mask == 1)[0]
 
         # Pre-processing params struct
         pp_params = namedtuple('pp_params', ['histeq', 'normalize', 'histmatch', 'cann_img'])  # noqa E501
 
+        # Create the iterator
+        data_generator = DskmanMemDataIterator(nndb)
+        data_generator.init(cls_ranges, col_ranges)
 
-        # TODO: Use this iterator
-        ## Initialize class ranges and column ranges
-        ## DEPENDANCY -The order must be preserved as per the enum Dataset 
-        ## REF_ORDER: [TR=0, VAL=1, TE=2, TR_OUT=3, VAL_OUT=4]
-        #cls_ranges = [sel.cls_range, 
-        #                sel.val_cls_range, 
-        #                sel.te_cls_range, 
-        #                sel.cls_range, 
-        #                sel.val_cls_range]
-
-        #col_ranges = [sel.tr_col_indices, 
-        #                sel.val_col_indices, 
-        #                sel.te_col_indices, 
-        #                sel.tr_out_col_indices, 
-        #                sel.val_out_col_indices]
-
-        #DbSlice.set_default_ranges(0, cls_ranges, col_ranges)
-        #self.data_generator.init(cls_ranges, col_ranges)
-
-        ## [PERF] Iterate through the choset subset of the disk|nndb database
-        #for cimg, has_cls_changed, cls_idx, col_idx, is_in_x_data in self.data_generator:
-
-        for i in data_range:
-
-            # Update current class index 'i_cls'
-            # Since 'i' may not be consecutive
-            while ((nndb.cls_st.size > i_cls+1) and
-                    (i >= nndb.cls_st[i_cls+1])):
-                i_cls = i_cls + 1
-
-            # Handling the boundary condition and determine cls_boundary.
-            # Refer Dbslice.dicard_needed() -> Dbslice.find() method for more details.
-            # <number> % 0 => ZeroDivisionError: integer division or modulo by zero (unlike matlab).
-            if (nndb.cls_st[i_cls] == 0):
-                if (nndb.cls_st.size <= i_cls+1):
-                    # When only 1 class is available in nndb
-                    cls_boundary = nndb.cls_st[i_cls] + nndb.n_per_class[i_cls]
-                else:
-                    cls_boundary = nndb.cls_st[i_cls+1]
-                    
-            else:
-                cls_boundary = nndb.cls_st[i_cls]
-
-            # Image index 'i' in data_range may not belong to one of 'tr', 'val', 'te', etc when 
-            # sel.tr_col_indices = [0 1]
-            # sel.val_col_indices = [2 3]
-            # sel.cls_range = [0 1]
-            # sel.val_cls_range = [2 3]
-            # TODO: detect this change in data_range() and remove the following code block
-            p = not DbSlice.dicard_needed(nndbs_tr, i, i_cls, cls_range, cls_boundary, sel.tr_col_indices)[0]
-            p = p | (not DbSlice.dicard_needed(nndbs_tr_out, i, i_cls, cls_range, cls_boundary, sel.tr_out_col_indices)[0])
-            p = p | (not DbSlice.dicard_needed(nndbs_val, i, i_cls, val_cls_range, cls_boundary, sel.val_col_indices)[0])
-            p = p | (not DbSlice.dicard_needed(nndbs_val_out, i, i_cls, val_cls_range, cls_boundary, sel.val_out_col_indices)[0])
-            p = p | (not DbSlice.dicard_needed(nndbs_te, i, i_cls, te_cls_range, cls_boundary, sel.te_col_indices)[0])
-            if (not p): continue  # noqa E701
-
-            # Color image
-            cimg = nndb.get_data_at(i)
+        # [PERF] Iterate through the choset subset of the disk|nndb database
+        for cimg, cls_idx, col_idx, range_indices in data_generator:
 
             # Iterate through image patches
-            for pI in range(patch_loop_max_n):
+            for pi in range(patch_loop_max_n):
 
                 # Holistic image (by default)
-                img = cimg
+                pimg = cimg
 
-                # Init variables
+                # Generate the image patch
                 if (sel.nnpatches is not None):
-                    nnpatch = sel.nnpatches[pI];
+                    nnpatch = sel.nnpatches[pi];
                     x = nnpatch.offset[1];
                     y = nnpatch.offset[0];                                                                                
                     w = nnpatch.w;
                     h = nnpatch.h;
                         
                     # Extract the patch
-                    img = cimg[y:y+h, x:x+w, :]
+                    pimg = cimg[y:y+h, x:x+w, :]
 
                 # Peform image operations only if db format comply them
+                # TODO: Compatibility with (nndb.format == Format.N_H_W_CH):
                 if (nndb.format == Format.H_W_CH_N):
 
                     # Perform resize
                     if (sel.scale is not None):
-                        img = scipy.misc.imresize(img, sel.scale)
+                        pimg = scipy.misc.imresize(pimg, sel.scale)
 
                     # Perform histrogram matching against the cannonical image
                     cls_st_img = None
                     if (sel.histmatch):
                         if (sel.scale is not None):
-                            cls_st = cls_boundary + 1
+                            cls_st = nndb.cls_st[cls_idx]
                             cls_st_img = scipy.misc.imresize(nndb.get_data_at(cls_st), sel.scale)  # noqa E501
 
                     # Color / Gray Scale Conversion (if required)
-                    img = DbSlice.process_color(img, sel)
-                    cls_st_img = DbSlice.process_color(cls_st_img, sel)
+                    pimg = DbSlice._process_color(pimg, sel)
+                    cls_st_img = DbSlice._process_color(cls_st_img, sel)
 
                     # Pre-Processing
                     pp_params.histeq = sel.histeq
                     pp_params.normalize = sel.normalize
                     pp_params.histmatch = sel.histmatch
                     pp_params.cann_img = cls_st_img
-                    img = im_pre_process(img, pp_params)
+                    pimg = im_pre_process(pimg, pp_params)
 
                     # [CALLBACK] the specific pre-processing script
                     if (sel.pre_process_script is not None):
-                        img = sel.pre_process_script(img)
+                        pimg = sel.pre_process_script(pimg)
 
-                # Build Training DB
-                [nndbs_tr, tr_idxs] =\
-                    DbSlice.build_nndb_tr(nndbs_tr, pI, tr_idxs, i, i_cls, cls_range, cls_boundary, img, sel, nf)  # noqa E501
+                # Iterate through range indices
+                for rng_idx, _ in range_indices:  # <= rng_idx corresponds to order defined @ REF_ORDER
 
-                # Build Training Output DB
-                [nndbs_tr_out, tr_out_idxs] =\
-                    DbSlice.build_nndb_tr_out(nndbs_tr_out, pI, tr_out_idxs, i, i_cls, cls_range, cls_boundary, img, sel)  # noqa E501
+                    ekey = Dataset.enum(rng_idx)
+                    nndbs = dict_nndbs.setdefault(ekey, None)
+                    samples = sample_counts[rng_idx]
 
-                # Build Valdiation DB
-                [nndbs_val, val_idxs] =\
-                    DbSlice.build_nndb_val(nndbs_val, pI, val_idxs, i, i_cls, val_cls_range, cls_boundary, img, sel)  # noqa E501
+                    # Build Traiing DB
+                    if (ekey == Dataset.TR):
 
-                # Build Valdiation Target DB
-                [nndbs_val_out, val_out_idxs] =\
-                    DbSlice.build_nndb_val_out(nndbs_val_out, pI, val_out_idxs, i, i_cls, val_cls_range, cls_boundary, img, sel)  # noqa E501
+                        # Check whether col_idx is a noise required index 
+                        process_noise = False
+                        noise_rate = None
+                        for nf in nf_indices:
+                            if (col_idx == sel.tr_col_indices[nf]):
+                                process_noise = True
+                                noise_rate = sel.tr_noise_rate[nf]
+                                break
 
-                # Build Testing DB
-                [nndbs_te, te_idxs] =\
-                    DbSlice.build_nndb_te(nndbs_te, pI, te_idxs, i, i_cls, te_cls_range, cls_boundary, img, sel)  # noqa E501
+                        [nndbs, samples] =\
+                            DbSlice._build_nndb_tr(nndbs, pi, samples, pimg, process_noise, noise_rate)  # noqa E501
+                    
+                    # Build Training Output DB
+                    elif(ekey == Dataset.TR_OUT):
+                       
+                        [nndbs, samples] =\
+                        DbSlice._build_nndb_tr_out(nndbs, pi, samples, pimg)  # noqa E501
+                
+                    # Build Valdiation DB
+                    elif(ekey == Dataset.VAL):                        
+                        [nndbs, samples] =\
+                            DbSlice._build_nndb_val(nndbs, pi, samples, pimg)  # noqa E501
 
-        # Returns NNdb object instead of cell array (non patch requirement)
+                    # Build Valdiation Target DB
+                    elif(ekey == Dataset.VAL_OUT):     
+                        [nndbs, samples] =\
+                            DbSlice._build_nndb_val_out(nndbs, pi, samples, pimg)  # noqa E501
+
+                    # Build Testing DB
+                    elif(ekey == Dataset.TE): 
+                        [nndbs, samples] =\
+                            DbSlice._build_nndb_te(nndbs, pi, samples, pimg)  # noqa E501
+
+
+        # Returns NNdb object instead of list (when no patches)
         if (sel.nnpatches is None):
-            nndbs_tr = None if (nndbs_tr is None) else nndbs_tr[0]  # noqa E701
-            nndbs_val = None if (nndbs_val is None) else nndbs_val[0]  # noqa E701            
-            nndbs_te = None if (nndbs_te is None) else nndbs_te[0]  # noqa E701
-            nndbs_tr_out = None if (nndbs_tr_out is None) else nndbs_tr_out[0]  # noqa E701            
-            nndbs_val_out = None if (nndbs_val_out is None) else nndbs_val_out[0]  # noqa E701
+            return  dict_nndbs[Dataset.TR][0],\
+                    dict_nndbs[Dataset.VAL][0],\
+                    dict_nndbs[Dataset.TE][0],\
+                    dict_nndbs[Dataset.TR_OUT][0],\
+                    dict_nndbs[Dataset.VAL_OUT][0]
 
-        return (nndbs_tr, nndbs_val, nndbs_te, nndbs_tr_out, nndbs_val_out)
-
-    @staticmethod
-    def set_default_ranges(default_idx,  cls_ranges, col_ranges):
-        for rng_idx in range(len(col_ranges)):
-            if (col_ranges[rng_idx] is not None and 
-                cls_ranges[rng_idx] is None):
-                cls_ranges[rng_idx] = cls_ranges[default_idx]
-
+        return  dict_nndbs[Dataset.TR],\
+                dict_nndbs[Dataset.VAL],\
+                dict_nndbs[Dataset.TE],\
+                dict_nndbs[Dataset.TR_OUT],\
+                dict_nndbs[Dataset.VAL_OUT]
 
     @staticmethod
     def examples(imdb_8):
@@ -422,7 +388,7 @@ class DbSlice(object):
         nndb = NNdb('original', imdb_8, 8, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
-        [nndb_tr, _, _, _] = DbSlice.slice(nndb, sel) # nndb_tr = DbSlice.slice(nndb, sel) # noqa E501
+        [nndb_tr, _, _, _, _] = DbSlice.slice(nndb, sel) # nndb_tr = DbSlice.slice(nndb, sel) # noqa E501
 
 
         #
@@ -431,10 +397,11 @@ class DbSlice(object):
         nndb = NNdb('original', imdb_8, 8, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
-        sel.nnpatches = NNPatch.GeneratePatch(nndb, 33, 33, 33, 33)
+        patch_gen = NNPatchGenerator(nndb.h, nndb.w, 33, 33, 33, 33)
+        sel.nnpatches = patch_gen.generate_patches()
 
         # Cell arrays of NNdb objects for each patch
-        [nndbs_tr, _, _, _] = DbSlice.slice(nndb, sel)
+        [nndbs_tr, _, _, _, _] = DbSlice.slice(nndb, sel)
         nndbs_tr[0].show()
         nndbs_tr[1].show()
         nndbs_tr[3].show()
@@ -448,7 +415,7 @@ class DbSlice(object):
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
-        [nndb_tr, _, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
 
         #
@@ -459,7 +426,7 @@ class DbSlice(object):
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.class_range = np.arange(10)                         # First ten identities # noqa E501
-        [nndb_tr, _, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
              
             
@@ -473,7 +440,7 @@ class DbSlice(object):
         sel.val_col_indices= np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.class_range    = np.arange(10)
-        [nndb_tr, nndb_val, nndb_te, _] = DbSlice.slice(nndb, sel);
+        [nndb_tr, nndb_val, nndb_te, _, _] = DbSlice.slice(nndb, sel);
             
             
         # 
@@ -488,7 +455,7 @@ class DbSlice(object):
         sel.class_range    = np.arange(10)
         sel.val_class_range= np.arange(6,15)
         sel.te_class_range = np.arange(17, 20)
-        [nndb_tr, nndb_val, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, nndb_val, nndb_te, _, _] = DbSlice.slice(nndb, sel)
             
             
         # 
@@ -528,7 +495,7 @@ class DbSlice(object):
         # sel.tr_noise_rate  = [0 0.5 0 0.5 0 Noise.G]         # last index with Gauss noise # noqa E501
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
-        [nndb_tr, _, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
 
         #
@@ -541,7 +508,7 @@ class DbSlice(object):
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.tr_out_col_indices = np.array([1, 1, 1])  # [1 1 1] (Regression 1->1, 2->1, 4->1) # noqa E501
         sel.te_col_indices = np.array([2, 4])
-        [nndb_tr, nndb_tr_out, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, nndb_tr_out, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
 
         #
@@ -551,7 +518,7 @@ class DbSlice(object):
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.scale = 0.5
-        [nndb_tr, _, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
 
         #
@@ -563,7 +530,7 @@ class DbSlice(object):
         sel.te_col_indices = np.array([2, 4])
         sel.use_rgb = False
         sel.histeq = True
-        [nndb_tr, _, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
 
         #
@@ -577,7 +544,7 @@ class DbSlice(object):
         sel.te_col_indices = np.array([2, 4])
         sel.use_rgb = False
         sel.histmatch = True
-        [nndb_tr, _, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
 
         #
@@ -588,13 +555,67 @@ class DbSlice(object):
         sel.te_col_indices = np.array([2, 4])
         sel.use_rgb = False
         sel.color_index = 5  # color channel denoted by 5th index
-        [nndb_tr, _, nndb_te, _] = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
     ##########################################################################
     # Private Interface
     ##########################################################################
+    def _create_dict_nndbs(col_ranges, cls_ranges, nndb):
+        """Create a dictionary of nndb lists.
+
+            i.e dict_nndbs[Dataset.TR] => [NNdb_Patch_1, NNdb_Patch_2, ...]
+
+            IMPLEMENTATION NOTES:
+                LIMITATION: if nndb has different n_per_class,
+                            and Select.ALL is requested, need to decide on a scalar
+                            n_per_class to pre-allocate arrays.
+                TODO:       Allocate to the maximum value of n_per_class and reduce/np.resize
+                            it later
+        """
+        dict_nndbs = {}
+
+        for rng_idx in range(len(col_ranges)):
+            
+            # Determine n_per_class
+            n_per_class = 0
+            col_range = col_ranges[rng_idx]  
+            if ((col_rangeis is not None) and 
+                (isinstance(col_range, Enum) and  col_range == Select.ALL)):
+               
+                common_n_per_class = np.unique(nndb.n_per_class)
+                if (common_n_per_class.size != 1):
+                    raise Exception("nndb.n_per_class must be same for all classes when Select.ALL oepration is used")
+                
+                n_per_class = common_n_per_class
+
+            elif (col_range is not None):
+                n_per_class = col_range.size
+
+            # Determine cls_range_size
+            cls_range_size = 0     
+            cls_range = cls_ranges[rng_idx]  
+            if ((cls_range is not None) and 
+                (isinstance(cls_range, Enum) and  cls_range == Select.ALL)):               
+                cls_range_size = nndb.cls_n
+
+            elif (col_ranges[rng_idx] is not None):
+                cls_range_size = cls_range.size
+
+            ekey = Dataset.enum(rng_idx)
+            dict_nndbs.setdefault(ekey, None)
+            dict_nndbs[ekey] = DbSlice._init_nndb(str(ekey), sel, nndb, n_per_class, cls_range_size, True)  # noqa E501
+
+        return dict_nndbs
+
     @staticmethod
-    def init_nndb(name, type, sel, nndb, n_per_class, cls_n, build_cls_idx):
+    def _set_default_range(default_idx,  cls_ranges, col_ranges):
+        for rng_idx in range(len(col_ranges)):
+            if (col_ranges[rng_idx] is not None and 
+                cls_ranges[rng_idx] is None):
+                cls_ranges[rng_idx] = cls_ranges[default_idx]
+
+    @staticmethod
+    def _init_nndb(name, sel, nndb, n_per_class, cls_n, build_cls_idx):
         """Initialize a new NNdb object lists.
                     
         Returns
@@ -636,61 +657,24 @@ class DbSlice(object):
                 # Init db for each patch
                 for i in range(patch_n):
                     nnpatch = sel.nnpatches[i]
-                    db.append(np.zeros((nnpatch.h, nnpatch.w, ch, n_per_class*cls_n), dtype=type))
+                    db.append(np.zeros((nnpatch.h, nnpatch.w, ch, n_per_class*cls_n), dtype=nndb.db.dtype))
             else:
-                db.append(np.zeros((nd1, nd2, ch, n_per_class*cls_n), dtype=type))
+                db.append(np.zeros((nd1, nd2, ch, n_per_class*cls_n), dtype=nndb.db.dtype))
 
         elif (nndb.format == Format.H_N):
             nd1 = nndb.h
-            db.append(np.zeros((nd1, n_per_class*cls_n), dtype=type))
+            db.append(np.zeros((nd1, n_per_class*cls_n), dtype=nndb.db.dtype))
 
         new_nndbs = []
 
         # Init nndb for each patch
         for i in range(len(db)):
-            new_nndbs.append(NNdb(name, db[i], n_per_class, build_cls_idx))
+            new_nndbs.append(NNdb(name + "_P" + str(i), db[i], n_per_class, build_cls_idx))
  
         return new_nndbs
 
     @staticmethod
-    def get_data_range(cls_range, val_cls_range, te_cls_range, 
-                        tr_col, tr_out_col, val_col, val_out_col, te_col, nndb):
-        """Fetch the data_range (images indices).
-
-        Returns
-        -------
-        img : vector -uint32
-            data indicies.
-        """
-        union = np.union1d
-        intersect = np.intersect1d
-
-        # Union of all class ranges
-        cls_range = union(union(cls_range, val_cls_range), te_cls_range)
-
-        # Union of all col indices        
-        col_indices = union(union(union(union(tr_col, tr_out_col), val_col), val_out_col), te_col)
-
-        # Class count
-        cls_n = np.size(cls_range)
-
-        # *Ease of implementation
-        # Allocate more memory, shrink it later
-        data_range = np.zeros(cls_n * np.size(col_indices), dtype='uint32')
-
-        st = 0
-        for i in range(cls_n):
-            ii = cls_range[i]
-            cls_offset = nndb.cls_st[ii]
-            data_range[st:st+np.size(col_indices)] = col_indices.astype('uint32') + dst;               
-            st = st + np.size(col_indices) 
-
-        # Shrink the vector (Can safely ignore this code)
-        data_range = np.resize(data_range,(st))
-        return data_range
-
-    @staticmethod
-    def process_color(img, sel):
+    def _process_color(img, sel):
         """Perform color related functions.
 
         Returns
@@ -718,7 +702,7 @@ class DbSlice(object):
         return img
 
     @staticmethod
-    def build_nndb_tr(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel, noise_found):
+    def _build_nndb_tr(nndbs, pi, samples, img, process_noise, noise_rate):
         """Build the nndb training database.
 
         Returns
@@ -726,70 +710,54 @@ class DbSlice(object):
         nndbs : cell- NNdb
             Updated NNdb objects.
 
-        ni : vector -uint16
+        samples : vector -uint16
             Updated image count vector.
         """
-        if (nndbs is None): return nndbs, ni  # noqa E701
-        nndb = nndbs[pi]
+        if (nndbs is None): return nndbs, samples  # noqa E701
+        nndb = nndbs[pi]    
 
-        # Find whether 'i' is in required indices
-        [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.tr_col_indices)
-        if (discard): return nndbs, ni  # noqa E701       
+        if (process_noise):
 
-        # Iterate over found indices
-        for j in range(np.size(found)):
+            h, w, ch = img.shape
 
-            # Check whether found contain a noise required index
-            if ((np.where(noise_found == found[j])[0]).shape[0]):
+            # Add different noise depending on the type or rate
+            # (ref. Enums/Noise)
+            if (noise_rate == Noise.G):
+                pass
+                # img = imnoise(img, 'gaussian')
+                # #img = imnoise(img, 'gaussian')
+                # #img = imnoise(img, 'gaussian')
+                # #img = imnoise(img, 'gaussian')
 
-                # Currently supports noise for images only
-                if (nndb.format != Format.H_W_CH_N):
-                    nndb.set_data_at(img, ni[pi])
-                    continue
-
-                h, w, ch = img.shape
-
-                # Fetch noise rate
-                rate = sel.tr_noise_rate[found[j]]
-
-                # Add different noise depending on the type or rate
-                # (ref. Enums/Noise)
-                if (rate == Noise.G):
-                    pass
-                    # img = imnoise(img, 'gaussian')
-                    # #img = imnoise(img, 'gaussian')
-                    # #img = imnoise(img, 'gaussian')
-                    # #img = imnoise(img, 'gaussian')
-
-                else:
-                    # Perform random corruption
-                    # Corruption Size (H x W)
-                    cs = [np.uint16(h*rate), np.uint16(w*rate)]
-
-                    # Random location choice
-                    # Start of H, W (location)
-                    sh = np.uint8(1 + rand()*(h-cs[0]-1))
-                    sw = np.uint8(1 + rand()*(w-cs[1]-1))
-
-                    # Set the corruption
-                    cimg = np.uint8(DbSlice.rand_corrupt(cs[0], cs[1])).astype('uint8')  # noqa E501
-
-                    if (ch == 1):
-                        img[sh:sh+cs[1], sw:sw+cs[2]] = cimg
-                    else:
-                        for ich in range(ch):
-                            img[sh:sh+cs[0], sw:sw+cs[1], ich] = cimg
-
-                nndb.set_data_at(img, ni[pi])
             else:
-                nndb.set_data_at(img, ni[pi])
-    
-            ni[pi] = ni[pi] + 1
+                # Perform random corruption
+                # Corruption Size (H x W)
+                cs = [np.uint16(h*noise_rate), np.uint16(w*noise_rate)]
 
-        return nndbs, ni
+                # Random location choice
+                # Start of H, W (location)
+                sh = np.uint8(1 + rand()*(h-cs[0]-1))
+                sw = np.uint8(1 + rand()*(w-cs[1]-1))
+
+                # Set the corruption
+                cimg = np.uint8(DbSlice._rand_corrupt(cs[0], cs[1])).astype('uint8')  # noqa E501
+
+                if (ch == 1):
+                    img[sh:sh+cs[1], sw:sw+cs[2]] = cimg
+                else:
+                    for ich in range(ch):
+                        img[sh:sh+cs[0], sw:sw+cs[1], ich] = cimg
+
+            nndb.set_data_at(img, samples[pi])
+        else:
+            nndb.set_data_at(img, samples[pi])
+    
+        samples[pi] = samples[pi] + 1
+
+        return nndbs, samples
 
     @staticmethod
-    def rand_corrupt(height, width):
+    def _rand_corrupt(height, width):
         """Corrupt the image with a (height, width) block.
 
         Returns
@@ -815,7 +783,7 @@ class DbSlice(object):
         return img
 
     @staticmethod
-    def build_nndb_tr_out(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel):
+    def _build_nndb_tr_out(nndbs, pi, samples, img):
         """Build the nndb training target database.
                     
         Returns
@@ -823,25 +791,19 @@ class DbSlice(object):
         nndbs : cell- NNdb
             Updated NNdb objects.
         
-        ni : vector -uint16
+        samples : vector -uint16
             Updated image count vector.
         """
-        if (nndbs is None): return nndbs, ni
+        if (nndbs is None): return nndbs, samples
         nndb = nndbs[pi]
 
-        # Find whether 'i' is in required indices
-        [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.tr_out_col_indices)
-        if (discard): return nndbs, ni  # noqa E701   
+        nndb.set_data_at(img, samples[pi])
+        samples[pi] = samples[pi] + 1
 
-        # Iterate over found indices
-        for j in range(np.size(found)):
-            nndb.set_data_at(img, ni[pi])
-            ni[pi] = ni[pi] + 1
-
-        return nndbs, ni
+        return nndbs, samples
 
     @staticmethod
-    def build_nndb_val(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel):
+    def _build_nndb_val(nndbs, pi, samples, img):
         """"Build the nndb validation database.
                     
         Returns
@@ -849,25 +811,19 @@ class DbSlice(object):
         nndbs : cell- NNdb
             Updated NNdb objects.
         
-        ni : vector -uint16
+        samples : vector -uint16
             Updated image count vector.
         """
-        if (nndbs is None): return nndbs, ni
+        if (nndbs is None): return nndbs, samples
         nndb = nndbs[pi]
 
-        # Find whether 'i' is in required indices
-        [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.val_col_indices)
-        if (discard): return nndbs, ni  # noqa E701 
+        nndb.set_data_at(img, samples[pi])
+        samples[pi] = samples[pi] + 1
 
-        # Iterate over found indices
-        for j in range(np.size(found)):
-            nndb.set_data_at(img, ni[pi])
-            ni[pi] = ni[pi] + 1
-
-        return nndbs, ni
+        return nndbs, samples
 
     @staticmethod
-    def build_nndb_val_out(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel):
+    def _build_nndb_val_out(nndbs, pi, samples, img):
         """"Build the nndb validation target database.
                     
         Returns
@@ -875,25 +831,19 @@ class DbSlice(object):
         nndbs : cell- NNdb
             Updated NNdb objects.
         
-        ni : vector -uint16
+        samples : vector -uint16
             Updated image count vector.
         """
-        if (nndbs is None): return nndbs, ni
+        if (nndbs is None): return nndbs, samples
         nndb = nndbs[pi]
 
-        # Find whether 'i' is in required indices
-        [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.val_out_col_indices)
-        if (discard): return nndbs, ni  # noqa E701 
+        nndb.set_data_at(img, samples[pi])
+        samples[pi] = samples[pi] + 1
 
-        # Iterate over found indices
-        for j in range(np.size(found)):
-            nndb.set_data_at(img, ni[pi])
-            ni[pi] = ni[pi] + 1
-
-        return nndbs, ni
+        return nndbs, samples
 
     @staticmethod
-    def build_nndb_te(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel):
+    def _build_nndb_te(nndbs, pi, samples, img):
         """Build the testing database.
                     
         Returns
@@ -901,55 +851,13 @@ class DbSlice(object):
         nndbs : cell- NNdb
             Updated NNdb objects.
         
-        ni : vector -uint16
+        samples : vector -uint16
             Updated image count vector.
         """
-        if (nndbs is None): return nndbs, ni
+        if (nndbs is None): return nndbs, samples
         nndb = nndbs[pi]
 
-        # Find whether 'i' is in required indices
-        [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.te_col_indices)
-        if (discard): return nndbs, ni  # noqa E701 
+        nndb.set_data_at(img, samples[pi])
+        samples[pi] = samples[pi] + 1
 
-        # Iterate over found indices
-        for j in range(np.size(found)):
-            nndb.set_data_at(img, ni[pi])
-            ni[pi] = ni[pi] + 1
-
-        return nndbs, ni
-
-    @staticmethod
-    def find(i, prev_cls_en, col_indices):
-        """Find whether 'i' is in required indices.
-
-        Returns
-        -------
-        found : vector- uint16
-            The index 'i' found positions in col_indices.
-        """
-        found = None
-        if (col_indices is None): return found  # noqa E701
-
-        # Find whether 'i' is in required indices
-        found = np.where(((i-col_indices) % prev_cls_en == 0) == True)[0]  # noqa E712, E501
-        found = None if (found.size == 0) else found
-        return found
-
-    @staticmethod
-    def dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, col_indices):
-        """Find whether 'i' is in required indices.
-
-        Returns
-        -------
-        discard : bool
-            Boolean indicating the dicard.
-
-        found : vector- uint16
-            If discard=false, found denotes the index 'i' found positions in col_indices.
-        """                        
-        found = DbSlice.find(i, prev_cls_en, col_indices)
-        discard = not ((nndbs is not None) and
-                    (np.intersect1d(i_cls, cls_range).size != 0) and
-                    (found is not None))
-
-        return discard, found
+        return nndbs, samples
