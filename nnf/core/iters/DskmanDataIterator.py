@@ -68,9 +68,6 @@ class DskmanDataIterator(DataIterator):
         self.union_cls_range = []
         self.union_col_range = []
 
-        # Used in __next__() to utilize the generator with yield
-        self._gen_next = self._next()
-
     def init(self, cls_ranges, col_ranges,
             featurewise_center=False,
             samplewise_center=False,
@@ -136,6 +133,9 @@ class DskmanDataIterator(DataIterator):
         self.union_cls_range = _union_range(cls_ranges)
         self.union_col_range = _union_range(col_ranges)
 
+        # Used in __next__() to utilize the generator with yield
+        self._gen_next = self._next()
+
     #################################################################
     # Protected Interface
     #################################################################
@@ -162,8 +162,7 @@ class DskmanDataIterator(DataIterator):
                     continue
 
                 if ((isinstance(col_range, Enum) and col_range == Select.ALL) or # ALL col indices (special value)s
-                    (np.intersect1d(col_idx, col_range).size != 0)):
-                    is_col_attached = True                
+                    (np.intersect1d(col_idx, col_range).size != 0)):            
 
                     # enum Dataset (TR, VAL, TE, etc)
                     edataset = Dataset.enum(rng_idx)
@@ -185,7 +184,7 @@ class DskmanDataIterator(DataIterator):
 
     def _yield_repeats_in_next(self, col_idx, filtered_datasets):
             """No of times to repeat the same yield. i.e col_tr_indices = [1 1 1 3]"""
-            yield_repeats = []
+            repeats = []
 
             for dataset_tup in filtered_datasets:
         
@@ -196,13 +195,17 @@ class DskmanDataIterator(DataIterator):
 
                 if (col_range is None or 
                     (isinstance(col_range, Enum) and col_range == Select.ALL)):
-                    return yield_repeats.append(filtered_datasets)
+                    return repeats.append(filtered_datasets)
 
+                is_first = True
                 for ci in np.sort(col_range):  # PERF
-                    if (ci == col_idx): yield_repeats.append([dataset_tup])
+                    if (ci == col_idx):                         
+                        dataset_tup = dataset_tup if (is_first) else (dataset_tup[0], False)
+                        is_first = False if (is_first) else is_first                     
+                        repeats.append([dataset_tup])
                     if (ci > col_idx): break  # PERF
         
-            return yield_repeats
+            return repeats
 
     def _next(self):
         """Generate the next valid image

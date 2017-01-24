@@ -13,6 +13,8 @@ class Selection:
         self.__dict__.update(kwds)
 
 class Select(Enum):
+    """SELECT Enumeration describes the special constants for Selection structure."""
+
     ALL = -999
 
     def int(self):

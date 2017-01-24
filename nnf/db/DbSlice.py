@@ -13,7 +13,7 @@ from nnf.db.NNdb import NNdb
 from nnf.db.Noise import Noise
 from nnf.pp.im_pre_process import im_pre_process
 from nnf.utl.rgb2gray import rgb2gray
-from nnf.db.Selection import Selection
+from nnf.db.Selection import *
 from nnf.db.Dataset import Dataset
 from nnf.core.iters.memory.DskmanMemDataIterator import DskmanMemDataIterator
 from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
@@ -68,11 +68,18 @@ class DbSlice(object):
     (chathurdara@gmail.com).
     """
 
+    _data_generator = None # PERF: repeated static calls DbSlice.slice()
+
     ##########################################################################
     # Public Interface
     ##########################################################################
+    def safe_slice(nndb, sel=None):
+        """Thread Safe"""
+        self._data_generator = DskmanMemDataIterator(nndb)
+        DbSlice.slice(nndb, sel, self._data_generator)
+
     @staticmethod
-    def slice(nndb, sel=None):
+    def slice(nndb, sel=None, data_generator=None):
         """Slice the database according to the selection structure.
 
         Parameters
@@ -194,7 +201,13 @@ class DbSlice(object):
            sel.tr_noise_rate is None):
             raise Exception('ARG_MISSING: specify sel.tr_noise_rate field')
 
-        # Set defaults for class range (tr or tr, val, te)
+        # Set defaults for data generator   
+        if (data_generator is None):
+            # Safe iterator object for repeated static calls DbSlice.slice()
+            DbSlice._data_generator  = DskmanMemDataIterator(nndb) if (DbSlice._data_generator is None) else DbSlice._data_generator
+            data_generator =  DbSlice._data_generator
+
+        # Set defaults for class range (tr|val|te|...)
         sel.class_range = np.arange(nndb.cls_n) if (sel.class_range is None) else sel.class_range
 
         # Initialize class ranges and column ranges
@@ -212,17 +225,17 @@ class DbSlice(object):
                         sel.tr_out_col_indices, 
                         sel.val_out_col_indices]
 
-        # Set defaults for other class ranges (val, te)
-        DbSlice._set_default_range(0, cls_ranges, col_ranges)
+        # Set defaults for class ranges [val|te|tr_out|val_out]
+        DbSlice._set_default_cls_range(0, cls_ranges, col_ranges)
 
         # NOTE: TODO: Whitening the root db did not perform well
         # (co-variance is indeed needed)
 
         # Initialize NNdb dictionary of lists
         # i.e dict_nndbs[Dataset.TR] => [NNdb_Patch_1, NNdb_Patch_2, ...]
-        dict_nndbs = DbSlice._create_dict_nndbs(col_ranges, cls_ranges, nndb)
+        dict_nndbs = DbSlice._create_dict_nndbs(col_ranges, cls_ranges, nndb, sel)
         
-        # Patch count
+        # Patch iterating loop's max count
         patch_loop_max_n = 1 if (sel.nnpatches is None) else len(sel.nnpatches)
 
         # Initialize the sample countss
@@ -234,17 +247,16 @@ class DbSlice(object):
                         np.zeros(patch_loop_max_n, 'uint16')]
 
         # Noise required indices
-        nf_indices = np.where(sel.tr_noise_mask == 1)[0]
+        noise_req_indices = np.where(sel.tr_noise_mask == 1)[0]
 
         # Pre-processing params struct
         pp_params = namedtuple('pp_params', ['histeq', 'normalize', 'histmatch', 'cann_img'])  # noqa E501
-
-        # Create the iterator
-        data_generator = DskmanMemDataIterator(nndb)
+        
+        # Initialize the generator
         data_generator.init(cls_ranges, col_ranges)
 
-        # [PERF] Iterate through the choset subset of the disk|nndb database
-        for cimg, cls_idx, col_idx, range_indices in data_generator:
+        # [PERF] Iterate through the choset subset of the nndb database
+        for cimg, cls_idx, col_idx, datasets in data_generator:
 
             # Iterate through image patches
             for pi in range(patch_loop_max_n):
@@ -293,15 +305,14 @@ class DbSlice(object):
                     if (sel.pre_process_script is not None):
                         pimg = sel.pre_process_script(pimg)
 
-                # Iterate through range indices
-                for rng_idx, _ in range_indices:  # <= rng_idx corresponds to order defined @ REF_ORDER
+                # Iterate through datasets
+                for edataset, _ in datasets:
 
-                    ekey = Dataset.enum(rng_idx)
-                    nndbs = dict_nndbs.setdefault(ekey, None)
-                    samples = sample_counts[rng_idx]
+                    nndbs = dict_nndbs.setdefault(edataset, None)
+                    samples = sample_counts[edataset.int()]
 
                     # Build Traiing DB
-                    if (ekey == Dataset.TR):
+                    if (edataset == Dataset.TR):
 
                         # Check whether col_idx is a noise required index 
                         process_noise = False
@@ -314,28 +325,27 @@ class DbSlice(object):
 
                         [nndbs, samples] =\
                             DbSlice._build_nndb_tr(nndbs, pi, samples, pimg, process_noise, noise_rate)  # noqa E501
-                    
+
                     # Build Training Output DB
-                    elif(ekey == Dataset.TR_OUT):
+                    elif(edataset == Dataset.TR_OUT):
                        
                         [nndbs, samples] =\
                         DbSlice._build_nndb_tr_out(nndbs, pi, samples, pimg)  # noqa E501
-                
+
                     # Build Valdiation DB
-                    elif(ekey == Dataset.VAL):                        
+                    elif(edataset == Dataset.VAL):                        
                         [nndbs, samples] =\
                             DbSlice._build_nndb_val(nndbs, pi, samples, pimg)  # noqa E501
 
                     # Build Valdiation Target DB
-                    elif(ekey == Dataset.VAL_OUT):     
+                    elif(edataset == Dataset.VAL_OUT):     
                         [nndbs, samples] =\
                             DbSlice._build_nndb_val_out(nndbs, pi, samples, pimg)  # noqa E501
 
                     # Build Testing DB
-                    elif(ekey == Dataset.TE): 
+                    elif(edataset == Dataset.TE): 
                         [nndbs, samples] =\
                             DbSlice._build_nndb_te(nndbs, pi, samples, pimg)  # noqa E501
-
 
         # Returns NNdb object instead of list (when no patches)
         if (sel.nnpatches is None):
@@ -428,8 +438,7 @@ class DbSlice(object):
         sel.class_range = np.arange(10)                         # First ten identities # noqa E501
         [nndb_tr, _, nndb_te, _, _] = DbSlice.slice(nndb, sel)
 
-             
-            
+
         # 
         # Select 1st 2nd 4th images of identities denoted by class_range for training.
         # Select 1st 2nd 4th images images of identities denoted by class_range for validation.   
@@ -456,8 +465,8 @@ class DbSlice(object):
         sel.val_class_range= np.arange(6,15)
         sel.te_class_range = np.arange(17, 20)
         [nndb_tr, nndb_val, nndb_te, _, _] = DbSlice.slice(nndb, sel)
-            
-            
+
+   
         # 
         # Select 1st 2nd 4th images of identities denoted by class_range for training.
         # Select 3rd 4th images of identities denoted by val_class_range for validation.
@@ -560,7 +569,8 @@ class DbSlice(object):
     ##########################################################################
     # Private Interface
     ##########################################################################
-    def _create_dict_nndbs(col_ranges, cls_ranges, nndb):
+    @staticmethod
+    def _create_dict_nndbs(col_ranges, cls_ranges, nndb, sel):
         """Create a dictionary of nndb lists.
 
             i.e dict_nndbs[Dataset.TR] => [NNdb_Patch_1, NNdb_Patch_2, ...]
@@ -574,14 +584,15 @@ class DbSlice(object):
         """
         dict_nndbs = {}
 
+        # Iterate through ranges
         for rng_idx in range(len(col_ranges)):
             
             # Determine n_per_class
             n_per_class = 0
             col_range = col_ranges[rng_idx]  
-            if ((col_rangeis is not None) and 
+            if ((col_range is not None) and 
                 (isinstance(col_range, Enum) and  col_range == Select.ALL)):
-               
+
                 common_n_per_class = np.unique(nndb.n_per_class)
                 if (common_n_per_class.size != 1):
                     raise Exception("nndb.n_per_class must be same for all classes when Select.ALL oepration is used")
@@ -601,6 +612,7 @@ class DbSlice(object):
             elif (col_ranges[rng_idx] is not None):
                 cls_range_size = cls_range.size
 
+            # Create nndb and store it at dict_nndbs[ekey]
             ekey = Dataset.enum(rng_idx)
             dict_nndbs.setdefault(ekey, None)
             dict_nndbs[ekey] = DbSlice._init_nndb(str(ekey), sel, nndb, n_per_class, cls_range_size, True)  # noqa E501
@@ -608,7 +620,11 @@ class DbSlice(object):
         return dict_nndbs
 
     @staticmethod
-    def _set_default_range(default_idx,  cls_ranges, col_ranges):
+    def _set_default_cls_range(default_idx,  cls_ranges, col_ranges):
+        """Set the value of the class range at default_idx 
+            to the class ranges at other indices [val|te|tr_out|val_out]
+        """
+
         for rng_idx in range(len(col_ranges)):
             if (col_ranges[rng_idx] is not None and 
                 cls_ranges[rng_idx] is None):
@@ -749,11 +765,11 @@ class DbSlice(object):
                         img[sh:sh+cs[0], sw:sw+cs[1], ich] = cimg
 
             nndb.set_data_at(img, samples[pi])
+
         else:
             nndb.set_data_at(img, samples[pi])
     
         samples[pi] = samples[pi] + 1
-
         return nndbs, samples
 
     @staticmethod

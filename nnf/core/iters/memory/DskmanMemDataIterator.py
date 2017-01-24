@@ -54,7 +54,7 @@ class DskmanMemDataIterator(DskmanDataIterator):
         # TODO: expose the pre-processing capability via parent property self._gen_data
 
         self.nndb = nndb
-        
+
     #################################################################
     # Protected Interface
     #################################################################

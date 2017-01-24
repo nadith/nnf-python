@@ -49,7 +49,7 @@ class NNDiskMan(object):
         col_ranges = [self.sel.tr_col_indices, self.sel.val_col_indices, self.sel.te_col_indices]
 
         # Set the default range if not specified
-        DbSlice._set_default_range(0, cls_ranges, col_ranges)
+        DbSlice._set_default_cls_range(0, cls_ranges, col_ranges)
         self.data_generator.init(cls_ranges, col_ranges)
 
         # [PERF] Iterate through the choset subset of the disk|nndb database
@@ -58,7 +58,7 @@ class NNDiskMan(object):
             # cimg: color/greyscale image 
             # has_cls_changed: bool (Whether the class has changed or not)
             # cls_idx, col_idx: int 
-            # range_indices: list - int (index of which the data belongs to [0->tr|1->val|2->te|etc]? data)
+            # datasets: list - int (index of which the data belongs to [0->tr|1->val|2->te|etc]? data)
             #                        - following the same order defined above.
     
             # Process the patches against cimg
