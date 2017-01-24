@@ -5,7 +5,7 @@ import numpy as np
 # Local Imports
 
     
-def rgb2gray(rgb, cast=False, keepDims=False):
+def rgb2gray(rgb, dtype='uint8', keepDims=False):
     """convert a color image to gray scale image.
 
     Parameters
@@ -46,8 +46,6 @@ def rgb2gray(rgb, cast=False, keepDims=False):
     #gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
 
     gray = np.sum(rgb* [0.2989, 0.5870, 0.1140], axis=len(rgb.shape)-1, keepdims=keepDims)
-
-    if (cast):
-        gray = gray.astype(dtype=np.uint8, copy=False)
+    gray = gray.astype(dtype, copy=False)
 
     return gray

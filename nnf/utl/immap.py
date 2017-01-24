@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 #plt.imshow(self.db[:, :, :, 1])
 
 def immap(X, rows, cols, scale=None, offset=0):
-    """visualize image data tensor in a grid.
+    """Visualize image data tensor in a grid.
 
     Parameters
     ----------

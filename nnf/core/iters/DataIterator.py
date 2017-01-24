@@ -1,82 +1,230 @@
-"""DataIterator to represent DataIterator class."""
 # -*- coding: utf-8 -*-
+"""
+.. module:: DataIterator
+   :platform: Unix, Windows
+   :synopsis: Represent DataIterator class.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
+
 # Global Imports
+from abc import ABCMeta, abstractmethod
+import numpy as np
+import types
 
 # Local Imports
-from nnf.core.iters.ImageDataGeneratorEx import ImageDataGeneratorEx
+from nnf.core.iters.ImageDataPreProcessor import ImageDataPreProcessor
 
 class DataIterator(object):
-    """description of class"""
+    """DataIterator represents the base class for all iterators in the Neural Network Framework.
 
-    def __init__(self, 
-                featurewise_center=False,
-                samplewise_center=False,
-                featurewise_std_normalization=False,
-                samplewise_std_normalization=False,
-                zca_whitening=False,
-                rotation_range=0.,
-                width_shift_range=0.,
-                height_shift_range=0.,
-                shear_range=0.,
-                zoom_range=0.,
-                channel_shift_range=0.,
-                fill_mode='nearest',
-                cval=0.,
-                horizontal_flip=False,
-                vertical_flip=False,
-                rescale=None,
-                preprocessing_function=None,
-                dim_ordering='default'
-        ):
-        self._gen_data = ImageDataGeneratorEx(                 
-                    featurewise_center=featurewise_center,
-                    samplewise_center=samplewise_center,
-                    featurewise_std_normalization=featurewise_std_normalization,
-                    samplewise_std_normalization=samplewise_std_normalization,
-                    zca_whitening=zca_whitening,
-                    rotation_range=rotation_range,
-                    width_shift_range=width_shift_range,
-                    height_shift_range=height_shift_range,
-                    shear_range=shear_range,
-                    zoom_range=zoom_range,
-                    channel_shift_range=channel_shift_range,
-                    fill_mode=fill_mode,
-                    cval=cval,
-                    horizontal_flip=horizontal_flip,
-                    vertical_flip=vertical_flip,
-                    rescale=rescale,
-                    preprocessing_function=preprocessing_function,
-                    dim_ordering=dim_ordering)
+    .. warning:: abstract class and must not be instantiated.
 
-        self._iter = None        
+    Attributes
+    ----------
+    _imdata_pp : :obj:`ImageDataPreProcessor`
+        Image data pre-processor for all iterators.
 
-    def reinit(self, 
-                featurewise_center=False,
-                samplewise_center=False,
-                featurewise_std_normalization=False,
-                samplewise_std_normalization=False,
-                zca_whitening=False,
-                rotation_range=0.,
-                width_shift_range=0.,
-                height_shift_range=0.,
-                shear_range=0.,
-                zoom_range=0.,
-                channel_shift_range=0.,
-                fill_mode='nearest',
-                cval=0.,
-                horizontal_flip=False,
-                vertical_flip=False,
-                rescale=None,
-                preprocessing_function=None,
-                dim_ordering='default'):
-        # TODO: set the fields in self._gen_data
+    _gen_next : `function`
+        Core iterator/generator that provide data.
+
+    Notes
+    -----
+    Disman data iterators are utilzing a generator function in _gen_next 
+    while the `nnmodel` data iterators are utilizing an core iterator.
+    """
+    __metaclass__ = ABCMeta
+
+    ##########################################################################
+    # Public Interface
+    ##########################################################################
+    def __init__(self, pp_params=None, fn_gen_coreiter=None, edataset=None, nb_class=None):
+        """Constructor of the abstract class :obj:`DataIterator`.
+
+        Parameters
+        ----------
+        pp_params : :obj:`dict`
+            Pre-processing parameters for :obj:`ImageDataPreProcessor`.
+
+        fn_gen_coreiter : `function`, optional
+            Factory method to create the core iterator. (Default value = None). 
+        """
+        # Initialize the image data pre-processor with pre-processing params
+        # Used by Diskman data iterators and `nnmodel` data iterators
+        self._imdata_pp = ImageDataPreProcessor(pp_params, fn_gen_coreiter)
+        self._pp_params = pp_params
+        self._fn_gen_coreiter = fn_gen_coreiter
+
+        # Core iterator or generator (initilaized in init())
+        # Diskman data iterators are utilzing a generator function in _gen_next
+        # while the `nnmodel` data iterators are utilizing an core iterator.
+        self._gen_next = None
+    
+        # Iterator params
+        # Used by `nnmodel` data iterators only.
+        # Can utilize in Diskman data iterators safely in the future.
+        self._params = None
+
+        # Used by `nnmodel` data iterators only.
+        self.edataset = edataset
+        self._nb_class = nb_class        
+        self._sync_gen_next = None
+
+    def init(self, gen_next=None, params=None):
+        """Initialize the instance.
+
+        Parameters
+        ----------
+        _gen_next : `function`
+            Core iterator/generator that provide data.
+        """        
+        # Set the core iterator or generator 
+        self._gen_next = gen_next
+
+        # Set iterator params
+        self._params = params
+
+    @property
+    def params(self):   
+        """:obj:`dict`: Core iterator parameters."""
+        if (self._params is None):
+            return {}
+        return self._params
+
+    ##########################################################################
+    # Public: Core Iterator Only Operations
+    ##########################################################################
+    def set_shuffle(self, shuffle):
+        """Set shuffle property."""
+        # This property is only supported by the core iterator
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return False
+
+        if (self._gen_next.batch_index != 0 and 
+            self._gen_next.shuffle != shuffle):
+            raise Exception("Iterator is already active and failed to set shuffle")
+
+        # Update iterator params if available
+        if (self._params is not None):
+            self._params['shuffle'] = shuffle
+
+        self._gen_next.shuffle = shuffle
+        return True
+
+    @property
+    def input_vectorized(self):
+        """bool: whether the input needs to be vectorized via the core iterator."""
+        # This property is only supported by the core iterator
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return None     
+        return self._gen_next.input_vectorized
+
+    @property
+    def batch_size(self):
+        """int: batch size to be read by the core iterator."""
+        # This property is only supported by the core iterator
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return None     
+        return self._gen_next.batch_size
+
+    @property
+    def class_mode(self):
+        """str: class mode at core iterator."""
+        # This property is only supported by the core iterator
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return None     
+        return self._gen_next.class_mode
+
+    @property
+    def nb_sample(self):
+        """int: number of samples registered at core iterator/generator."""
+        # This property is only supported by the core iterator
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return None
+        return self._gen_next.nb_sample
+
+    @property
+    def nb_class(self):
+        """int: number of classes registered at core iterator/generator."""
+        # This property is only supported by the core iterator
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return None     
+        return self._gen_next.nb_class
+
+    @property
+    def image_shape(self):   
+        """:obj:`tuple` : shape of the image that is natively producted by this iterator."""
+        # This property is only supported by the core iterator      
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return None  
+        return self._gen_next.image_shape
+
+    @property
+    def dim_ordering(self):   
+        """:obj:`tuple` : shape of the image that is natively producted by this iterator."""
+        # This property is only supported by the core iterator      
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return None  
+        return self._gen_next.dim_ordering
+
+    @property
+    def is_synced(self):   
+        """bool : whether this generator is synced with another generator."""
+        return (self._sync_gen_next is not None)
+
+    def sync(self, gen_next):
+        """Sync the secondary iterator with this iterator.
+
+        Sync the secondary core iterator with this core itarator internally.
+        Used when data needs to be generated with its matching target.
+
+        Parameters
+        ----------
+        gen : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator` 
+            Core iterator that needs to be synced with this core iterator.
+
+        Note
+        ----
+        Current supports only 1 iterator to be synced.
+        """
+        # This method is only supported by the core iterator      
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return False       
+
+        if (gen_next is None or
+            isinstance(gen_next , types.GeneratorType)): 
+            return False
+
+        self._gen_next.sync(gen_next)
+        self._sync_gen_next = gen_next
+        return True
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    @abstractmethod
+    def clone(self):
+        """Create a copy of this object."""
         pass
 
+    def _release(self):
+        """Release internal resources used by the iterator."""
+        self._imdata_pp = None
+        self._gen_next = None
+
     def __iter__(self):
+        """Python iterator interface required method."""
         return self
 
     def __next__(self):
-        batch_x, batch_y = next(self._iter)
-        batch_x = batch_x.reshape((len(batch_x), np.prod(batch_x.shape[1:])))
-        batch_y = batch_y.reshape((len(batch_y), np.prod(batch_y.shape[1:])))
-        return batch_x, batch_y
+        """Python iterator interface required method."""
+        return next(self._gen_next)

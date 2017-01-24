@@ -9,22 +9,63 @@ import numpy as np
 # Local Imports
 
 class EarlyStoppingEx(EarlyStopping):
-    '''Stop training when a monitored quantity has stopped improving.
+    """Stop training when a monitored quantity has stopped improving..
 
-    # Arguments
+    Attributes
+    ----------
         monitor: quantity to be monitored.
+        <describe>.
+
         patience: number of epochs with no improvement
             after which training will be stopped.
         verbose: verbosity mode.
-        mode: one of {auto, min, max}. In `min` mode,
-            training will stop when the quantity
-            monitored has stopped decreasing; in `max`
-            mode it will stop when the quantity
-            monitored has stopped increasing; in `auto`
-            mode, the direction is automatically inferred
-            from the name of the monitored quantity.
-    '''
+        <describe>.
+
+    wait : <describe>.
+        <describe>.
+
+    mode : one of {auto, min, max}
+        In `min` mode, training will stop when the quantity monitored has stopped decreasing;
+        in `max` mode it will stop when the quantity monitored has stopped increasing;
+        in `auto` mode, the direction is automatically inferred from the name of the monitored quantity.
+
+    Methods
+    -------
+    on_train_begin()
+        <describe>.
+
+    on_epoch_end()
+        <describe>.
+
+    Examples
+    --------
+    <describe>
+    >>> nndb = EarlyStoppingEx(EarlyStopping)
+
+    <describe>
+    >>> nndb = EarlyStoppingEx(EarlyStopping)
+    """
+
     def __init__(self, monitor='val_loss', patience=0, verbose=0, mode='auto'):
+        """describe.
+
+        Parameters
+        ----------
+        sel : selection structure
+            Information to split the dataset.
+
+        monitor : Describe
+            describe.
+
+        patience : Describe
+            describe.
+
+        verbose : Describe
+            describe.
+
+        mode : Describe
+            describe.
+        """
         super(EarlyStoppingEx, self).__init__()
 
         self.monitor = monitor
@@ -49,10 +90,30 @@ class EarlyStoppingEx(EarlyStopping):
                 self.monitor_op = np.less
 
     def on_train_begin(self, logs={}):
+        """Construct a on_train_begin object.
+
+        Parameters
+        ----------
+        sel : selection structure
+            Information to split the dataset.
+
+        logs : Describe
+            describe.
+        """
         self.wait = 0       # Allow instances to be re-used
         self.best = np.Inf if self.monitor_op == np.less else -np.Inf
 
     def on_epoch_end(self, epoch, logs={}):
+        """Construct a on_epoch_end object.
+
+        Parameters
+        ----------
+        sel : selection structure
+            Information to split the dataset.
+
+        logs : Describe
+            describe.
+        """
         current = logs.get(self.monitor)
         
         if current is None:

@@ -1,22 +1,46 @@
+# -*- coding: utf-8 -*-
+# Global Imports
+import numpy as np
+
+# Local Imports
+from nnf.pp.hist_match_ch import hist_match_ch
+from nnf.pp.hist_eq_ch import hist_eq_ch
+
 def im_pre_process(img, params):
-#%IM_PRE_PROCESS pre-process the image.
+    """Preprocess a single image according the params provided.
 
-#% Copyright 2015-2016 Nadith Pathirage, Curtin University.
+        pp_params.histeq = sel.histeq
+        pp_params.normalize = sel.normalize
+        pp_params.histmatch = sel.histmatch
+        pp_params.cann_img = cls_st_img
 
-#    if (~isfield(params, 'histeq')); params.histeq = false; end
-#    if (~isfield(params, 'normalize')); params.normalize = false; end
-#    if (~isfield(params, 'histmatch')); params.histmatch = false; end
-#    if (~isfield(params, 'cann_img')); params.cann_img = []; end
+    Parameters
+    ----------
+    img : describe
+        decribe.
 
-#    if (params.histeq)
-#        if (size(img, 3) == 3)
-#            img = histeqRGB(img);
-#        else
-#            img = histeq(img);
-#        end
-#    end
+    params : describe
+        describe.
 
-#    if (params.normalize)        
+    Returns
+    -------
+    img : decribe
+        describe.
+    """
+    if ('histeq' not in params): params['histeq'] = False
+    if ('normalize' not in params): params['normalize'] = False
+    if ('histmatch' not in params): params['histmatch'] = False
+    if ('cann_img' not in params): params['cann_img'] = None
+
+    # Histrogram eqaulization
+    if (params['histeq']):
+        dtype = img.dtype
+        img = hist_eq_ch(img, params['ch_axis'])
+        img = img.astype(dtype, copy=False)
+    
+
+    # TODO: dtype changes
+#    if (params['normalize'])
 #        img = bsxfun(@minus, double(img), mean(mean(img))); 
 #        img = bsxfun(@rdivide, double(img), std(std(img))); 
 #    %         means = mean(mean(low_dim_img));
@@ -25,10 +49,11 @@ def im_pre_process(img, params):
 #    %         end
 #    end
     
-#    % Histrogram matching
-#    if (params.histmatch && ~isempty(params.cann_img))            
-#        img = histmatch(params.cann_img, img);
-#    end
+    # Histrogram matching
+    if (params['histmatch'] and params['cann_img'] is not None):
+        dtype = params['cann_img'].dtype
+        img = hist_match_ch(img, params['cann_img'], params['ch_axis'])
+        img = img.astype(dtype, copy=False)
         
     return img
 

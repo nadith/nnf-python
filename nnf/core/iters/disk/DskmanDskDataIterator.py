@@ -1,76 +1,92 @@
-"""DskmanDskDataIterator to represent DskmanDskDataIterator class."""
 # -*- coding: utf-8 -*-
+"""
+.. module:: DskmanDskDataIterator
+   :platform: Unix, Windows
+   :synopsis: Represent DskmanDskDataIterator class.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
+
 # Global Imports
 from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
+from warnings import warn as warning
 import numpy as np
 import os
 
 # Local Imports
 from nnf.core.iters.DskmanDataIterator import DskmanDataIterator
-import nnf.core.NNDiskMan
+from nnf.db.Format import Format
 
 class DskmanDskDataIterator(DskmanDataIterator):
-    """description of class"""
+    """DskmanDataIterator iterates the data in the disk for :obj:`NNDiskMan'.
+
+        Each data item is assumed to be stored in each file. Subdirectories denote
+        the classes.
+
+    Attributes
+    ----------
+    cls_n : int
+        Class count.
+
+    paths : :obj:`dict`
+        Track the files for each class.
+
+    n_per_class : :obj:`dict`
+        Track images per class for each class.
+
+    cls_idx_to_dir : :obj:`dict`
+        Auto assigned class index to user assigned class name mapping.
+    """
 
     #################################################################
     # Public Interface
     #################################################################
-    def __init__(self, directory,
-                featurewise_center=False,
-                samplewise_center=False,
-                featurewise_std_normalization=False,
-                samplewise_std_normalization=False,
-                zca_whitening=False,
-                rotation_range=0.,
-                width_shift_range=0.,
-                height_shift_range=0.,
-                shear_range=0.,
-                zoom_range=0.,
-                channel_shift_range=0.,
-                fill_mode='nearest',
-                cval=0.,
-                horizontal_flip=False,
-                vertical_flip=False,
-                rescale=None,
-                preprocessing_function=None,
-                dim_ordering='default'
-        ):
-        super().__init__(featurewise_center=featurewise_center,
-                samplewise_center=samplewise_center,
-                featurewise_std_normalization=featurewise_std_normalization,
-                samplewise_std_normalization=samplewise_std_normalization,
-                zca_whitening=zca_whitening,
-                rotation_range=rotation_range,
-                width_shift_range=width_shift_range,
-                height_shift_range=height_shift_range,
-                shear_range=shear_range,
-                zoom_range=zoom_range,
-                channel_shift_range=channel_shift_range,
-                fill_mode=fill_mode,
-                cval=cval,
-                horizontal_flip=horizontal_flip,
-                vertical_flip=vertical_flip,
-                rescale=rescale,
-                preprocessing_function=preprocessing_function,
-                dim_ordering=dim_ordering)
+    def __init__(self, db_pp_params):
+        """Construct a DskmanDskDataIterator instance.
 
-        # TODO: expose the pre-processing capability via parent property self._gen_data
+        Parameters
+        ----------
+        db_pp_params : :obj:`dict`
+            Pre-processing parameters for :obj:`ImageDataPreProcessor`.
+        """
+        super().__init__(db_pp_params)
         
-        # Class count, will be updated below
+        # Class count
         self.cls_n = 0 
     
         # Keyed by the cls_idx
         # value = [file_path_1, file_path_2, ...] <= list of file paths
-        self.paths = {} # A dictionary that hold lists. self.paths[cls_idx] => list of file paths
+        self.paths = {}
         
         # Keyed by the cls_idx
         # value = <int> denoting the images per class
         self.n_per_class = {}
         
-        # Future use
-        self.cls_idx_to_dir = {}       
+        # INHERITED: Whether to read the data
+        # self._read_data
 
+        # Future use
+        # Auto assigned class index to user assigned class name mapping.
+        self.cls_idx_to_dir = {}
+
+    def init_params(self, db_dir, save_dir):
+        """Initialize parameters for :obj:`DskmanDskDataIterator` instance.
+
+        .. warning:: DO NOT override init() method, since it is used to initialize the
+        :obj:`DskmanDataIterator` with essential information.
+    
+            Each data item is assumed to be stored in each file. Subdirectories denote
+            the classes.
+
+        Parameters
+        ----------
+        db_dir : str
+            Path to the database directory.
+
+        save_dir : str
+            Path to directory of processed data.
+        """
         # Inner function: Fetch the files in the disk
         def _recursive_list(subpath):
             return sorted(os.walk(subpath, followlinks=False), key=lambda tpl: tpl[0])
@@ -79,24 +95,21 @@ class DskmanDskDataIterator(DskmanDataIterator):
         cls_idx = 0
 
         # Iterate the directory and populate self.paths dictionary
-        for root, dirs, files in _recursive_list(directory):
+        for root, dirs, files in _recursive_list(db_dir):
 
             # Exclude this directory itself
-            if (root == directory):
+            if (root == db_dir):
                 continue
             
             # Extract the directory
             dir = root[(root.rindex ('\\')+1):]
         
             # Exclude the internally used data folder
-            if (dir == nnf.core.NNDiskMan.NNDiskMan._SAVE_TO_DIR):
+            if (dir == save_dir):
                 continue
 
             # Since dir is considered to be a class name, give the explicit internal index
-            self.cls_idx_to_dir.setdefault(cls_idx, dir) # Future use
-
-            # Update class count
-            self.cls_n += 1
+            self.cls_idx_to_dir.setdefault(cls_idx, dir)  # Future use
 
             # Initialize [paths|n_per_class] dictionaries with related cls_idx
             fpaths = self.paths.setdefault(cls_idx, [])            
@@ -108,42 +121,104 @@ class DskmanDskDataIterator(DskmanDataIterator):
                 fpaths.append(fpath)
                 n_per_class += 1
  
+            # assert(cls_idx == self.cls_n)
+
             # Update n_per_class dictionary
             self.n_per_class[cls_idx] = n_per_class
             cls_idx += 1
 
-    #################################################################
-    # Protected Interface
-    #################################################################
-    def _get_cimg_in_next(self, cls_idx, col_idx):
-        """Fetch image @ cls_idx, col_idx"""
-        assert(cls_idx < self.cls_n and col_idx < self.n_per_class[cls_idx])
+            # Update class count       
+            self.cls_n += 1
 
-        impath = self.paths[cls_idx][col_idx]            
-        img = load_img(impath, grayscale=False, target_size=None)
-        cimg = img_to_array(img, dim_ordering='default')
-        return cimg
+    ##########################################################################
+    # Protected: DskmanDataIterator Overrides
+    ##########################################################################
+    def _release(self):
+        """Release internal resources used by the iterator."""
+        super()._release()
+        del self.cls_n
+        del self.paths
+        del self.n_per_class
+        del self.cls_idx_to_dir
 
-    def _is_valid_cls_idx(self, cls_idx):
-        """Check the validity cls_idx"""
+    def get_im_ch_axis(self):
+        """Image channel axis."""
+        # Ref: _get_cimg_frecord_in_next(...) method
+        return 2
+
+    def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
+        """Get image and file record (frecord) at cls_idx, col_idx.
+
+        Parameters
+        ----------
+        cls_idx : int
+            Class index. Belongs to `union_cls_range`.
+
+        col_idx : int
+            Column index. Belongs to `union_col_range`.
+
+        Returns
+        -------
+        `array_like`
+            Color image.
+
+        :obj:`list`
+            file record. [file_path, file_position, class_label]
+        """
+        if (cls_idx >= self.cls_n):
+            raise Exception('Class:'+ str(cls_idx) + ' is missing in the database.')
+
+        if (col_idx >= self.n_per_class[cls_idx]):
+            raise Exception('Class:'+ str(cls_idx) + ' ImageIdx:' + str(col_idx) + ' is missing in the database.')
+
+        # Fetch the image path to read from the disk
+        impath = self.paths[cls_idx][col_idx]
+
+        # Read the actual data only if necessary
+        cimg = None
+        if (self._read_data):
+            cimg = load_img(impath, grayscale=False, target_size=None)
+            cimg = img_to_array(cimg, dim_ordering='tf')
+
+        return cimg, [impath, np.uint8(0), np.uint16(cls_idx)]  # [fpath, fpos, cls_lbl]
+
+    def _is_valid_cls_idx(self, cls_idx, show_warning=True):
+        """Check the validity of class index.
+
+        Parameters
+        ----------
+        cls_idx : int
+            Class index. Belongs to `union_cls_range`.
+
+        Returns
+        -------
+        bool
+            True if valid. False otherwise.
+        """
+        if (cls_idx >= self.cls_n and show_warning):
+            warning('Class:'+ str(cls_idx) + ' is missing in the database')
+
         return cls_idx < self.cls_n        
 
-    def _is_valid_col_idx(self, cls_idx, col_idx):
-        """Check the validity col_idx of the class denoted by cls_idx"""
+    def _is_valid_col_idx(self, cls_idx, col_idx, show_warning=True):
+        """Check the validity of column index of the class denoted by cls_idx.
+
+        Parameters
+        ----------
+        cls_idx : int
+            Class index. Belongs to `union_cls_range`.
+
+        col_idx : int
+            Column index. Belongs to `union_col_range`.
+
+        Returns
+        -------
+        bool
+            True if valid. False otherwise.
+        """
         assert(cls_idx < self.cls_n)
+
+        if (col_idx >= self.n_per_class[cls_idx] and show_warning):
+            warning('Class:'+ str(cls_idx) + ' ImageIdx:' + str(col_idx) + ' is missing in the database')
+
         return col_idx < self.n_per_class[cls_idx]
-       
-# Sample code
-#import os
-
-#def _recursive_list(subpath):
-#    return sorted(os.walk(subpath, followlinks=False), key=lambda tpl: tpl[0])
-
-#for root, dirs, files in _recursive_list('D:\TestImageFolder'):
-#    print(root) 
-
-#for root, dirs, files in _recursive_list('D:\TestImageFolder'):
-#    print(dirs) 
-
-#for root, dirs, files in _recursive_list('D:\TestImageFolder'):
-#    print(files) 

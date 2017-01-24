@@ -1,10 +1,11 @@
-"""DAEModel to represent DAEModel class."""
 # -*- coding: utf-8 -*-
 # Global Imports
 from keras.layers import Input, Dense
 from keras.models import Model
 from keras.datasets import mnist
 import numpy as np
+import os
+import math
 
 # Local Imports
 from nnf.core.models.NNModel import NNModel
@@ -12,142 +13,579 @@ from nnf.core.models.Autoencoder import Autoencoder
 from nnf.core.iters.DataIterator import DataIterator
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
+from nnf.db.Dataset import Dataset
+from nnf.core.iters.memory.MemDataIterator import MemDataIterator
+from nnf.core.iters.memory.BigDataNumpyArrayIterator import BigDataNumpyArrayIterator
+from nnf.core.iters.disk.DskDataIterator import DskDataIterator
+from nnf.core.iters.disk.BigDataDirectoryIterator import BigDataDirectoryIterator
+from nnf.core.models.NNModelPhase import NNModelPhase
 
 class DAEModel(NNModel):
-    """Generic deep order encoder model
-    
-       Extend this class to implement specific auto encoder models
+    """Generic deep autoencoder model.
+
+    Note
+    ----
+    Extend this class to implement custom deep autoencoder models.
     """
-    def __init__(self, patch, iterstore):   
-        super().__init__(patch, iterstore)
 
-        # Initialize instance variables
-        self.X_gen = self.X_val_gen = self.Xte_gen = None
+    ##########################################################################
+    # Public Interface
+    ##########################################################################
+    def __init__(self, callbaks=None):
+        super().__init__()
 
-        # Initialize iterators
-        if (self._iterstore is not None):
-            (self.X_gen, self.X_val_gen, self.Xte_gen) = self._iterstore[0]
-    
-    # Model based framework will set the iterstore via set_iterstore() 
-    # due to iterstores being not created during the model creation.
-    # In contrast Patch based framework set the iterator store in the constructor.
-    def set_iterstore(self, iterstore):
-        super().set_iterstore(iterstore)
-               
-         # Initialize iterators
-        if (self._iterstore is not None):
-            (self.X_gen, self.X_val_gen, self.Xte_gen) = self._iterstore[0]
+        # Set defaults for arguments
+        self.callbacks = {} if (callbaks is None) else callbaks
+        self.callbacks.setdefault('test', None)
+        self.callbacks.setdefault('predict', None)
+        get_dat_gen = self.callbacks.setdefault('get_data_generators', None)
+        if (get_dat_gen is None):
+            self.callbacks['get_data_generators'] = self._get_data_generators
 
-    def pre_train(self, daeprecfgs, daecfg):
+    ##########################################################################
+    # Protected: NNModel Overrides
+    ##########################################################################
+    def _pre_train(self, daeprecfgs, daecfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+        """Pre-train the :obj:`DAEModel`.
+
+        Parameters
+        ----------
+        precfgs : list of :obj:`NNCfg`
+            List of Neural Network configurations. Useful for layer-wise pre-training.
+
+        cfg : :obj:`NNCfg`
+            Neural Network configuration that will be used in training. 
+            Useful to build the deep stacked network after layer-wise pre-trianing.
+
+        patch_idx : int
+            Patch's index in this model.
+
+        dbparam_save_dirs : :obj:`list`
+            Paths to temporary directories for each user db-param of each `nnpatch`.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+        """
+        # Validate nncfgs
+        for _, daeprecfg in enumerate(daeprecfgs):
+            self._validate_cfg(NNModelPhase.PRE_TRAIN, daeprecfg)
+        self._validate_cfg(NNModelPhase.TRAIN, daecfg)
+
+        # Initialize parameters
+        save_to_dir = None
+        if (dbparam_save_dirs is not None):
+            save_to_dir = dbparam_save_dirs[0]  # save_to_dir for dbparam1
+
+        # Initialize data generators
+        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.PRE_TRAIN, list_iterstore, dict_iterstore)
+
+        # Pre-condition asserts
+        assert((daecfg.use_db is None and X_gen is not None) or 
+                (daecfg.use_db is not None))
 
         # Track layers to build Deep/Stacked Auto Encoder (DAE)
         layers = [Input(shape=(daecfg.arch[0],))]
 
         # Initialize weights and transpose of weights
-        w_T = w = None 
-       
-        # Set generator variables
-        X_gen = self.X_gen
-        X_val_gen = self.X_val_gen
+        w_T = w = None       
+
+        # map of iterators for TR|VAL|TE|... datasets in Autoencoder
+        ae_iterstore = {}
 
         # Iterate through pre-trianing configs and 
         # perform layer-wise pre-training.
-        i = 0
+        layer_idx = 1
         for daeprecfg in daeprecfgs:
 
             # Directly feeding external databases            
             X = None
             X_val = None
 
-            # Data from generators    
-            _iterstore = [(X_gen, X_val_gen)]
+            # Callback for pre-training pre-processing
+            X_gen, X_val_gen = self._pre_train_preprocess(layer_idx, daeprecfgs, daecfg, X_gen, X_val_gen)
     
+            # Set data from autoencoder            
+            ae_iterstore[Dataset.TR] = X_gen
+            ae_iterstore[Dataset.VAL] = X_val_gen
+
             # Create a simple AE
-            ae = Autoencoder(self.patches, _iterstore, X, X_val)
+            ae = Autoencoder('dae_' + str(self.uid) + '_ae_' + str(layer_idx))
+            ae._add_iterstores(list_iterstore=[ae_iterstore])
      
             # Using non-generators for external databases
-            if (daecfg.use_db != 'generator'):    
+            if (daecfg.use_db is not None):
                 X, X_val = ae.train(daeprecfg)            
                 X = ae._encode(X)
                 X_val = ae._encode(X_val)
 
-            else:                
-                if (_iterstore == [(None, None)]):
+            else:
+                if (ae_iterstore == [(None, None)]):
                     raise Exception("No data iterators. Check daecfg.use_db option !")   
 
+                print("\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< AUTOENCODER >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
                 # Using generators for NNDb or disk databases            
-                ae.train(daeprecfg)   
+                ae.train(daeprecfg)
 
                 # Fetch generator for next layer (i+1)
-                X_gen, X_val_gen = self._get_genrators_at(i, ae, X_gen, X_val_gen)
+                X_gen, X_val_gen = self.__get_genrators_at(patch_idx, save_to_dir, layer_idx, ae, X_gen, X_val_gen)
 
-            #w = ae._encoder_weights
-            #w_T = [np.transpose(w[0]), np.zeros(w[0].shape[0])]
-            
-            ## Adding encoding layer for DAE
-            #layers.insert(i, Dense(enc_arch[i], activation='relu', weights=w, name="encoder" + str(i+1)))
+            layers = self._stack_layers(ae, layer_idx, layers, daeprecfgs, daecfg)
 
-            # Adding decoding layer for DAE
-            dec_act = 'relu' # nnprecfg[i].act_fn  
-        #    if (i == 1):  # for last decoder
-        #        dec_act = 'sigmoid' # nnprecfg[n-1].output_fn      
-        #    layers.insert(i+1, Dense(enc_arch[i-1], activation=dec_act, weights=w_T, name="decoder" + str(i+1)))
+            # Increment layer index
+            layer_idx = layer_idx + 1
 
-            i = i + 1
+        # Build DAE
+        self.__build(layers, daecfg)
 
-        ## Build DAE
-        #in_tensor = layers[0]
-        #out_tensor = layers[0]
+    def _train(self, daecfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+        """Train the :obj:`DAEModel`.
 
-        #for i in range(1, len(layers)):
-        #    out_tensor = layers[i](out_tensor)
-        
-        #self.net = Model(input=in_tensor, output=out_tensor)
-        #print(self.net.summary())
+        Parameters
+        ----------
+        cfg : :obj:`NNCfg`
+            Neural Network configuration used in training.
 
-        #self.net.compile(optimizer=daecfg.opt_fn, loss=daecfg.loss_fn)
+        patch_idx : int
+            Patch's index in this model.
 
-    def train(self, daecfg):
+        dbparam_save_dirs : :obj:`list`
+            Paths to temporary directories for each user db-param of each `nnpatch`.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+        """
+        # Validate nncfg
+        self._validate_cfg(NNModelPhase.TRAIN, daecfg)
+
+        # Initialize data generators
+        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN, list_iterstore, dict_iterstore)
+
+        # Pre-condition asserts
+        assert((daecfg.use_db is None and X_gen is not None) or 
+                (daecfg.use_db is not None))
+
+        # Build the DAE if not already built (no-pretraining)
         if (self.net is None):
-            pass
+            self._build(daecfg)
 
+        # Preloaded databases for quick deployment
+        if ((daecfg.use_db == 'mnist') and
+            (self.X_L is None and self.X_L_val is None and
+            self.Xt is None and self.Xt_val is None)):
+            self.X_L, self.Xt, self.X_L_val, self.Xt_val = MnistAE.LoadDb()     
+
+        # Training without generators
+        if (daecfg.use_db is not None):
+            super()._start_train(daecfg, self.X_L, self.Xt, self.X_L_val, self.Xt_val)
+            return (self.X_L, self.Xt, self.X_L_val, self.Xt_val)
+
+        # Training with generators
+        super()._start_train(daecfg, X_gen=X_gen, X_val_gen=X_val_gen)
+
+        # Save the trained model
+        self._try_save(daecfg, patch_idx, "DAE")
+
+        return (None, None, None, None)
+
+    def _test(self, daecfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+        """Test the :obj:`Autoencoder`.
+
+        Parameters
+        ----------
+        cfg : :obj:`NNCfg`
+            Neural Network configuration used in training.
+
+        patch_idx : int
+            Patch's index in this model.
+
+        dbparam_save_dirs : :obj:`list`
+            Paths to temporary directories for each user db-param of each `nnpatch`.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+        """    
+        # Initialize data generators
+        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.TEST, list_iterstore, dict_iterstore)
+
+        # Pre-condition asserts
+        assert((daecfg.use_db is None and Xte_gen is not None) or 
+                (daecfg.use_db is not None))
+
+        if (Xte_target_gen is not None):
+            # No. of testing and testing target samples must be equal
+            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
+
+        # 1st Priority, Load the saved model with weights
+        is_loaded = self._try_load(daecfg, patch_idx, "DAE")
+
+        # 2nd Priority, Load the saved weights but not the model
+        if (not is_loaded and daecfg.weights_path is not None):
+            assert(False)  # TODO: Pretraining must be skipped and it should only build the model with daecfg
+            #self._build(daecfg, Xte_gen)
+            #self.net.load_weights(daecfg.weights_path)
+
+        assert(self.net is not None)
+
+        # Preloaded databases for quick deployment
         if (daecfg.use_db == 'mnist'):
-            enc_data, enc_data_val = MnistAE.LoadDb()
+            Xte_L, Xte_target = MnistAE.LoadTeDb() 
 
-        if (daecfg.use_db != 'generator'):    
-            self.net.fit(enc_data, enc_data,
-                    nb_epoch=50,
-                    batch_size=256,
-                    shuffle=True,
-                    validation_data=(enc_data_val, enc_data_val), callbacks=[cb_early_stop])
+        # Test without generators
+        if (daecfg.use_db is not None):
+            super()._start_test(patch_idx, Xte_L, Xte_target) 
+
+        # Test with generators
+        super()._start_test(patch_idx, Xte_gen=Xte_gen, Xte_target_gen=Xte_target_gen)
+
+    def _predict(self, daecfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+        """Predict the :obj:`Autoencoder`.
+
+        Parameters
+        ----------
+        cfg : :obj:`NNCfg`
+            Neural Network configuration used in training.
+
+        patch_idx : int
+            Patch's index in this model.
+
+        dbparam_save_dirs : :obj:`list`
+            Paths to temporary directories for each user db-param of each `nnpatch`.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+        """
+        # Initialize data generators
+        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.PREDICT, list_iterstore, dict_iterstore)
+
+        # Pre-condition asserts
+        assert((daecfg.use_db is None and Xte_gen is not None) or 
+                (daecfg.use_db is not None))
+
+        if (Xte_target_gen is not None):
+            # No. of testing and testing target samples must be equal
+            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
+
+        # 1st Priority, Load the saved model with weights
+        is_loaded = self._try_load(daecfg, patch_idx, "DAE")
+
+        # 2nd Priority, Load the saved weights but not the model
+        if (not is_loaded and daecfg.weights_path is not None):
+            assert(False)  # TODO: Pretraining must be skipped and it should only build the model with daecfg
+            #self._build(daecfg, Xte_gen)
+            #self.net.load_weights(daecfg.weights_path)
+
+        assert(self.net is not None)
+
+        # Preloaded databases for quick deployment
+        if (daecfg.use_db == 'mnist'):
+            Xte_L, Xte_target = MnistAE.LoadTeDb() 
+
+        # Test without generators
+        if (daecfg.use_db is not None):
+            Xte =  Xte_L[0]
+            super()._start_predict(patch_idx, Xte_L, Xte_target)
+
+        # Test with generators
+        super()._start_predict(patch_idx, Xte_gen=Xte_gen, Xte_target_gen=Xte_target_gen)
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    def _validate_cfg(self, ephase, cfg):
+        if (len(cfg.arch) != len(cfg.act_fns)):
+            raise Exception('Activation function for each layer is not' + 
+            ' specified. (length of `cfg.arch` != length of `cfg.act_fns`).')
+        
+    def _get_data_generators(self, ephase, list_iterstore, dict_iterstore):
+        """Get data generators for pre-training, training, testing, prediction.
+
+        Parameters
+        ----------
+        ephase : :obj:`NNModelPhase`
+            Phase of which the data generators are required.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+
+        Returns
+        -------
+        :obj:`tuple`
+            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
+            then 
+                Generators for training and validation.
+                Refer https://keras.io/preprocessing/image/
+
+            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
+            then
+                Generators for testing and testing target.
+        """
+        if (ephase == NNModelPhase.PRE_TRAIN or ephase == NNModelPhase.TRAIN):
+            # Iteratorstore for dbparam1
+            X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
+            X2_gen = list_iterstore[0].setdefault(Dataset.VAL, None)
+
+        elif (ephase == NNModelPhase.TEST or ephase == NNModelPhase.PREDICT):
+            # Iteratorstore for dbparam1
+            X1_gen = list_iterstore[0].setdefault(Dataset.TE, None)
+            X2_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
+
         else:
-            X_gen = self.data_client
-            X_val_gen = self.data_val_client
+            raise Exception('Unsupported NNModelPhase')
 
-            self.net.fit_generator(
-                    X_gen,
-                    samples_per_epoch=2000,
-                    nb_epoch=50,
-                    validation_data=X_val_gen,
-                    nb_val_samples=800)
+        return X1_gen, X2_gen
 
-        pass
+    def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
+        """Initialize data generators for pre-training, training, testing, prediction.
 
-    def _get_genrators_at(self, i, ae, X_gen, X_val_gen):
+        Parameters
+        ----------
+        ephase : :obj:`NNModelPhase`
+            Phase of which the data generators are required.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+
+        Returns
+        -------
+        :obj:`tuple`
+            When ephase == NNModelPhase.PRE_TRAIN
+            then 
+                Generators for pre-training and validation. 
+                But cloned before use.
+
+            When ephase == NNModelPhase.TRAIN
+            then 
+                Generators for training and validation.
+
+            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
+            then
+                Generators for testing and testing target.
+        """
+        X_gen = None; X_val_gen = None
+        if (list_iterstore is not None):
+            X_gen, X_val_gen = self.callbacks['get_data_generators'](ephase, list_iterstore, dict_iterstore)
+
+            if (ephase == NNModelPhase.PRE_TRAIN):  # Pre-training stage
+                # Take a copy since we are going to manipulate it                
+                X_gen = self._clone_iter(X_gen)
+                X_val_gen = self._clone_iter(X_val_gen)
+
+        assert(X_gen is not None)
+        return X_gen, X_val_gen
+
+    def _pre_train_preprocess(self, layer_idx, daeprecfgs, daecfg, X_gen, X_val_gen):
+        """describe"""
+        return X_gen, X_val_gen  
+
+    def _stack_layers(self, ae, layer_idx, layers, daeprecfgs, daecfg):
+        # Tied weights
+        w = ae._encoder_weights
+        w_T = [np.transpose(w[0]), np.zeros(w[0].shape[0])]
+
+        # Adding encoding layer for DAE
+        layers.insert(layer_idx, 
+                        Dense(daecfg.arch[layer_idx], 
+                                activation=daecfg.act_fns[layer_idx],
+                                weights=w, 
+                                name="enc: " + str(layer_idx)))
+
+        # Adding decoding layer for DAE
+        dec_i = len(daecfg.arch)-layer_idx
+        layers.insert(layer_idx+1, 
+                        Dense(daecfg.arch[dec_i], 
+                                activation=daecfg.act_fns[dec_i], 
+                                weights=w_T, 
+                                name="dec: " + str(layer_idx)))
+        return layers
+
+    def _build(self, daecfg):
+        """Build the DAE.
+        
+            Used when the network needs to be build without pretraining.
+        """
+        layers = [Input(shape=(daecfg.arch[0],))]
+        mid = (len(daecfg.arch) + 1) // 2
+        for i, dim in enumerate(daecfg.arch[1:mid]):
+            layer_idx = i + 1
+            layers.insert(layer_idx, 
+                            Dense(daecfg.arch[layer_idx], 
+                                    activation=daecfg.act_fns[layer_idx],
+                                    name="enc: " + str(layer_idx)))
+
+            dec_i = len(daecfg.arch)-layer_idx
+            layers.insert(layer_idx+1, 
+                            Dense(daecfg.arch[dec_i], 
+                                    activation=daecfg.act_fns[dec_i],
+                                    name="dec: " + str(layer_idx)))
+
+        # Build DAE
+        self.__build(layers, daecfg)
+
+    ##########################################################################
+    # Private Interface
+    ##########################################################################
+    def __build(self, layers, daecfg):
+
+        in_tensor = layers[0]
+        out_tensor = layers[0]
+
+        for i in range(1, len(layers)):
+            out_tensor = layers[i](out_tensor)
+        
+        self.net = Model(input=in_tensor, output=out_tensor)
+        print(self.net.summary())
+
+        self.net.compile(optimizer=daecfg.opt_fn, loss=daecfg.loss_fn)
+
+    def __get_genrators_at(self, patch_idx, save_to_dir, layer_idx, ae, X_gen, X_val_gen):
+        """describe
+
+        Parameters
+        ----------
+        i : Describe
+            describe.
+
+        ae : Describe
+            describe.
+
+        X_gen : Describe
+            describe.
+
+        X_val_gen : Describe
+            describe.
+
+        sel : selection structure
+            Information to split the dataset.
+
+        Returns
+        -------
+        X_gen : describe
+
+        X_val_gen : describe
+        """
         # If the current generators are pointing to a temporary location, mark it for deletion
         # predict from current X_gen and X_val_gen and save the data in a temporary location 
         # for index i (layer i). Construct new generators for the data stored in this temporary location.
         # if the previous data locations are marked for deletion (temporary location), proceed the deletion
+        
+        # TODO: release X_gen._release() resources
 
-        enc_data = ae._encode(X_gen.nndb.features_scipy)         
-        X_gen = DataIterator(NNdb('Temp', enc_data, format=Format.N_H))
+        if (isinstance(X_gen, MemDataIterator)):
 
-        if (X_val_gen is not None):
-            enc_data_val = ae._encode(X_val_gen.nndb.features_scipy)
-            X_val_gen = DataIterator(NNdb('TempVal', enc_data_val, format=Format.N_H))
+            # Create a new core iterator
+            fn_gen_coreiter = lambda X, y, nb_class, image_data_generator, params:\
+                                BigDataNumpyArrayIterator(X, y, nb_class, image_data_generator, params)
+
+            # Create a generator for training
+            enc_data = ae._encode(X_gen.nndb.features_scipy)     
+            params = X_gen.params
+            X_gen = MemDataIterator(X_gen.edataset, NNdb('Temp_Layer:'+str(layer_idx), enc_data, format=Format.N_H), X_gen.nndb.cls_n, None, fn_gen_coreiter)
+            X_gen.init(params)
+
+            # Create a generator for validation
+            if (X_val_gen is not None):
+                enc_data_val = ae._encode(X_val_gen.nndb.features_scipy)
+                params = X_val_gen.params
+                X_val_gen = MemDataIterator(X_val_gen.edataset, NNdb('TempVal_Layer:'+str(layer_idx), enc_data_val, format=Format.N_H), X_val_gen.nndb.cls_n, None, fn_gen_coreiter)
+                X_val_gen.init(params)
+
+        elif (isinstance(X_gen, DskDataIterator)):
+            
+            patch_dir = os.path.join(save_to_dir, "ptmp_" + str(patch_idx))
+            if not os.path.exists(patch_dir):
+                os.makedirs(patch_dir)
+
+            fname = "tmp_m_" + str(self.uid) + ".l_" + str(layer_idx) + ".TR.dat"
+            fpath = os.path.join(patch_dir, fname)
+            X_gen = self.__save_encoded_data_and_create_dsk_generator(fpath, ae, X_gen)
+
+            if (X_val_gen is not None):
+                fname = "tmp_m_" + str(self.uid) + ".l_" + str(layer_idx) + ".VAL.dat"
+                fpath = os.path.join(patch_dir, fname)
+                X_val_gen = self.__save_encoded_data_and_create_dsk_generator(fpath, ae, X_val_gen)
 
         return (X_gen, X_val_gen)
 
-class DAEModelEx(NNModel):
-    """Multiple encoder, single decoder model"""
-    pass
+    def __save_encoded_data_and_create_dsk_generator(self, fpath, ae, cur_dskgen):
+        """Save the encoded data and create a new dsk generator for next iteration"""
+
+        # Iterate with the current generator and encode, save data        
+        params = cur_dskgen.params.copy()
+        params['class_mode'] = 'sparse'
+        params['shuffle'] = False
+
+        # Reinit current dsk generator
+        cur_dskgen.init(params)  
+
+        # Fetch new target size (the encoder layer size)
+        enc_layer_size = (ae.enc_size, )
+
+        # Calculate when to stop
+        nloops = math.ceil(cur_dskgen.nb_sample / cur_dskgen.batch_size)
+            
+        # Open a file for writing (binary mode)
+        f = open(fpath, "wb")
+
+        # file records array
+        frecords = []
+        fpos = 0
+
+        # Breaks when one round of iteration on dataset is performed
+        # Default bhavior: inifnite looping over and over again on the dataset
+        for i, batch in enumerate(cur_dskgen):
+            X_batch, Y_batch = batch[0], batch[1]
+            enc_data = ae._encode(X_batch)
+            enc_data.tofile(f)
+                
+            # Update frecords
+            if (not cur_dskgen.is_synced):
+                for cls_lbl in Y_batch:
+                    frecords.append([fpath, np.float32(fpos), np.uint16(cls_lbl)])
+                    fpos = enc_layer_size[0] * enc_data.dtype.itemsize
+
+            else:
+                for _ in range(len(X_batch)):  # No of samples
+                    frecords.append([fpath, np.float32(fpos), np.uint16(0)])
+                    fpos = enc_layer_size[0] * enc_data.dtype.itemsize
+                        
+            # Break when full dataset is traversed once
+            if (i + 1 >= nloops):
+                break
+
+        f.close()
+
+        # Create a new core generator
+        fn_gen_coreiter = lambda frecords, nb_class, image_data_generator, params:\
+                            BigDataDirectoryIterator(frecords,
+                                                    nb_class,
+                                                    image_data_generator,
+                                                    params)
+        # Params for create a new dsk generator  
+        params['class_mode'] = None
+        params['shuffle'] = True
+        params['color_mode'] = None
+        params['target_size'] = enc_layer_size
+        params['binary_data'] = True
+
+        new_dskgen = DskDataIterator(cur_dskgen.edataset, frecords, cur_dskgen.nb_class, fn_gen_coreiter=fn_gen_coreiter)
+        new_dskgen.init(params)
+    
+        return new_dskgen
