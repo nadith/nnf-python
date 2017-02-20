@@ -15,6 +15,7 @@ import os
 # Local Imports
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
+from nnf.db.MnistDb import MnistDb
 from nnf.db.Dataset import Dataset
 from nnf.db.NNPatch import NNPatch
 from nnf.db.DbSlice import DbSlice
@@ -28,7 +29,7 @@ from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
 
 class CNNPatch(NNPatch):
     def generate_nnmodels(self):
-        return CNNModel({'predict':TestCNNModel._fn_predict})
+        return CNNModel(callbacks={'predict':TestCNNModel._fn_predict})
 
 class CNNPatchGen(NNPatchGenerator):
     def __init__(self): 
@@ -43,6 +44,17 @@ class TestCNNModel(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
+    def Test_preloaded_db(self):
+        nnpatchman = NNPatchMan(CNNPatchGen())
+        cnncfg = CNNCfg()
+        cnncfg.preloaded_db = MnistDb(debug=True)
+        cnncfg.numepochs = 20
+        cnncfg.nb_val_samples = 800
+        cnncfg.samples_per_epoch = 600
+        nnpatchman.train(cnncfg)
+        #nnpatchman.test(cnncfg)
+        nnpatchman.predict(cnncfg)
+
     def Test(self):
         # Get the current working directory, define a `DataFolder`
         cwd = os.getcwd()
@@ -146,5 +158,5 @@ class TestCNNModel(object):
     # NNF: Callbacks
     ##########################################################################
     @staticmethod
-    def _fn_predict(nnmodel, nnpatch, prediction, labels):
+    def _fn_predict(nnmodel, nnpatch, predictions, true_output):
         pass

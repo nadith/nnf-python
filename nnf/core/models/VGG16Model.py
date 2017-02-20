@@ -31,9 +31,9 @@ class VGG16Model(CNNModel):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, callbaks=None):
+    def __init__(self, callbacks=None):
         """describe"""
-        super().__init__(callbaks=callbaks)
+        super().__init__(callbaks=callbacks)
 
     ##########################################################################
     # Protected: CNNModel Overrides

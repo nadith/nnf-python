@@ -10,8 +10,6 @@
 # Global Imports
 
 # Local Imports
-from nnf.core.models.NNModel import NNModel
-from nnf.core.models.Autoencoder import Autoencoder
 from nnf.db.Format import Format
 
 class NNPatch(object):
@@ -120,21 +118,6 @@ class NNPatch(object):
             self.w = 1
             self.h = pimg.shape[0]
 
-    @property
-    def id(self):
-        """Patch identification string.
-
-        Returns
-        -------
-        str
-            Patch idenfication string. May not be unique.
-        """
-        patch_id = '{offset_x}_{offset_y}_{height}_{width}'.format(offset_x=self.offset[0],
-                                                                    offset_y=self.offset[1],
-                                                                    height=self.h,
-                                                                    width=self.w)
-        return patch_id
-
     ##########################################################################
     # Protected Interface
     ##########################################################################
@@ -232,3 +215,21 @@ class NNPatch(object):
             iseq = True
 
         return iseq
+
+    ##########################################################################
+    # Dependant Properties
+    ##########################################################################
+    @property
+    def id(self):
+        """Patch identification string.
+
+        Returns
+        -------
+        str
+            Patch idenfication string. May not be unique.
+        """
+        patch_id = '{offset_x}_{offset_y}_{height}_{width}'.format(offset_x=self.offset[0],
+                                                                    offset_y=self.offset[1],
+                                                                    height=self.h,
+                                                                    width=self.w)
+        return patch_id

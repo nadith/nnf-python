@@ -13,6 +13,7 @@ import numpy as np
 import math
 from keras.models import load_model
 from warnings import warn as warning
+from keras import backend as K
 
 # Local Imports
 from nnf.db.Dataset import Dataset
@@ -33,8 +34,10 @@ class NNModel(object):
 
     Attributes
     ----------
-    uid : int
-        Unique id of this model across the framework.
+    uid : int or str
+        Unique id of this model across the framework. Can also set a custom
+        id for models created inside another model. 
+        Ref:`DAEModel` creating `Autoencoder`
 
     nnpatches : list of :obj:`NNPatch`
         Associated `nnpatches` with this model.
@@ -83,6 +86,8 @@ class NNModel(object):
         # Assign unique id
         if (uid is None):
             self.uid = NNModel.get_uid()
+        else:
+            self.uid = uid
 
         # Initialize instance variables
         # Iteartorstores format = [ (dict_iterstore, list_iterstore) for nnpatch_1, 
@@ -129,12 +134,7 @@ class NNModel(object):
         not sufficient to determine the architecture of the final 
         stacked network.
         """
-        print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< MODEL PRE-TRAIN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-
-        # If pre-train is called directly without the nnf
-        if (len(self._iteratorstores) == 0):
-            self._pre_train(daeprecfgs, daecfg)
-            return
+        print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< PRE-TRAIN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
         # If patch unique id is not given (Serial Processing)
         if (patch_idx is None):
@@ -186,11 +186,11 @@ class NNModel(object):
             Patch's index in this model. (Default value = None).
         """
         print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< TRAIN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-
-        # If pre-train is called directly without the nnf
-        if (len(self._iteratorstores) == 0):
-            self._pre_train(daeprecfgs, daecfg)
-            return
+        
+        # For models created inside another model and using preloaded dbs.
+        # Ref:`DAEModel` creating `Autoencoder`
+        if (len(self._iteratorstores) == 0):            
+            return self._train(cfg, patch_idx)
 
         # If patch unique id is not given (Serial Processing)
         if (patch_idx is None):
@@ -240,12 +240,7 @@ class NNModel(object):
 
         patch_idx : int, optional
             Patch's index in this model. (Default value = None).
-        """   
-        # If pre-train is called directly without the nnf
-        if (len(self._iteratorstores) == 0):
-            self._pre_train(daeprecfgs, daecfg)
-            return
-
+        """
         # If patch unique id is not given (Serial Processing)
         if (patch_idx is None):
 
@@ -289,11 +284,6 @@ class NNModel(object):
         patch_idx : int
             Patch's index in this model.
         """   
-        # If pre-train is called directly without the nnf
-        if (len(self._iteratorstores) == 0):
-            self._pre_train(daeprecfgs, daecfg)
-            return
-
         # If patch unique id is not given (Serial Processing)
         if (patch_idx is None):
 
@@ -485,6 +475,9 @@ class NNModel(object):
                         print('\t{} : {}'.format(key, val))
                 print("")
 
+        if (list_iterstore is None):
+            return
+
         for i, iterstore in enumerate(list_iterstore):
             print("\nIterator Store:{}".format(i))
             print("=================")
@@ -507,11 +500,11 @@ class NNModel(object):
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, nb_epoch=50, batch_size=256, shuffle=True, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, lbl, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
 
                 # Train with targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, nb_epoch=50, batch_size=256, shuffle=True, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, Xt, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
 
             else:
                 X, lbl = X_L
@@ -519,11 +512,11 @@ class NNModel(object):
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, nb_epoch=50, batch_size=256, shuffle=True) 
+                    self.net.fit(X, lbl, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
 
                 # Train without targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, nb_epoch=50, batch_size=256, shuffle=True) 
+                    self.net.fit(X, Xt, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
                   
         # Train from data generators
         else:
@@ -537,46 +530,60 @@ class NNModel(object):
                         X_gen, samples_per_epoch=cfg.samples_per_epoch,
                         nb_epoch=cfg.numepochs)
 
-    def _start_test(self, patch_idx=None, Xte_L=None, Xte_target=None, Xte_gen=None, Xte_target_gen=None):
-        assert((Xte_L is not None) or (Xte_gen is not None))
+    def _start_test(self, patch_idx=None, X_L_te=None, Xt_te=None, X_te_gen=None, Xt_te_gen=None):
+        assert((X_L_te is not None) or (X_te_gen is not None))
         assert(self.net is not None)
 
         # Test from preloaded database
-        if (Xte_L is not None):
+        if (X_L_te is not None):
 
-            Xte, lbl = Xte_L
-
-            # Test with labels
-            if (lbl is not None):
-                loss, accuracy = self.net.evaluate(Xte, lbl, verbose=1)
-
-            # Train with targets
-            elif (Xte_target is not None):
-                loss, accuracy = self.net.evaluate(Xte, Xte_target, verbose=1)
-            else:
-                raise Exception("Unsupported mode in testing...")
-
-        # Test from data generators
-        else:  
-            # Test with labels or target
-            if (Xte_target_gen is not None):
-                Xte_gen.sync_generator(Xte_target_gen)
-
-            # Calculate when to stop
-            nloops = math.ceil(Xte_gen.nb_sample / Xte_gen.batch_size)
+            Xte, lbl = X_L_te
 
             # Dictionary to collect loss and accuracy for batches
             metrics = {}
             for mname in self.net.metrics_names:
                 metrics.setdefault(mname, [])
 
-            for i, batch in enumerate(Xte_gen):
-                Xte_batch, Yte_batch = batch[0], batch[1]
+            # Test with labels
+            if (lbl is not None):
+                eval_res = self.net.evaluate(Xte, lbl, verbose=1)
 
-                # Yte_batch=Xte_target_batch when Xte_gen is sycned with Xte_target_gen
-                eval_res = self.net.evaluate(Xte_batch, Yte_batch, verbose=1)
+                # Accumilate metrics into a list 
+                for mi, mname in enumerate(self.net.metrics_names):
+                    metrics[mname].append(eval_res if np.isscalar(eval_res) else eval_res[mi])
+
+            # Train with targets
+            elif (Xt_te is not None):
+                eval_res = self.net.evaluate(Xte, Xt_te, verbose=1)
+
+                # Accumilate metrics into a list 
+                for mi, mname in enumerate(self.net.metrics_names):
+                    metrics[mname].append(eval_res if np.isscalar(eval_res) else eval_res[mi])
+
+            else:
+                raise Exception("Unsupported mode in testing...")
+
+        # Test from data generators
+        else:  
+            # Test with labels or target
+            if (Xt_te_gen is not None):
+                X_te_gen.sync_generator(Xt_te_gen)
+
+            # Calculate when to stop
+            nloops = math.ceil(X_te_gen.nb_sample / X_te_gen.batch_size)
+
+            # Dictionary to collect loss and accuracy for batches
+            metrics = {}
+            for mname in self.net.metrics_names:
+                metrics.setdefault(mname, [])
+
+            for i, batch in enumerate(X_te_gen):
+                X_te_batch, Y_te_batch = batch[0], batch[1]
+
+                # Y_te_batch=X_te_batch when X_te_gen is sycned with Xt_te_gen
+                eval_res = self.net.evaluate(X_te_batch, Y_te_batch, verbose=1)
                 
-                # Accumilate figure into a list 
+                # Accumilate metrics into a list 
                 for mi, mname in enumerate(self.net.metrics_names):
                     metrics[mname].append(eval_res if np.isscalar(eval_res) else eval_res[mi])
 
@@ -591,67 +598,118 @@ class NNModel(object):
         if (self.callbacks['test'] is not None):
             self.callbacks['test'](self, self.nnpatches[patch_idx], metrics)
 
-    def _start_predict(self, patch_idx=None, Xte_L=None, Xte_target=None, Xte_gen=None, Xte_target_gen=None):
-        assert((Xte_L is not None) or (Xte_gen is not None))
+    def _start_predict(self, patch_idx=None, X_L_te=None, Xt_te=None, X_te_gen=None, Xt_te_gen=None):
+        assert((X_L_te is not None) or (X_te_gen is not None))
         assert(self.net is not None)
 
         # Predict from preloaded database
-        if (Xte_L is not None):
-            prediction = self.net.predict(Xte_L, verbose=1)
+        if (X_L_te is not None):
+
+            # true_output=labels or other
+            Xte, true_output = X_L_te
+
+            if (true_output is None):
+                true_output = Xt_te
+
+            predictions = self._predict_features(Xte)
 
         # Predict from data generators
         else:
             # Turn off shuffling: the predictions will be in original order
-            Xte_gen.set_shuffle(False)
+            X_te_gen.set_shuffle(False)
 
-            labels = None
+            # Labels or other
+            true_output = None
 
-            # Test with labels or target
-            if (Xte_target_gen is not None):
-                Xte_gen.sync_generator(Xte_target_gen)
+            # Test with target of true_output
+            if (Xt_te_gen is not None):
+                X_te_gen.sync_generator(Xt_te_gen)
 
-                tshape = Xte_target_gen.image_shape
-                if (Xte_gen.input_vectorized):
+                tshape = Xt_te_gen.image_shape
+                if (X_te_gen.input_vectorized):
                     tshape = (np.prod(np.array(tshape)), )
 
-                labels = np.zeros((Xte_gen.nb_sample, ) + tshape, 'float32')
+                true_output = np.zeros((X_te_gen.nb_sample, ) + tshape, 'float32')
             else:
                 # Array to collect true labels for batches
-                if (Xte_gen.class_mode is not None):                    
-                    labels = np.zeros(Xte_gen.nb_sample, 'float32')
+                if (X_te_gen.class_mode is not None):                    
+                    true_output = np.zeros(X_te_gen.nb_sample, 'float32')
 
             # Calculate when to stop
-            nloops = math.ceil(Xte_gen.nb_sample / Xte_gen.batch_size)
+            nloops = math.ceil(X_te_gen.nb_sample / X_te_gen.batch_size)
 
-            # Array to collect prediction for batches
-            prediction = np.zeros((Xte_gen.nb_sample, self._predict_feature_size()), 'float32')
+            # Array to collect prediction from various feature layers in batches
+            predictions = []
+            predict_feature_sizes = self._predict_feature_sizes()
+            for i, predict_feature_size in enumerate(predict_feature_sizes):
+                predictions.append(np.zeros((X_te_gen.nb_sample, predict_feature_size), 'float32'))
     
-            for i, batch in enumerate(Xte_gen):
-                Xte_batch, yte_batch = batch[0], batch[1]
+            for i, batch in enumerate(X_te_gen):
+                X_te_batch, Y_te_batch = batch[0], batch[1]
+                # Y_te_batch=X_te_batch when X_te_gen is sycned with Xt_te_gen
 
                 # Set the range
-                np_sample_batch = Xte_batch.shape[0]
+                np_sample_batch = X_te_batch.shape[0]
                 rng = range(i*np_sample_batch, (i+1)*np_sample_batch)
 
                 # Predictions for this batch
-                prediction[rng, :] = self._predict_feature(Xte_batch)
+                batch_predictions = self._predict_features(X_te_batch)
+                for j, batch_prediction in enumerate(batch_predictions):
+                    predictions[j][rng, :] = batch_prediction
 
-                # Labels for this batch
-                if (labels is not None):
-                    labels[rng] = yte_batch
+                # true_output for this batch
+                if (true_output is not None):
+                    true_output[rng] = Y_te_batch
 
                 # Break when full dataset is traversed once
                 if (i + 1 >= nloops):
                     break
 
         if (self.callbacks['predict'] is not None):
-            self.callbacks['predict'](self, self.nnpatches[patch_idx], prediction, labels)
+            self.callbacks['predict'](self, self.nnpatches[patch_idx], predictions, true_output)
 
-    def _predict_feature_size(self):
-        return self.net.output_shape[1]        
+    def _predict_feature_sizes(self):
+        return self.feature_sizes
 
-    def _predict_feature(self, Xte):
-        return self.net.predict(Xte, verbose=1)
+    def _predict_features(self, Xte):
+        predictions = []
+        for _, fn_predict_feature in enumerate(self.fns_predict_feature):
+            predictions.append(fn_predict_feature([Xte, 0])[0])
+
+        # return [self.net.predict(Xte, verbose=1)]
+        return predictions
+
+    def _init_fns_predict_feature(self, cfg):
+
+        self.fns_predict_feature = []
+        self.feature_sizes = []
+        if (cfg.feature_layers is None): 
+            return
+
+        for i, f_idx in enumerate(cfg.feature_layers):
+            f_layer = self.net.layers[f_idx]
+            
+            if (hasattr(f_layer, 'output_dim')):
+                self.feature_sizes.append(f_layer.output_dim)
+
+            elif (hasattr(f_layer, 'output_shape')):
+                self.feature_sizes.append(f_layer.output_shape[1])
+
+            else:
+                raise Exception("Feature layers chosen are invalid. `cfg.feature_layers`")
+
+            self.fns_predict_feature.append(
+                        K.function([self.net.layers[0].input, K.learning_phase()],
+                                    [f_layer.output]))
+
+            # IMPORTANT: 
+            # Retrieves the output tensor(s) of a layer at a given node.
+            # f.get_output_at(node_index): 
+
+            # Retrieves the output tensor(s) of a layer (only applicable if
+            # the layer has exactly one inbound node, i.e. if it is connected
+            # to one incoming layer).
+            # f.output
 
     def _try_save(self, cfg, patch_idx, prefix="PREFIX"):
         assert(self.net is not None)

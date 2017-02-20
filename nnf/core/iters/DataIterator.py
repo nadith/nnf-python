@@ -84,15 +84,8 @@ class DataIterator(object):
         # Set iterator params
         self._params = params
 
-    @property
-    def params(self):   
-        """:obj:`dict`: Core iterator parameters."""
-        if (self._params is None):
-            return {}
-        return self._params
-
     ##########################################################################
-    # Public: Core Iterator Only Operations
+    # Public: Core Iterator Only Operations/Dependant Properties
     ##########################################################################
     def set_shuffle(self, shuffle):
         """Set shuffle property."""
@@ -111,6 +104,39 @@ class DataIterator(object):
 
         self._gen_next.shuffle = shuffle
         return True
+
+    def sync(self, gen_next):
+        """Sync the secondary iterator with this iterator.
+
+        Sync the secondary core iterator with this core itarator internally.
+        Used when data needs to be generated with its matching target.
+
+        Parameters
+        ----------
+        gen : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator` 
+            Core iterator that needs to be synced with this core iterator.
+
+        Note
+        ----
+        Current supports only 1 iterator to be synced.
+        """
+        # This method is only supported by the core iterator      
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return False       
+
+        if (gen_next is None or
+            isinstance(gen_next , types.GeneratorType)): 
+            return False
+
+        self._gen_next.sync(gen_next)
+        self._sync_gen_next = gen_next
+        return True
+
+    @property
+    def is_synced(self):
+        """bool : whether this generator is synced with another generator."""
+        return (self._sync_gen_next is not None)
 
     @property
     def input_vectorized(self):
@@ -158,7 +184,7 @@ class DataIterator(object):
         return self._gen_next.nb_class
 
     @property
-    def image_shape(self):   
+    def image_shape(self):
         """:obj:`tuple` : shape of the image that is natively producted by this iterator."""
         # This property is only supported by the core iterator      
         if (self._gen_next is None or
@@ -167,46 +193,13 @@ class DataIterator(object):
         return self._gen_next.image_shape
 
     @property
-    def dim_ordering(self):   
+    def dim_ordering(self):
         """:obj:`tuple` : shape of the image that is natively producted by this iterator."""
         # This property is only supported by the core iterator      
         if (self._gen_next is None or
             isinstance(self._gen_next , types.GeneratorType)):
             return None  
         return self._gen_next.dim_ordering
-
-    @property
-    def is_synced(self):   
-        """bool : whether this generator is synced with another generator."""
-        return (self._sync_gen_next is not None)
-
-    def sync(self, gen_next):
-        """Sync the secondary iterator with this iterator.
-
-        Sync the secondary core iterator with this core itarator internally.
-        Used when data needs to be generated with its matching target.
-
-        Parameters
-        ----------
-        gen : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator` 
-            Core iterator that needs to be synced with this core iterator.
-
-        Note
-        ----
-        Current supports only 1 iterator to be synced.
-        """
-        # This method is only supported by the core iterator      
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return False       
-
-        if (gen_next is None or
-            isinstance(gen_next , types.GeneratorType)): 
-            return False
-
-        self._gen_next.sync(gen_next)
-        self._sync_gen_next = gen_next
-        return True
 
     ##########################################################################
     # Protected Interface
@@ -221,6 +214,9 @@ class DataIterator(object):
         self._imdata_pp = None
         self._gen_next = None
 
+    ##########################################################################
+    # Special Interface
+    ##########################################################################
     def __iter__(self):
         """Python iterator interface required method."""
         return self
@@ -228,3 +224,13 @@ class DataIterator(object):
     def __next__(self):
         """Python iterator interface required method."""
         return next(self._gen_next)
+
+    ##########################################################################
+    # Dependant Properties
+    ##########################################################################
+    @property
+    def params(self):
+        """:obj:`dict`: Core iterator parameters."""
+        if (self._params is None):
+            return {}
+        return self._params

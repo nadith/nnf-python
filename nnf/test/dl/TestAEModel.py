@@ -15,6 +15,7 @@ import os
 # Local Imports
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
+from nnf.db.MnistDb import MnistDb
 from nnf.db.Dataset import Dataset
 from nnf.db.NNPatch import NNPatch
 from nnf.db.DbSlice import DbSlice
@@ -28,7 +29,7 @@ from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
 
 class AEPatch(NNPatch):
     def generate_nnmodels(self):
-        return Autoencoder({'predict':TestAEModel._fn_predict})
+        return Autoencoder(callbacks={'predict':TestAEModel._fn_predict})
 
 class AEPatchGen(NNPatchGenerator):
     def __init__(self): 
@@ -43,6 +44,16 @@ class TestAEModel(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
+    def Test_preloaded_db(self):
+        nnpatchman = NNPatchMan(AEPatchGen())
+        aecfg = AECfg([784, 500, 784], preloaded_db=MnistDb(debug=True))
+        aecfg.numepochs = 20
+        aecfg.nb_val_samples = 800
+        aecfg.samples_per_epoch = 600
+        nnpatchman.train(aecfg)
+        #nnpatchman.test(aecfg)
+        nnpatchman.predict(aecfg)
+
     def Test(self):
         # Get the current working directory, define a `DataFolder`
         cwd = os.getcwd()
@@ -151,5 +162,5 @@ class TestAEModel(object):
     # NNF: Callbacks
     ##########################################################################
     @staticmethod
-    def _fn_predict(nnmodel, nnpatch, prediction, labels):
+    def _fn_predict(nnmodel, nnpatch, predictions, true_output):
         pass

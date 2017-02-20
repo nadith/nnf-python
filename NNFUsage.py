@@ -153,7 +153,12 @@ imdb_obj = matStruct['imdb_obj']
 #from nnf.test.dl.TestAEModel import TestAEModel
 #TestAEModel().Test()
 
-#2: DAE Model
+#1.1: AE Model (pre-loaded database)
+#from nnf.test.dl.TestAEModel import TestAEModel
+#TestAEModel().Test_preloaded_db()
+
+
+#2: DAE Model ################################################################
 #from nnf.test.dl.TestDAEModel import TestDAEModel
 #TestDAEModel().Test()
 
@@ -161,16 +166,29 @@ imdb_obj = matStruct['imdb_obj']
 #from nnf.test.dl.TestDAEModel import TestDAEModel
 #TestDAEModel().Test(pretrain=False)
 
-#3: DAEReg Model
+#2.2: DAE Model (pre-loaded database)
+#from nnf.test.dl.TestDAEModel import TestDAEModel
+#TestDAEModel().Test_preloaded_db()
+
+
+#3: DAEReg Model #############################################################
 #from nnf.test.dl.TestDAERegModel import TestDAERegModel
 #TestDAERegModel().Test()
 
-#4: CNN Model
+#3.1: DAEReg Model (pre-loaded database)
+#from nnf.test.dl.TestDAERegModel import TestDAERegModel
+#TestDAERegModel().Test_preloaded_db()
+
+
+#4: CNN Model ################################################################
 #from nnf.test.dl.TestCNNModel import TestCNNModel
 #TestCNNModel().Test()
 
-#5: TODO: VGG16 Model
+#4.1: CNN Model (pre-loaded database) 
+#from nnf.test.dl.TestCNNModel import TestCNNModel
+#TestCNNModel().Test_preloaded_db()
+
+
+#5: TODO: VGG16 Model ########################################################
 #from nnf.test.dl.TestVGG16Model import TestVGG16Model
 #TestVGG16Model().Test()
-
-

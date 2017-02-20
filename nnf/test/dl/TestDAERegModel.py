@@ -15,6 +15,7 @@ import os
 # Local Imports
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
+from nnf.db.MnistDb import MnistDb
 from nnf.db.Dataset import Dataset
 from nnf.db.NNPatch import NNPatch
 from nnf.db.DbSlice import DbSlice
@@ -43,6 +44,26 @@ class TestDAERegModel(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
+    def Test_preloaded_db(self, pretrain=True):
+        nnpatchman = NNPatchMan(DAERegPatchGen())
+
+        daepcfgs = []
+        daecfg = DAERegCfg([784, 512, 400, 320, 200, 784], 
+                            act_fns=['input', 'relu', 'relu', 'sigmoid', 'sigmoid', 'sigmoid'],
+                            lp=['input', 'dr', 'dr', 'rg', 'rg', 'output'],
+                            preloaded_db=MnistDb(debug=True))
+
+        if (pretrain):
+            daepcfgs.append(DAEPreCfg([784, 512, 784], preloaded_db=MnistDb(debug=True)))
+            daepcfgs.append(DAEPreCfg([512, 400, 512]))
+            daepcfgs.append(DAEPreCfg([400, 320, 784])) 
+            daepcfgs.append(DAEPreCfg([320, 200, 784])) 
+            nnpatchman.pre_train(daepcfgs, daecfg)
+
+        nnpatchman.train(daecfg)
+        nnpatchman.predict(daecfg)
+
+
     def Test(self, pretrain=True):
         # Get the current working directory, define a `DataFolder`
         cwd = os.getcwd()
@@ -165,5 +186,5 @@ class TestDAERegModel(object):
     # NNF: Callbacks
     ##########################################################################
     @staticmethod
-    def _fn_predict(nnmodel, nnpatch, prediction, labels):
+    def _fn_predict(nnmodel, nnpatch, predictions, true_output):
         pass

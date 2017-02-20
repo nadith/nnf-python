@@ -26,28 +26,16 @@ class DAERegModel(DAEModel):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, callbaks=None):
-        super().__init__(callbaks)
+    def __init__(self, callbacks=None):
+        super().__init__(callbacks)
         self.Xt_gen = self.Xt_val_gen = None
 
         # Set defaults for arguments
         get_target_dat_gen = self.callbacks.setdefault('get_target_data_generators', None)
         if (get_target_dat_gen is None):
-            self.callbacks['get_target_data_generators'] = self._get_target_data_generators
+            self.callbacks['get_target_data_generators'] = self.get_target_data_generators
      
-    ##########################################################################
-    # Protected: DAEModel Overrides
-    ##########################################################################
-    def _validate_cfg(self, ephase, cfg):
-        super()._validate_cfg(ephase, cfg)
-
-        if (ephase != NNModelPhase.TRAIN): return
-
-        if (len(cfg.arch) != len(cfg.lp)):
-            raise Exception('Layer purpose string for each layers is not' + 
-            ' specified. (length of `cfg.arch` != length of `cfg.lp`).')
-
-    def _get_target_data_generators(self, ephase, list_iterstore, dict_iterstore):
+    def get_target_data_generators(self, ephase, list_iterstore, dict_iterstore):
         """Get target data generators for pre-training, training only.
 
         .. warning:: Only invoked in PRE_TRAIN and TRAIN phases. For other phases,
@@ -83,6 +71,18 @@ class DAERegModel(DAEModel):
             X2_gen = list_iterstore[0].setdefault(Dataset.VAL_OUT, None)
 
         return X1_gen, X2_gen
+
+    ##########################################################################
+    # Protected: DAEModel Overrides
+    ##########################################################################
+    def _validate_cfg(self, ephase, cfg):
+        super()._validate_cfg(ephase, cfg)
+
+        if (ephase != NNModelPhase.TRAIN): return
+
+        if (len(cfg.arch) != len(cfg.lp)):
+            raise Exception('Layer purpose string for each layers is not' + 
+            ' specified. (length of `cfg.arch` != length of `cfg.lp`).')
 
     def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
         """Initialize data generators for pre-training, training, testing, prediction.
@@ -121,19 +121,20 @@ class DAERegModel(DAEModel):
         # PERF: No need to make a copy of the following generators since 
         # they are used as secondary generators to X_gen, X_val_gen with sync_generator(...)
         if (ephase == NNModelPhase.PRE_TRAIN):
-
-            # Refer _pre_train_preprocess() for syncing these data generators
-            self.Xt_gen, self.Xt_val_gen =\
-                    self.callbacks['get_target_data_generators'](ephase, list_iterstore, dict_iterstore)
+            if (list_iterstore is not None):
+                # Refer _pre_train_preprocess() for syncing these data generators
+                self.Xt_gen, self.Xt_val_gen =\
+                        self.callbacks['get_target_data_generators'](ephase, list_iterstore, dict_iterstore)
         
         elif (ephase == NNModelPhase.TRAIN):
-            Xt_gen, Xt_val_gen =\
-                    self.callbacks['get_target_data_generators'](ephase, list_iterstore, dict_iterstore)
+            if (list_iterstore is not None):
+                Xt_gen, Xt_val_gen =\
+                        self.callbacks['get_target_data_generators'](ephase, list_iterstore, dict_iterstore)
 
-            # Sync the data generators
-            X_gen.sync_generator(Xt_gen)        
-            if (X_val_gen is not None):
-                X_val_gen.sync_generator(Xt_val_gen)       
+                # Sync the data generators
+                X_gen.sync_generator(Xt_gen)        
+                if (X_val_gen is not None):
+                    X_val_gen.sync_generator(Xt_val_gen)       
 
         return X_gen, X_val_gen
 
@@ -151,6 +152,19 @@ class DAERegModel(DAEModel):
                 X_val_gen.sync_generator(self.Xt_val_gen)  
 
         return X_gen, X_val_gen
+
+    def _pre_train_postprocess_preloaded_db(self, layer_idx, daecfg, ae, X_L, Xt, X_L_val, Xt_val):
+        X_L, Xt, X_L_val, Xt_val =\
+            super()._pre_train_postprocess_preloaded_db(layer_idx, daecfg, ae, X_L, Xt, X_L_val, Xt_val)
+        
+        # Layer purpose (for the next layer)
+        lp = daecfg.lp[layer_idx + 1]
+        
+        # Update the targets if it is a regression layer
+        if (lp == 'rg'):
+            _, Xt, _, Xt_val = daecfg.preloaded_db.LoadPreTrDb(self)
+
+        return  X_L, Xt, X_L_val, Xt_val
 
     def _stack_layers(self, ae, layer_idx, layers, daeprecfgs, daecfg):
         """Non tied weights"""

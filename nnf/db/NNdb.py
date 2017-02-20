@@ -77,9 +77,9 @@ class NNdb(object):
     Database with given class labels
     >>> nndb = NNdb('any_name', imdb, [4 3], false, [1 1 1 1 2 2 2])
     """
-    #################################################################
+    ##########################################################################
     # Public Interface
-    #################################################################
+    ##########################################################################
     def __init__(self, name, db, n_per_class=None, build_cls_lbl=False,
                  cls_lbl=None, format=Format.H_W_CH_N):
         """Construct a nndb object.
@@ -441,9 +441,9 @@ class NNdb(object):
             # hold off
             plt.show()
 
-    #################################################################
-    # Dependant property Implementations
-    #################################################################
+    ##########################################################################
+    # Dependant Properties
+    ##########################################################################
     @property
     def features(self):
         """2D Feature Matrix (double)."""

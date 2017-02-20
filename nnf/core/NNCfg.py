@@ -51,10 +51,11 @@ class BaseCfg(object):
         self.mr = 0  
         self.non_sparse_penalty = 0
         self.weight_decay_L2 = 0
-        self.batch_size = 1  # only used in explcit database test cases
+        self.batch_size = 1             # Only used in PreLoadedDb test cases
         self.numepochs = 2
         self.loss_fn = 'mean_squared_error'
-        self.use_db  = None #'mnist'
+        self.preloaded_db = None        # PreLoadedDb instance
+        self.feature_layers = [-1, -2]  # Used to predict features
 
         # When data generators are used to train
         self.nb_val_samples = 100
@@ -95,35 +96,37 @@ class DAEPreCfg(BaseCfg):
     """
 
     def __init__(self, arch=[1089, 784, 1089],
-                        act_fns=['input', 'sigmoid', 'sigmoid']):
+                        act_fns=['input', 'sigmoid', 'sigmoid'],
+                        preloaded_db=None):
         super().__init__()
         self.arch = arch
         self.act_fns = act_fns
+        self.preloaded_db = preloaded_db
      
 class AECfg(DAEPreCfg):
     """Training configuration for simple autoencoder network."""
 
     def __init__(self, arch=[1089, 784, 1089],
-                        act_fns=['input', 'sigmoid', 'sigmoid']):
-        super().__init__(arch)
-        self.act_fns = act_fns
+                        act_fns=['input', 'sigmoid', 'sigmoid'],
+                        preloaded_db=None):
+        super().__init__(arch, act_fns, preloaded_db)
 
 class DAECfg(DAEPreCfg):
     """Training configuration for deep autoencoder network."""
 
     def __init__(self, arch=[1089, 784, 512, 784, 1089], 
-                        act_fns=['input', 'sigmoid', 'sigmoid', 'sigmoid', 'sigmoid']):
-        super().__init__(arch)
-        self.act_fns = act_fns
+                        act_fns=['input', 'sigmoid', 'sigmoid', 'sigmoid', 'sigmoid'],
+                        preloaded_db=None):
+        super().__init__(arch, act_fns, preloaded_db)
 
 class DAERegCfg(DAEPreCfg):
     """Training configuration for deep regr. autoencoder network."""
 
     def __init__(self, arch=[1089, 784, 512, 256, 128, 1089], 
                         act_fns=['input', 'sigmoid', 'sigmoid', 'sigmoid', 'sigmoid', 'sigmoid'],
-                        lp=['input', 'dr', 'dr', 'dr', 'rg', 'output']):
-        super().__init__(arch)
-        self.act_fns = act_fns
+                        lp=['input', 'dr', 'dr', 'dr', 'rg', 'output'],
+                        preloaded_db=None):
+        super().__init__(arch, act_fns, preloaded_db)
           
         # Layer purpose
         # 'dr' => dimension reduction layer
