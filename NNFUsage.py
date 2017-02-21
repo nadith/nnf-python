@@ -39,7 +39,6 @@ imdb_obj = matStruct['imdb_obj']
 #nndb = NNdb('Original', db, 8, True, format=Format.N_H_W_CH)
 #nndb.show(5, 8)
 
-
 # Database Slicing ##########################################################
 #############################################################################
 #from nnf.db.NNdb import NNdb
@@ -145,6 +144,30 @@ imdb_obj = matStruct['imdb_obj']
 #nndbs_tr[1].show()
 #nndbs_tr[2].show()
 #nndbs_tr[3].show()
+
+##############################################################################
+# ML Algorithms #############################################################
+#############################################################################
+#from nnf.alg.LDA import LDA
+#from nnf.alg.Util import Util
+#from nnf.db.NNdb import NNdb
+#from nnf.db.DbSlice import DbSlice
+#from nnf.db.Selection import Selection
+#from nnf.db.Selection import Select
+
+##1: LDA
+#nndb = NNdb('original', imdb_obj.db, 8, True)
+#sel = Selection()
+#sel.scale = 0.5
+#sel.use_rgb = False
+#sel.tr_col_indices      = np.array([0, 2, 3, 5], dtype='uint8')
+#sel.te_col_indices      = np.array([6, 7], dtype='uint8')
+#sel.class_range         = np.uint8(np.arange(0, 60))
+#[nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
+
+#W, info = LDA.l2(nndb_tr)
+#accuracy = Util.test(W, nndb_tr, nndb_te, info)
+#print("LDA: Accuracy:" + str(accuracy))
 
 ##############################################################################
 ## Deep Learning Framework ###################################################
