@@ -20,25 +20,14 @@ class DskDataIterator(DataIterator):
     Attributes
     ----------
     frecords : :obj:`list`
-        List of file records. frecord = [fpath, fpos, cls_lbl] 
-
-    _nb_class : int
-        Number of classes.
-
-    _pp_params : :obj:`dict`, optional
-        Pre-processing parameters for :obj:`ImageDataPreProcessor`. (Default value = None). 
-
-    _params : :obj:`dict`
-        Core iterator/generator parameters. (Default value = None)
-
-    _sync_iter : :obj:`DskDataIterator`
-        Iterator that needs to be synced with this iterator. (Default value = None)
+        List of file records. frecord = [fpath, fpos, cls_lbl]
     """
 
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, edataset, frecords, nb_class, pp_params=None, fn_gen_coreiter=None):
+    def __init__(self, edataset, frecords, nb_class, pp_params=None, 
+                                                        fn_gen_coreiter=None):
         """Construct a DskmanDskDataIterator instance.
 
         Parameters
@@ -47,16 +36,18 @@ class DskDataIterator(DataIterator):
             Dataset enumeration key.
 
         frecords : :obj:`list`
-            List of file records. frecord = [fpath, fpos, cls_lbl] 
+            List of file records. frecord = [fpath, fpos, cls_lbl].
 
         nb_class : int
             Number of classes.
 
         pp_params : :obj:`dict`, optional
-            Pre-processing parameters for :obj:`ImageDataPreProcessor`. (Default value = None).
+            Pre-processing parameters for :obj:`ImageDataPreProcessor`.
+            (Default value = None).
 
         fn_gen_coreiter : `function`, optional
-            Factory method to create the core iterator. (Default value = None).
+            Factory method to create the core iterator.
+            (Default value = None).
         """
         super().__init__(pp_params, fn_gen_coreiter, edataset, nb_class)        
         self.frecords = frecords
@@ -76,12 +67,15 @@ class DskDataIterator(DataIterator):
         i.e params.binary_data is unique and only used in
             BigDataDirectoryIterator(DskDataIterator)
         """
-        gen_next = self._imdata_pp.flow_from_directory(self.frecords, self._nb_class, params)          
+        gen_next = self._imdata_pp.flow_from_directory(self.frecords,
+                                                        self._nb_class, 
+                                                        params)          
         super().init(gen_next, params)
 
     def clone(self):
         """Create a copy of this NNdb object."""
-        new_obj = DskDataIterator(self.edataset, self.frecords, self._nb_class, self._pp_params, self._fn_gen_coreiter)
+        new_obj = DskDataIterator(self.edataset, self.frecords,
+                    self._nb_class, self._pp_params, self._fn_gen_coreiter)
         new_obj.init(self._params)
         new_obj.sync(self._sync_gen_next)
         return new_obj

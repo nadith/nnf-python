@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- TODO: Comment (__get_pp_params_map)
+# -*- coding: utf-8 -*-
 """
 .. module:: NNFrmework
    :platform: Unix, Windows
@@ -353,8 +353,23 @@ class NNFramework(object):
     # Private Interface
     ##########################################################################
     def __get_pp_params_map(self, iter_pp_param):
-        # 'iter_pp_param': [{}, (Dataset.TR, {}), (Dataset.VAL, {}), ((Dataset.TE, Dataset.TE_OUT), {})]
+        """Fetch iterator pre-processor parameter set for each dataset.
 
+        Parameters
+        ----------
+        iter_pp_param : :obj:`list`
+            List of `dict` element, `tuple` element in the following format.
+            [{default_pp_params}, 
+            (Dataset.TR, {pp_params}), 
+            (Dataset.VAL, {pp_params}), 
+            ((Dataset.TE, Dataset.TE_OUT), {pp_params})]                
+
+        Returns
+        -------
+        :obj:`dict`
+            Dictonary of pre-processor parameters keyed by Dataset 
+            enumeration. (i.e Dataset.TR|VAL|...).
+        """
         map = {}
         default_pp_params = None
         if (isinstance(iter_pp_param, list)):  # [{}, (..., ...), (..., ...), ((..., ...), ...)] 

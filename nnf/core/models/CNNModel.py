@@ -1,39 +1,71 @@
 # -*- coding: utf-8 -*-
+"""
+.. module:: CNNModel
+   :platform: Unix, Windows
+   :synopsis: Represent CNNModel class.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
+
 # Global Imports
 from warnings import warn as warning
-from keras.layers import Input, Dense
-from keras.models import Model
 import numpy as np
-
-from keras.models import Sequential
+from keras.models import Model, Sequential
+from keras.layers import Input
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D,ZeroPadding2D
 #from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD,RMSprop,adam
 
-
 # Local Imports
-from nnf.core.models.NNModel import NNModel
-from nnf.core.models.Autoencoder import Autoencoder
-from nnf.core.iters.DataIterator import DataIterator
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
 from nnf.db.Dataset import Dataset
+from nnf.core.models.NNModel import NNModel
+from nnf.core.models.Autoencoder import Autoencoder
+from nnf.core.models.NNModelPhase import NNModelPhase
+from nnf.core.iters.DataIterator import DataIterator
 from nnf.core.iters.memory.MemDataIterator import MemDataIterator
 from nnf.core.iters.disk.DskDataIterator import DskDataIterator
-from nnf.core.models.NNModelPhase import NNModelPhase
 
 class CNNModel(NNModel):
     """Generic Convolutional Neural Network Model.
 
+    Attributes
+    ----------
+    callbacks : :obj:`dict`
+        Callback dictionary. Supported callbacks.
+        {`test`, `predict`, `get_data_generators`}
+
+    X_L : :obj:`tuple`
+        In the format (`array_like` data tensor, labels).
+        If the `nnmodel` is not expecting labels, set it to None.
+
+    Xt : `array_like`
+        Target data tensor.
+        If the `nnmodel` is not expecting a target data tensor,
+        set it to None.
+
+    X_L_val : :obj:`tuple`
+        In the format (`array_like` validation data tensor, labels).
+        If the `nnmodel` is not expecting labels, set it to None.
+
+    Xt_val : `array_like`
+        Validation target data tensor.
+        If the `nnmodel` is not expecting a validation target data tensor,
+        set it to None.
+
     Note
     ----
-    Extend this class to implement custom deep autoencoder models.
+    Extend this class to implement custom CNN models.
     """
+
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, X_L=None, Xt=None, X_L_val=None, Xt_val=None, callbacks=None):
+    def __init__(self, X_L=None, Xt=None, X_L_val=None, Xt_val=None,
+                                                            callbacks=None):
+        """Constructs :obj:`CNNModel` instance."""
         super().__init__()
 
         # Set defaults for arguments
@@ -48,10 +80,11 @@ class CNNModel(NNModel):
         self.X_L = X_L          # (X, labels)
         self.Xt = Xt            # X target
         self.X_L_val = X_L_val  # (X_val, labels_val)
-        self.Xt_val = Xt_val    # X_val target       
+        self.Xt_val = Xt_val    # X_val target
+        pass      
 
     def pre_train(self, precfgs, cfg, patch_idx=None):
-        """Pre-train the :obj:`Autoencoder`.
+        """Pre-train the :obj:`CNNModel`.
 
         .. warning:: Not supported.
 
@@ -113,8 +146,9 @@ class CNNModel(NNModel):
     ##########################################################################
     # Protected: NNModel Overrides
     ##########################################################################
-    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
-        """Train the :obj:`Autoencoder`.
+    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
+                                    list_iterstore=None, dict_iterstore=None):
+        """Train the :obj:`CNNModel`.
 
         Parameters
         ----------
@@ -125,7 +159,8 @@ class CNNModel(NNModel):
             Patch's index in this model.
 
         dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of each `nnpatch`.
+            Paths to temporary directories for each user db-param of 
+            each `nnpatch`.
 
         list_iterstore : :obj:`list`
             List of iterstores for :obj:`DataIterator`.
@@ -134,7 +169,9 @@ class CNNModel(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN, list_iterstore, dict_iterstore)
+        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN,
+                                                        list_iterstore,
+                                                        dict_iterstore)
 
         # Pre-condition asserts
         assert((cfg.preloaded_db is None and X_gen is not None) or 
@@ -169,8 +206,9 @@ class CNNModel(NNModel):
 
         return (None, None, None, None)
 
-    def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
-        """Test the :obj:`Autoencoder`.
+    def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
+                                    list_iterstore=None, dict_iterstore=None):
+        """Test the :obj:`CNNModel`.
 
         Parameters
         ----------
@@ -181,7 +219,8 @@ class CNNModel(NNModel):
             Patch's index in this model.
 
         dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of each `nnpatch`.
+            Paths to temporary directories for each user db-param of 
+            each `nnpatch`.
 
         list_iterstore : :obj:`list`
             List of iterstores for :obj:`DataIterator`.
@@ -190,8 +229,10 @@ class CNNModel(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.TEST, list_iterstore, dict_iterstore)
-
+        Xte_gen, Xte_target_gen = self._init_data_generators(
+                                                    NNModelPhase.TEST,
+                                                    list_iterstore,
+                                                    dict_iterstore)
         # Pre-condition asserts
         assert((cfg.preloaded_db is None and Xte_gen is not None) or 
                 (cfg.preloaded_db is not None))
@@ -222,10 +263,13 @@ class CNNModel(NNModel):
             return
 
         # Test with generators
-        super()._start_test(patch_idx, Xte_gen=Xte_gen, Xte_target_gen=Xte_target_gen)
+        super()._start_test(patch_idx,
+                            Xte_gen=Xte_gen,
+                            Xte_target_gen=Xte_target_gen)
 
-    def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
-        """Predict the :obj:`Autoencoder`.
+    def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
+                                    list_iterstore=None, dict_iterstore=None):
+        """Predict using :obj:`CNNModel`.
 
         Parameters
         ----------
@@ -236,7 +280,8 @@ class CNNModel(NNModel):
             Patch's index in this model.
 
         dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of each `nnpatch`.
+            Paths to temporary directories for each user db-param of
+            each `nnpatch`.
 
         list_iterstore : :obj:`list`
             List of iterstores for :obj:`DataIterator`.
@@ -245,8 +290,10 @@ class CNNModel(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.PREDICT, list_iterstore, dict_iterstore)
-
+        Xte_gen, Xte_target_gen = self._init_data_generators(
+                                                NNModelPhase.PREDICT, 
+                                                list_iterstore, 
+                                                dict_iterstore)
         # Pre-condition asserts
         assert((cfg.preloaded_db is None and Xte_gen is not None) or 
                 (cfg.preloaded_db is not None))
@@ -277,13 +324,16 @@ class CNNModel(NNModel):
             return
 
         # Predict with generators
-        super()._start_predict(patch_idx, Xte_gen=Xte_gen, Xte_target_gen=Xte_target_gen)
+        super()._start_predict(patch_idx, 
+                                Xte_gen=Xte_gen, 
+                                Xte_target_gen=Xte_target_gen)
 
     ##########################################################################
     # Protected Interface
     ##########################################################################
     def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """Initialize data generators for pre-training, training, testing, prediction.
+        """Initialize data generators for pre-training, training, testing,
+            prediction.
 
         Parameters
         ----------
@@ -314,7 +364,7 @@ class CNNModel(NNModel):
         return X_gen, X_val_gen
 
     def _build(self, cfg, X_gen):
-        
+        """Build the keras CNN."""
         if (cfg.preloaded_db is not None):
             cfg.preloaded_db.reinit('default')
             input_shape = cfg.preloaded_db.get_input_shape()
@@ -386,14 +436,11 @@ class CNNModel(NNModel):
                       metrics=['accuracy'])
         self._init_fns_predict_feature(cfg)      
 
-
-
         #rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
         #self.net.compile(loss='categorical_crossentropy',
         #              optimizer=rms,
         #              metrics=['accuracy'])
 
-        # TODO: Tune
         #sgd = SGD(lr=0.5, decay=1e-6, momentum=0.1, nesterov=True)
         #self.net.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
 

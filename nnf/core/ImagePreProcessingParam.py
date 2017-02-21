@@ -71,7 +71,7 @@ class ImagePreProcessingParam(object):
             otherwise we multiply the data by the value provided
             (before applying any other transformation).
 
-    preprocessing_function : :obj:`function`
+        preprocessing_function : :obj:`function`
             Function that will be implied on each input.
             The function will run before any other modification on it.
             The function should take one argument: one image (Numpy tensor with rank 3),

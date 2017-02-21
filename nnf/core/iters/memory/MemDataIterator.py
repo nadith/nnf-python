@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- TODO: CHECK COMMENTS
+# -*- coding: utf-8 -*-
 """
 .. module:: MemDataIterator
    :platform: Unix, Windows
@@ -21,23 +21,12 @@ class MemDataIterator(DataIterator):
     ----------
     nndb : :obj:`NNdb`
         Database to iterate.
-
-    _nb_class : int
-        Number of classes.
-
-    _pp_params : :obj:`dict`, optional
-        Pre-processing parameters for :obj:`ImageDataPreProcessor`. (Default value = None). 
-
-    _params : :obj:`dict`
-        Core iterator/generator parameters. (Default value = None)
-
-    _sync_iter : :obj:`MemDataIterator`
-        Iterator that needs to be synced with this iterator. (Default value = None)
     """
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, edataset, nndb, nb_class, pp_params=None, fn_gen_coreiter=None):
+    def __init__(self, edataset, nndb, nb_class, pp_params=None, 
+                                                        fn_gen_coreiter=None):
         """Construct a MemDataIterator instance.
 
         Parameters
@@ -52,10 +41,12 @@ class MemDataIterator(DataIterator):
             Number of classes.
 
         pp_params : :obj:`dict`, optional
-            Pre-processing parameters for :obj:`ImageDataPreProcessor`. (Default value = None). 
+            Pre-processing parameters for :obj:`ImageDataPreProcessor`. 
+            (Default value = None). 
 
         fn_gen_coreiter : `function`, optional
-            Factory method to create the core iterator. (Default value = None).
+            Factory method to create the core iterator.
+            (Default value = None).
         """
         super().__init__(pp_params, fn_gen_coreiter, edataset, nb_class)
 
@@ -94,8 +85,8 @@ class MemDataIterator(DataIterator):
                 params['_image_shape'] = (1,) + target_size
                 db = self.nndb.db_convo_th
 
-        # Required for featurewise_center, featurewise_std_normalization and zca_whitening
-        # Currently supported only for in memory datasets.
+        # Required for featurewise_center, featurewise_std_normalization and 
+        # zca_whitening. Currently supported only for in memory datasets.
         if (self._imdata_pp.featurewise_center or
             self._imdata_pp.featurewise_std_normalization or
             self._imdata_pp.zca_whitening): 
@@ -104,12 +95,14 @@ class MemDataIterator(DataIterator):
                                 self._imdata_pp.rounds,
                                 self._imdata_pp.seed)
 
-        gen_next = self._imdata_pp.flow(db, self.nndb.cls_lbl, self._nb_class, params=params)
+        gen_next = self._imdata_pp.flow(db, self.nndb.cls_lbl, 
+                                            self._nb_class, params=params)
         super().init(gen_next, params)
 
     def clone(self):
         """Create a copy of this object."""
-        new_obj = MemDataIterator(self.edataset, self.nndb, self._nb_class, self._pp_params, self._fn_gen_coreiter)
+        new_obj = MemDataIterator(self.edataset, self.nndb, self._nb_class,
+                                    self._pp_params, self._fn_gen_coreiter)
         new_obj.init(self._params)
         new_obj.sync(self._sync_gen_next)
         return new_obj

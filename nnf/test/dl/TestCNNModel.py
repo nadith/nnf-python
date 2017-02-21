@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- TODO: Revisit the comments
+# -*- coding: utf-8 -*-
 """
 .. module:: TestCNNModel
    :platform: Unix, Windows
@@ -155,7 +155,7 @@ class TestCNNModel(object):
         return dbparam1
 
     ##########################################################################
-    # NNF: Callbacks
+    # NNModel: Callbacks
     ##########################################################################
     @staticmethod
     def _fn_predict(nnmodel, nnpatch, predictions, true_output):

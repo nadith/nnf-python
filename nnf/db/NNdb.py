@@ -22,11 +22,11 @@ class NNdb(object):
 
     Attributes
     ----------
-    db : 4D tensor -uint8
-        Data tensor that contains images.
+    db : `array_like` -uint8
+        4D Data tensor that contains images.
 
-    format : nnf.db.Format
-        Format of the database. (Default value = 0, start from 0).
+    format : nnf.db.Format, optional
+        Format of the database. (Default value = Format.H_W_CH_N).
 
     h : int
         Height (Y dimension).
@@ -99,7 +99,7 @@ class NNdb(object):
             Class index array. (Default value = None).
 
         format : nnf.db.Format, optinal
-            Format of the database. (Default value = 1, start from 1).
+            Format of the database. (Default value = Format.H_W_CH_N).
         """
         print('Costructor::NNdb ', name)
 

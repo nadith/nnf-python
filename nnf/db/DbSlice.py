@@ -182,7 +182,7 @@ class DbSlice(object):
         # Set defaults for class ranges [val|te|tr_out|val_out]
         DbSlice._set_default_cls_range(0, cls_ranges, col_ranges)
 
-        # NOTE: TODO: Whitening the root db did not perform well
+        # NOTE: Whitening the root db did not perform well
         # (co-variance is indeed needed)
 
         # Initialize NNdb dictionary

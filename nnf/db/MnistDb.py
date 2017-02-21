@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- TODO: CHECK COMMENTS
+# -*- coding: utf-8 -*-
 """
 .. module:: MnistDb
    :platform: Unix, Windows
@@ -26,19 +26,42 @@ class MnistDb(PreLoadedDb):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, filepath=r'F:\#Research Data\keras\mnist.pkl.gz', debug=False):
+    def __init__(self, filepath=r'F:\#Research Data\keras\mnist.pkl.gz', 
+                                                                debug=False):
         """Initialize the `PreLoadedDb` instance.
     
-            Invoked by the NNF framework
+            Invoked by the NNF.
         """
         super().__init__()
         self.filepath = filepath
         self.debug = debug
 
+        self.tr_n = 0
+        self.X = None
+        self.Xte = None
+
+        self.X_lbl = None
+        self.Xte_lbl = None
+
     ##########################################################################
     # Public: PreLoadedDb Overrides
     ##########################################################################
     def reinit(self, dim_ordering='default'):
+        """Initialize the `PreLoadedDb` instance.
+
+        Parameters
+        ----------
+        dim_ordering : str
+            'th' or 'tf'. In 'th' mode, the channels dimension
+            (the depth) is at index 1, in 'tf' mode it is at index 3.
+            It defaults to the `image_dim_ordering` value found in your
+            Keras config file at `~/.keras/keras.json`.
+            If you never set it, then it will be "th".
+
+        Note
+        ----
+        This method may be invoked multiple times by the NNF.
+        """
         already_init = super().reinit(dim_ordering)
         if (already_init): return  # PERF
 
@@ -56,7 +79,8 @@ class MnistDb(PreLoadedDb):
         self.X_lbl = X_lbl
         self.Xte_lbl = Xte_lbl
 
-        print ("MNIST Database Loaded: Tr.Shape: " + str(X.shape) +  " Te.Shape: " + str(Xte.shape))
+        print ("MNIST Database Loaded: Tr.Shape: " + str(X.shape) +
+                                                " Te.Shape: " + str(Xte.shape))
 
         # Debug data extract
         if (self.debug):
@@ -67,6 +91,14 @@ class MnistDb(PreLoadedDb):
             self.Xte_lbl = self.Xte_lbl[0:10]
 
     def get_input_shape(self):
+        """Fetch the size of a single image/data sample
+    
+        Returns
+        -------
+        :obj:`tuple` :
+            Indicates (height, width, ch) or (height, width, ch)
+            depending on the `self.dim_ordering` property.            
+        """
         target_shape = (28, 28)
         if self.dim_ordering == 'tf':
             input_shape =  target_shape + (1,)
@@ -79,6 +111,38 @@ class MnistDb(PreLoadedDb):
         return 10        
 
     def LoadPreTrDb(self, nnmodel):
+        """Load the pre-training dataset.
+
+        Parameters
+        ----------
+        nnmodel : :obj:`NNModel`
+            The `NNModel` that invokes this method.
+
+        Returns
+        -------
+        :obj:`tuple`
+            X_L = (`array_like` data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+        
+        `array_like`
+            Xt = target data tensor
+            If the `nnmodel` is not expecting a target data tensor, 
+            set it to None.
+
+        :obj:`tuple`
+            X_L_val = (`array_like` validation data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        `array_like`
+            Xt_val = validation target data tensor
+            If the `nnmodel` is not expecting a validation target data tensor, 
+            set it to None.
+
+        Notes
+        -----
+        Depending on the model, the labels need to be categorial or in a vector 
+        arrangement.
+        """
         tr_offset = int(0.8*self.tr_n)
         val_offset = int(0.2*self.tr_n)
         X = self.X[:tr_offset]
@@ -103,6 +167,38 @@ class MnistDb(PreLoadedDb):
             raise Exception("NNModel is not supported")
 
     def LoadTrDb(self, nnmodel):
+        """Load the training dataset.
+
+        Parameters
+        ----------
+        nnmodel : :obj:`NNModel`
+            The `NNModel` that invokes this method.
+
+        Returns
+        -------
+        :obj:`tuple`
+            X_L = (`array_like` data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+        
+        `array_like`
+            Xt = target data tensor
+            If the `nnmodel` is not expecting a target data tensor, 
+            set it to None.
+
+        :obj:`tuple`
+            X_L_val = (`array_like` validation data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        `array_like`
+            Xt_val = validation target data tensor
+            If the `nnmodel` is not expecting a validation target data tensor, 
+            set it to None.
+
+        Notes
+        -----
+        Depending on the model, the labels need to be categorial or in a vector 
+        arrangement.
+        """
         tr_offset = int(0.8*self.tr_n)
         val_offset = int(0.2*self.tr_n)
         X = self.X[:tr_offset]
@@ -134,6 +230,38 @@ class MnistDb(PreLoadedDb):
             return X_L, None, X_L_val, None
 
     def LoadTeDb(self, nnmodel):
+        """Load the testing dataset.
+
+        Parameters
+        ----------
+        nnmodel : :obj:`NNModel`
+            The `NNModel` that invokes this method.
+
+        Returns
+        -------
+        :obj:`tuple` :
+            X_L = (`array_like` data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+        
+        `array_like`
+            Xt = target data tensor
+            If the `nnmodel` is not expecting a target data tensor, 
+            set it to None.
+
+        :obj:`tuple`
+            X_L_val = (`array_like` validation data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        `array_like`
+            Xt_val = validation target data tensor
+            If the `nnmodel` is not expecting a validation target data tensor, 
+            set it to None.
+
+        Notes
+        -----
+        Depending on the model, the labels need to be categorial or in a vector 
+        arrangement.
+        """
         Xte = self.Xte
         Xte_lbl = self.Xte_lbl
 
@@ -155,6 +283,38 @@ class MnistDb(PreLoadedDb):
             return X_L_te, None
 
     def LoadPredDb(self, nnmodel):
+        """Load the dataset for predictions.
+
+        Parameters
+        ----------
+        nnmodel : :obj:`NNModel`
+            The `NNModel` that invokes this method.
+
+        Returns
+        -------
+        :obj:`tuple`
+            X_L = (`array_like` data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+        
+        `array_like`
+            Xt = target data tensor
+            If the `nnmodel` is not expecting a target data tensor, 
+            set it to None.
+
+        :obj:`tuple`
+            X_L_val = (`array_like` validation data tensor, labels)
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        `array_like`
+            Xt_val = validation target data tensor
+            If the `nnmodel` is not expecting a validation target data tensor, 
+            set it to None.
+
+        Notes
+        -----
+        Depending on the model, the labels need to be categorial or in a vector 
+        arrangement.
+        """
         Xte = self.Xte
         Xte_lbl = self.Xte_lbl
 
@@ -181,6 +341,7 @@ class MnistDb(PreLoadedDb):
     # Private Interface
     ##########################################################################
     def __process(self, X):
+        """Process the data tensor according to `dim_ordering` specified."""
         if self.dim_ordering == 'tf':
             X = X[:, :, :, np.newaxis]
         else:

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- TODO: CHECK COMMENTS
+# -*- coding: utf-8 -*-
 """
 .. module:: NNPatch
    :platform: Unix, Windows
@@ -92,17 +92,28 @@ class NNPatch(object):
 
         Notes
         -----
-        Invoked by :obj:`NNPatchMan`. 
+        Invoked by :obj:`NNPatchMan`.
 
         Note
         ----
-        Used only in Patch Based Framework. Extend this method to implement custom 
-        generation of `nnmodels`.    
+        Used only in Patch Based Framework. Extend this method to implement
+        custom generation of `nnmodels`.
         """
         assert(False)
 
     def init_nnpatch_fields(self, pimg, format):
+        """Initialize the fields of `nnpatch` with the information provided.
 
+        .. warning:: Offset field will not be set via this method.
+
+        Parameters
+        ----------
+        pimg : `array_like`
+            Color image patch or raw data item.
+
+        format : nnf.db.Format
+            Format of the database.
+        """
         # TODO: offset needs to be adjusted accordingly
         if (format == Format.H_W_CH_N):
             self.h, self.w, _ = pimg.shape
@@ -133,7 +144,8 @@ class NNPatch(object):
             Dictonary of iterstores for :obj:`DataIterator`.
 
         dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of this `nnpatch`.
+            Paths to temporary directories for each user db-param of this
+            `nnpatch`.
 
         Notes
         -----
@@ -152,7 +164,7 @@ class NNPatch(object):
             model._add_save_to_dirs(dbparam_save_dirs)
 
     def _setdefault_udata(self, ekey, value):
-        """Set the default value in `_user_data` dictionary. 
+        """Set the default value in `_user_data` dictionary.
 
         Parameters
         ----------
@@ -165,7 +177,7 @@ class NNPatch(object):
         return self._user_data.setdefault(ekey, value)
 
     def _set_udata(self, ekey, value):
-        """Set the value in `_user_data` dictionary. 
+        """Set the value in `_user_data` dictionary.
 
         Parameters
         ----------
@@ -178,7 +190,7 @@ class NNPatch(object):
         self._user_data[ekey] = value
 
     def _get_udata(self, ekey):
-        """Get the value in `_user_data` dictionary. 
+        """Get the value in `_user_data` dictionary.
 
         Parameters
         ----------

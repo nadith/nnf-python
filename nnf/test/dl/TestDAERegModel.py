@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*- TODO: Revisit the comments
+# -*- coding: utf-8 -*-
 """
-.. module:: TestDAEModel
+.. module:: TestDAERegModel
    :platform: Unix, Windows
-   :synopsis: Represent TestDAEModel and related classes.
+   :synopsis: Represent TestDAERegModel and related classes.
 
 .. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
 """
@@ -39,7 +39,7 @@ class DAERegPatchGen(NNPatchGenerator):
         return DAERegPatch(h, w, offset, True)
 
 class TestDAERegModel(object):
-    """TestAEModel to test AE model."""
+    """TestDAERegModel to test TestDAEReg model."""
 
     ##########################################################################
     # Public Interface
@@ -183,7 +183,7 @@ class TestDAERegModel(object):
         return dbparam1
 
     ##########################################################################
-    # NNF: Callbacks
+    # NNModel: Callbacks
     ##########################################################################
     @staticmethod
     def _fn_predict(nnmodel, nnpatch, predictions, true_output):

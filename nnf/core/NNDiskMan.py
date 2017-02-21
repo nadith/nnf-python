@@ -79,7 +79,7 @@ class NNDiskMan(object):
     ##########################################################################
     def __init__(self, sel, db_pp_param, nndb=None, db_dir=None, 
                                                 save_dir=None, iter_param=None):
-        """Constructs :obj:`NNDiskMan` instance. 
+        """Constructs :obj:`NNDiskMan` instance.
 
         Must call init() to intialize the instance.
 

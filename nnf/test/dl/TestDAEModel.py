@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- TODO: Revisit the comments
+# -*- coding: utf-8 -*-
 """
 .. module:: TestDAEModel
    :platform: Unix, Windows
@@ -85,10 +85,10 @@ class TestDAEModel(object):
         db_dir = os.path.join(data_folder, "disk_db")
 
         # Use nndb, iterators read from the memory
-        # list_dbparams = self.__inmem_dbparams(nndb, sel)
+        list_dbparams = self.__inmem_dbparams(nndb, sel)
 
         # Use database at db_dir, write the processed data on to the disk, iterators read from the disk
-        list_dbparams = self.__indsk_dbparams(os.path.join(db_dir, "_processed_DB1"), sel)
+        # list_dbparams = self.__indsk_dbparams(os.path.join(db_dir, "_processed_DB1"), sel)
 
         # Use nndb, write the processed data on to the disk, iterators read from the disk.
         #list_dbparams = self.__mem_to_dsk_indsk_dbparams(nndb, db_dir, sel)
@@ -170,7 +170,7 @@ class TestDAEModel(object):
         return dbparam1
 
     ##########################################################################
-    # NNF: Callbacks
+    # NNModel: Callbacks
     ##########################################################################
     @staticmethod
     def _fn_predict(nnmodel, nnpatch, predictions, true_output):

@@ -16,7 +16,8 @@ import types
 from nnf.core.iters.ImageDataPreProcessor import ImageDataPreProcessor
 
 class DataIterator(object):
-    """DataIterator represents the base class for all iterators in the Neural Network Framework.
+    """DataIterator represents the base class for all iterators in the
+        Neural Network Framework.
 
     .. warning:: abstract class and must not be instantiated.
 
@@ -28,6 +29,26 @@ class DataIterator(object):
     _gen_next : `function`
         Core iterator/generator that provide data.
 
+    _sync_gen_next : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator`
+        Core iterator that needs to be synced with `_gen_next`.
+        (Default value = None)
+
+    _params : :obj:`dict`
+        Core iterator/generator parameters. (Default value = None)
+
+    _pp_params : :obj:`dict`, optional
+        Pre-processing parameters for :obj:`ImageDataPreProcessor`.
+        (Default value = None).
+
+    _fn_gen_coreiter : `function`, optional
+        Factory method to create the core iterator. (Default value = None).
+
+    edataset : :obj:`Dataset`
+        Dataset enumeration key.
+
+    _nb_class : int
+        Number of classes.
+
     Notes
     -----
     Disman data iterators are utilzing a generator function in _gen_next 
@@ -38,7 +59,8 @@ class DataIterator(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, pp_params=None, fn_gen_coreiter=None, edataset=None, nb_class=None):
+    def __init__(self, pp_params=None, fn_gen_coreiter=None, edataset=None, 
+                                                                nb_class=None):
         """Constructor of the abstract class :obj:`DataIterator`.
 
         Parameters
@@ -52,23 +74,29 @@ class DataIterator(object):
         # Initialize the image data pre-processor with pre-processing params
         # Used by Diskman data iterators and `nnmodel` data iterators
         self._imdata_pp = ImageDataPreProcessor(pp_params, fn_gen_coreiter)
-        self._pp_params = pp_params
-        self._fn_gen_coreiter = fn_gen_coreiter
-
+        
         # Core iterator or generator (initilaized in init())
         # Diskman data iterators are utilzing a generator function in _gen_next
         # while the `nnmodel` data iterators are utilizing an core iterator.
         self._gen_next = None
-    
+
+        # :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator`
+        # Core iterator that needs to be synced with `_gen_next`.
+        self._sync_gen_next = None
+
         # Iterator params
         # Used by `nnmodel` data iterators only.
         # Can utilize in Diskman data iterators safely in the future.
         self._params = None
 
+        # All the parameters are saved in instance variables to support the 
+        # clone() method implementaiton of the child classes.
+        self._pp_params = pp_params
+        self._fn_gen_coreiter = fn_gen_coreiter
+
         # Used by `nnmodel` data iterators only.
         self.edataset = edataset
-        self._nb_class = nb_class        
-        self._sync_gen_next = None
+        self._nb_class = nb_class
 
     def init(self, gen_next=None, params=None):
         """Initialize the instance.
@@ -114,7 +142,8 @@ class DataIterator(object):
         Parameters
         ----------
         gen : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator` 
-            Core iterator that needs to be synced with this core iterator.
+            Core iterator that needs to be synced with this core iterator
+            `_gen_next`.
 
         Note
         ----

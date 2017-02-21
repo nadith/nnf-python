@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-: TODO: Ccomment
+# -*- coding: utf-8 -*-
 """
 .. module:: NNModel
    :platform: Unix, Windows
@@ -50,6 +50,12 @@ class NNModel(object):
 
     net : :obj:`keras.Model`
         Core network model (keras).
+
+    fns_predict_feature :
+        Keras/teano sub functions to predict each feature.
+
+    feature_sizes :
+        Feature size for each prediction.
     """
     __metaclass__ = ABCMeta
 
@@ -82,7 +88,6 @@ class NNModel(object):
         `uid` is not None for nnmodels that are created inside a nnmodel. 
         i.e Autoencoder in DAEModel
         """
-
         # Assign unique id
         if (uid is None):
             self.uid = NNModel.get_uid()
@@ -112,6 +117,12 @@ class NNModel(object):
 
         # Core network model (keras).
         self.net = None
+
+        # Keras/teano sub functions to predict each feature
+        self.fns_predict_feature = []
+
+        # Feature sizes for each prediction
+        self.feature_sizes = []
     
     def pre_train(self, precfgs, cfg, patch_idx=None):
         """Pre-train the :obj:`NNModel`.
@@ -456,6 +467,17 @@ class NNModel(object):
         return iter.clone() if (iter is not None) else None
 
     def _debug_print(self, list_iterstore):
+        """Print information for each iterator store in `list_iterstore`.
+
+            The iterator params and pre-processor params of iterator store
+            for each dataset. 
+            i.e (Dataset.TR | VAL | ...).
+
+        Parameters
+        ----------
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+        """
         def __print_params(iterstore, edataset):
             if (edataset not in iterstore): return
             gen = iterstore[edataset]
@@ -488,7 +510,41 @@ class NNModel(object):
             __print_params(iterstore, Dataset.VAL_OUT)
             __print_params(iterstore, Dataset.TE_OUT)
 
-    def _start_train(self, cfg, X_L=None, Xt=None, X_L_val=None, Xt_val=None, X_gen=None, X_val_gen=None):
+    def _start_train(self, cfg, X_L=None, Xt=None, X_L_val=None, Xt_val=None, 
+                                                X_gen=None, X_val_gen=None):
+        """Common routine to start the training phase of `NNModel`.
+
+        Parameters
+        ----------
+        patch_idx : int, optional
+            Patch's index in this model. (Default value = None).
+
+        X_L : :obj:`tuple`
+            (`array_like` data tensor, labels).
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        Xt : `array_like`
+            Target data tensor. If the `nnmodel` is not expecting a 
+            target data tensor, set it to None.
+
+        X_L_val : :obj:`tuple`
+            (`array_like` validation data tensor, labels).
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        Xt_val : `array_like`
+            Target validation data tensor. If the `nnmodel` is not expecting a
+            target validation data tensor, set it to None.
+
+        X_gen : :obj:`DataIterator`
+            Data iterator that generates data in 
+            (`array_like`, labels or `array_like`) format, depending on
+            the `nnmodel` architecture.
+
+        X_val_gen : :obj:`DataIterator`
+            Validation data iterator that generates data in 
+            (`array_like`, labels or `array_like`) format, depending on
+            the `nnmodel` architecture.
+        """
         assert((X_L is not None) or (X_gen is not None))
 
         # Train from preloaded database
@@ -530,7 +586,33 @@ class NNModel(object):
                         X_gen, samples_per_epoch=cfg.samples_per_epoch,
                         nb_epoch=cfg.numepochs)
 
-    def _start_test(self, patch_idx=None, X_L_te=None, Xt_te=None, X_te_gen=None, Xt_te_gen=None):
+    def _start_test(self, patch_idx=None, X_L_te=None, Xt_te=None, 
+                                            X_te_gen=None, Xt_te_gen=None):
+        """Common routine to start the testing phase of `NNModel`.
+
+        Parameters
+        ----------
+        patch_idx : int, optional
+            Patch's index in this model. (Default value = None).
+
+        X_L_te : :obj:`tuple`
+            (`array_like` test data tensor, labels).
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        Xt_te : `array_like`
+            Target test data tensor. If the `nnmodel` is not expecting a
+            target test data tensor, set it to None.
+
+        X_te_gen : :obj:`DataIterator`
+            Test data iterator that generates data in 
+            (`array_like`, labels or `array_like`) format, depending on
+            the `nnmodel` architecture.
+
+        Xt_te_gen : :obj:`DataIterator`
+            Target test data iterator that generates data in 
+            (`array_like`, labels or `array_like`) format, depending on
+            the `nnmodel` architecture.
+        """
         assert((X_L_te is not None) or (X_te_gen is not None))
         assert(self.net is not None)
 
@@ -598,7 +680,33 @@ class NNModel(object):
         if (self.callbacks['test'] is not None):
             self.callbacks['test'](self, self.nnpatches[patch_idx], metrics)
 
-    def _start_predict(self, patch_idx=None, X_L_te=None, Xt_te=None, X_te_gen=None, Xt_te_gen=None):
+    def _start_predict(self, patch_idx=None, X_L_te=None, Xt_te=None, 
+                                            X_te_gen=None, Xt_te_gen=None):
+        """Common routine to start the prediction phase of `NNModel`.
+
+        Parameters
+        ----------
+        patch_idx : int, optional
+            Patch's index in this model. (Default value = None).
+
+        X_L_te : :obj:`tuple`
+            (`array_like` test data tensor, labels).
+            If the `nnmodel` is not expecting labels, set it to None.
+
+        Xt_te : `array_like`
+            Target test data tensor. If the `nnmodel` is not expecting a 
+            target test data tensor, set it to None.
+
+        X_te_gen : :obj:`DataIterator`
+            Test data iterator that generates data in 
+            (`array_like`, labels or `array_like`) format, depending on
+            the `nnmodel` architecture.
+
+        Xt_te_gen : :obj:`DataIterator`
+            Target test data iterator that generates data in 
+            (`array_like`, labels or `array_like`) format, depending on
+            the `nnmodel` architecture.
+        """
         assert((X_L_te is not None) or (X_te_gen is not None))
         assert(self.net is not None)
 
@@ -669,9 +777,36 @@ class NNModel(object):
             self.callbacks['predict'](self, self.nnpatches[patch_idx], predictions, true_output)
 
     def _predict_feature_sizes(self):
+        """Get the list of feature sizes to be used in the predictions.
+            
+            Each feature size must corresponds to the size of a hidden 
+            layer of the `nnmodel`.
+            See also: self._predict_features()
+
+        Returns
+        -------
+        :obj:`list` :
+            Feature size for each prediction.
+        """
         return self.feature_sizes
 
     def _predict_features(self, Xte):
+        """Get the list of predicted features.
+            
+            Each predicted feature must be fetched via a hidden layer of 
+            the `nnmodel`.
+            See also: self._predict_feature_sizes()
+
+        Parameters
+        ----------
+        Xte : `array_like`
+            Test data tensor to be fed into the keras model.
+
+        Returns
+        -------
+        :obj:`list` :
+            Predicted features.
+        """
         predictions = []
         for _, fn_predict_feature in enumerate(self.fns_predict_feature):
             predictions.append(fn_predict_feature([Xte, 0])[0])
@@ -680,7 +815,16 @@ class NNModel(object):
         return predictions
 
     def _init_fns_predict_feature(self, cfg):
+        """Initialize keras/teano sub functions to predict each feature.
 
+        .. warning:: Currently compatible with output layers that have 
+                    exactly one inbound node.
+
+        Parameters
+        ----------
+        cfg : :obj:`NNCfg`
+            NN Configuration.
+        """
         self.fns_predict_feature = []
         self.feature_sizes = []
         if (cfg.feature_layers is None): 
@@ -698,20 +842,38 @@ class NNModel(object):
             else:
                 raise Exception("Feature layers chosen are invalid. `cfg.feature_layers`")
 
-            self.fns_predict_feature.append(
-                        K.function([self.net.layers[0].input, K.learning_phase()],
-                                    [f_layer.output]))
 
             # IMPORTANT: 
             # Retrieves the output tensor(s) of a layer at a given node.
-            # f.get_output_at(node_index): 
+            # f_layer.get_output_at(node_index): 
 
             # Retrieves the output tensor(s) of a layer (only applicable if
             # the layer has exactly one inbound node, i.e. if it is connected
             # to one incoming layer).
-            # f.output
+            # f_layer.output
+            self.fns_predict_feature.append(
+                        K.function([self.net.layers[0].input, K.learning_phase()],
+                                    [f_layer.output]))
 
     def _try_save(self, cfg, patch_idx, prefix="PREFIX"):
+        """Attempt to save keras/teano model in `nnmodel`.
+
+        Parameters
+        ----------
+        cfg : :obj:`NNCfg`
+            NN Configuration.
+
+        patch_idx : int
+            Patch's index in this model.
+
+        prefix : str, optional
+            Prefix string for the file to be saved. (Default value = 'PREFIX').
+
+        Returns
+        -------
+        bool :
+            True if succeeded. False otherwise.
+        """
         assert(self.net is not None)
         if (cfg.model_dir is not None):
             fpath = self._get_saved_model_name(patch_idx, cfg.model_dir, prefix)
@@ -720,15 +882,53 @@ class NNModel(object):
         return False
     
     def _try_load(self, cfg, patch_idx, prefix="PREFIX"):
+        """Attempt to load keras/teano model in `nnmodel`.
+
+        Parameters
+        ----------
+        cfg : :obj:`NNCfg`
+            NN Configuration.
+
+        patch_idx : int
+            Patch's index in this model.
+
+        prefix : str, optional
+            Prefix string for the file to be loaded. (Default value = 'PREFIX').
+
+        Returns
+        -------
+        bool
+            True if succeeded. False otherwise.
+        """
         if (cfg.model_dir is not None):
             fpath = self._get_saved_model_name(patch_idx, cfg.model_dir, prefix)
             self.net = load_model(fpath)
             if (cfg.weights_path is not None):
-                warning('ARG_CONFLICT: Model weights will not be used since a saved model is already loaded.')
+                warning('ARG_CONFLICT: Model weights will not be used since a' + 
+                        ' saved model is already loaded.')
             return True
         return False
 
     def _get_saved_model_name(self, patch_idx, cfg_save_dir, prefix):
+        """Generate a file path for the keras/teano model to be saved or loaded.
+
+        Parameters
+        ----------
+        patch_idx : int
+            Patch's index in this model.
+
+        cfg_save_dir : str
+            Path to the folder where the keras/teano model needs to be 
+            saved/loaded.
+
+        prefix : str
+            Prefix string for the file to be saved/loaded.
+
+        Returns
+        -------
+        str :
+            File path.
+        """
         fname = prefix + "_p_" + str(patch_idx) + ".m_" + str(self.uid) + ".model.h5"
         fpath = os.path.join(cfg_save_dir, fname)
         return fpath

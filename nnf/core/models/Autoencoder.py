@@ -1,5 +1,12 @@
-"""Autoencoder to represent Autoencoder class."""
 # -*- coding: utf-8 -*-
+"""
+.. module:: Autoencoder
+   :platform: Unix, Windows
+   :synopsis: Represent Autoencoder class.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
+
 # Global Imports
 from warnings import warn as warning
 from keras.layers import Input, Dense
@@ -8,91 +15,55 @@ from keras.callbacks import EarlyStopping
 import numpy as np
 
 # Local Imports
-from nnf.core.models.NNModel import NNModel
 from nnf.db.Dataset import Dataset
+from nnf.core.models.NNModel import NNModel
 from nnf.core.models.NNModelPhase import NNModelPhase
 
 class Autoencoder(NNModel):
-    """description of class
+    """Generic Autoencoder Model.
 
     Attributes
     ----------
-    encoder : describe
-        describe.
+    callbacks : :obj:`dict`
+        Callback dictionary. Supported callbacks.
+        {`test`, `predict`, `get_data_generators`}
 
-    decoder : describe
-        describe.
+    X_L : :obj:`tuple`
+        In the format (`array_like` data tensor, labels).
+        If the `nnmodel` is not expecting labels, set it to None.
 
-    cb_early_stop : describe
-        describe.
+    Xt : `array_like`
+        Target data tensor.
+        If the `nnmodel` is not expecting a target data tensor,
+        set it to None.
 
-    list_iterstore : describe
-        describe.
+    X_L_val : :obj:`tuple`
+        In the format (`array_like` validation data tensor, labels).
+        If the `nnmodel` is not expecting labels, set it to None.
 
-    X_gen : describe
-        describe.
+    Xt_val : `array_like`
+        Validation target data tensor.
+        If the `nnmodel` is not expecting a validation target data tensor,
+        set it to None.
 
-    X_val_gen : describe
-        describe.
+    encoder : :obj:`Sequential`
+        keras model that maps an input to its encoded representation.
 
-    Xte_gen : describe
-        describe.
-
-    X : bool
-        describe.
-
-    X_val : describe
-        describe.
-
-    cb_early_stop : describe
-        describe.
-
-    Methods
-    -------
-    init_iterstores()
-        describe.
-
-    build()
-        describe.
-
-    pre_train()
-        describe.
-
-    train()
-        describe.
-
-    _train()
-        describe.
-
-    _test()
-        describe.
-
-    _encode()
-        describe.
-
-    _encoder_weights()
-        Property : describe.
-
-    _decoder_weights()
-        Property : describe.
-
-    Examples
-    --------
-    describe
-    >>> nndb = Autoencoder(NNModel)
-    >>> nndb = init_iterstores(NNModel)
-    >>> nndb = build(NNModel)
+    Note
+    ----
+    Extend this class to implement custom Autoencoder models.
     """
 
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, uid=None, X_L=None, Xt=None, X_L_val=None, Xt_val=None, callbacks=None):
+    def __init__(self, uid=None, X_L=None, Xt=None, X_L_val=None, Xt_val=None,
+                                                            callbacks=None):
         super().__init__(uid)
 
         # Initialize variables
         self.encoder = None
-        self.decoder = None
+        #self.decoder = None
 
         # Set defaults for arguments
         self.callbacks = {} if (callbacks is None) else callbacks
@@ -128,8 +99,31 @@ class Autoencoder(NNModel):
         warning('Pre-training is not supported in Autoencoder')
 
     def get_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """describe"""
+        """Get data generators for pre-training, training, testing, prediction.
 
+        Parameters
+        ----------
+        ephase : :obj:`NNModelPhase`
+            Phase of which the data generators are required.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+
+        Returns
+        -------
+        :obj:`tuple`
+            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
+            then 
+                Generators for training and validation.
+                Refer https://keras.io/preprocessing/image/
+
+            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
+            then
+                Generators for testing and testing target.
+        """
         if (ephase == NNModelPhase.TRAIN):
             # Iteratorstore for dbparam1
             X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
@@ -148,7 +142,8 @@ class Autoencoder(NNModel):
     ##########################################################################
     # Protected: NNModel Overrides
     ##########################################################################
-    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
+                                    list_iterstore=None, dict_iterstore=None):
         """Train the :obj:`Autoencoder`.
 
         Parameters
@@ -160,7 +155,8 @@ class Autoencoder(NNModel):
             Patch's index in this model.
 
         dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of each `nnpatch`.
+            Paths to temporary directories for each user db-param of 
+            each `nnpatch`.
 
         list_iterstore : :obj:`list`
             List of iterstores for :obj:`DataIterator`.
@@ -169,7 +165,9 @@ class Autoencoder(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN, list_iterstore, dict_iterstore)  
+        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN,
+                                                        list_iterstore,
+                                                        dict_iterstore)
 
         # Pre-condition asserts
         assert((cfg.preloaded_db is None and X_gen is not None) or 
@@ -191,7 +189,8 @@ class Autoencoder(NNModel):
             (self.X_L is None and self.X_L_val is None and
             self.Xt is None and self.Xt_val is None)):
             cfg.preloaded_db.reinit('default')
-            self.X_L, self.Xt, self.X_L_val, self.Xt_val = cfg.preloaded_db.LoadTrDb(self)
+            self.X_L, self.Xt, self.X_L_val, self.Xt_val =\
+                                            cfg.preloaded_db.LoadTrDb(self)
 
         # Training without generators
         if (cfg.preloaded_db is not None or 
@@ -207,27 +206,33 @@ class Autoencoder(NNModel):
 
         return (None, None, None, None)
 
-    def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
-        """describe
+    def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
+                                    list_iterstore=None, dict_iterstore=None):
+        """Test the :obj:`Autoencoder`.
 
         Parameters
         ----------
-        X : Describe
-            describe.
+        cfg : :obj:`NNCfg`
+            Neural Network configuration used in training.
 
-        visualize : Describe
-            describe.
+        patch_idx : int
+            Patch's index in this model.
 
-        sel : selection structure
-            Information to split the dataset.
+        dbparam_save_dirs : :obj:`list`
+            Paths to temporary directories for each user db-param of
+            each `nnpatch`.
 
-        Returns
-        -------
-        decoded_imgs : describe
-        """
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+        """  
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.TEST, list_iterstore, dict_iterstore)
-
+        Xte_gen, Xte_target_gen = self._init_data_generators(
+                                                    NNModelPhase.TEST,
+                                                    list_iterstore,
+                                                    dict_iterstore)
         # Pre-condition asserts
         assert((cfg.preloaded_db is None and Xte_gen is not None) or 
                 (cfg.preloaded_db is not None))
@@ -258,10 +263,13 @@ class Autoencoder(NNModel):
             return
 
         # Test with generators
-        super()._start_test(patch_idx, Xte_gen=Xte_gen, Xte_target_gen=Xte_target_gen)
+        super()._start_test(patch_idx,
+                            Xte_gen=Xte_gen,
+                            Xte_target_gen=Xte_target_gen)
 
-    def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
-        """Predict the :obj:`Autoencoder`.
+    def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
+                                    list_iterstore=None, dict_iterstore=None):
+        """Predict using :obj:`Autoencoder`.
 
         Parameters
         ----------
@@ -272,7 +280,8 @@ class Autoencoder(NNModel):
             Patch's index in this model.
 
         dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of each `nnpatch`.
+            Paths to temporary directories for each user db-param of
+            each `nnpatch`.
 
         list_iterstore : :obj:`list`
             List of iterstores for :obj:`DataIterator`.
@@ -281,8 +290,10 @@ class Autoencoder(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.PREDICT, list_iterstore, dict_iterstore)
-
+        Xte_gen, Xte_target_gen = self._init_data_generators(
+                                                    NNModelPhase.PREDICT,
+                                                    list_iterstore,
+                                                    dict_iterstore)
         # Pre-condition asserts
         assert((cfg.preloaded_db is None and Xte_gen is not None) or 
                 (cfg.preloaded_db is not None))
@@ -313,30 +324,54 @@ class Autoencoder(NNModel):
             return
 
         # Predict with generators
-        super()._start_predict(patch_idx, Xte_gen=Xte_gen, Xte_target_gen=Xte_target_gen)
+        super()._start_predict(patch_idx,
+                                Xte_gen=Xte_gen, 
+                                Xte_target_gen=Xte_target_gen)
 
     ##########################################################################
     # Protected Interface
     ##########################################################################
     def _encode(self, X):
-        """describe
+        """Encode the data.
 
         Parameters
         ----------
-        X : Describe
-            describe.
-
-        sel : selection structure
-            Information to split the dataset.
+        X : `array_like`
+            Input data tensor.
 
         Returns
         -------
-        self.encoder.predict(X) : describe
+        `array_like`
+            Encoded representation.
         """
         return self.encoder.predict(X)
 
     def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """describe"""
+        """Initialize data generators for pre-training, training, testing, 
+            prediction.
+
+        Parameters
+        ----------
+        ephase : :obj:`NNModelPhase`
+            Phase of which the data generators are required.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+
+        Returns
+        -------
+        :obj:`tuple`
+            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
+            then 
+                Generators for training and validation.
+
+            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
+            then
+                Generators for testing and testing target.
+        """
         X_gen = None; X_val_gen = None
         if (list_iterstore is not None):
             X_gen, X_val_gen = self.callbacks['get_data_generators'](ephase, list_iterstore, dict_iterstore)
@@ -351,15 +386,7 @@ class Autoencoder(NNModel):
                 dec_activation='sigmoid', dec_weights=None,
                 loss_fn='mean_squared_error', use_early_stop=False, 
                 cb_early_stop=EarlyStopping(monitor='val_loss', patience=0, verbose=0, mode='auto')):
-        """describe
-        Parameters
-        ----------
-        nndb : NNdb
-            NNdb object that represents the dataset.
-
-        sel : selection structure
-            Information to split the dataset.
-        """   
+        """Build the keras Autoencoder."""  
         # Set early stop for later use
         self.cb_early_stop = cb_early_stop
 
@@ -402,18 +429,21 @@ class Autoencoder(NNModel):
     ##########################################################################
     @property
     def enc_size(self):
+        """Size of the encoding layer."""
         enc_layer = self.net.layers[1] 
         assert enc_layer == self.net.layers[-2]
         return enc_layer.output_dim
 
     @property
     def _encoder_weights(self):
+        """Encoding weights."""
         enc_layer = self.net.layers[1] 
         assert enc_layer == self.net.layers[-2]
         return enc_layer.get_weights()
 
     @property
     def _decoder_weights(self):
+        """Decoding weights."""
         dec_layer = self.net.layers[-1] 
         assert dec_layer == self.net.layers[2] 
         return dec_layer.get_weights()

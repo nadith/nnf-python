@@ -149,42 +149,42 @@ imdb_obj = matStruct['imdb_obj']
 ##############################################################################
 ## Deep Learning Framework ###################################################
 ##############################################################################
-#1: AE Model
+##1: AE Model
 #from nnf.test.dl.TestAEModel import TestAEModel
 #TestAEModel().Test()
 
-#1.1: AE Model (pre-loaded database)
+##1.1: AE Model (pre-loaded database)
 #from nnf.test.dl.TestAEModel import TestAEModel
 #TestAEModel().Test_preloaded_db()
 
 
-#2: DAE Model ################################################################
+##2: DAE Model ################################################################
 #from nnf.test.dl.TestDAEModel import TestDAEModel
 #TestDAEModel().Test()
 
-#2.1: DAE Model (without pre-training)
+##2.1: DAE Model (without pre-training)
 #from nnf.test.dl.TestDAEModel import TestDAEModel
 #TestDAEModel().Test(pretrain=False)
 
-#2.2: DAE Model (pre-loaded database)
+##2.2: DAE Model (pre-loaded database)
 #from nnf.test.dl.TestDAEModel import TestDAEModel
 #TestDAEModel().Test_preloaded_db()
 
 
-#3: DAEReg Model #############################################################
+##3: DAEReg Model #############################################################
 #from nnf.test.dl.TestDAERegModel import TestDAERegModel
 #TestDAERegModel().Test()
 
-#3.1: DAEReg Model (pre-loaded database)
+##3.1: DAEReg Model (pre-loaded database)
 #from nnf.test.dl.TestDAERegModel import TestDAERegModel
 #TestDAERegModel().Test_preloaded_db()
 
 
-#4: CNN Model ################################################################
+##4: CNN Model ################################################################
 #from nnf.test.dl.TestCNNModel import TestCNNModel
 #TestCNNModel().Test()
 
-#4.1: CNN Model (pre-loaded database) 
+##4.1: CNN Model (pre-loaded database) 
 #from nnf.test.dl.TestCNNModel import TestCNNModel
 #TestCNNModel().Test_preloaded_db()
 

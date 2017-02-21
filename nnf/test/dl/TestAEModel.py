@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- TODO: Revisit the comments
+# -*- coding: utf-8 -*-
 """
 .. module:: TestAEModel
    :platform: Unix, Windows
@@ -8,9 +8,9 @@
 """
 
 # Global Imports
-import numpy as np
-import scipy.io
 import os
+import scipy.io
+import numpy as np
 
 # Local Imports
 from nnf.db.NNdb import NNdb
@@ -159,7 +159,7 @@ class TestAEModel(object):
         return dbparam1
 
     ##########################################################################
-    # NNF: Callbacks
+    # NNModel: Callbacks
     ##########################################################################
     @staticmethod
     def _fn_predict(nnmodel, nnpatch, predictions, true_output):

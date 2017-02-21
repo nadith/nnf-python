@@ -1,3 +1,12 @@
+# -*- coding: utf-8 -*-
+"""
+.. module:: Format
+   :platform: Unix, Windows
+   :synopsis: Represent Format enumeration.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
+
 # Global Imports
 from enum import Enum
 

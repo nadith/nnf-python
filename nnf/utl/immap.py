@@ -1,24 +1,26 @@
-"""IMMAP Module to represent immap function."""
+# -*- coding: utf-8 -*-
+"""
+.. module:: immap
+   :platform: Unix, Windows
+   :synopsis: Represent immap function.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
 # Global Imports
-import scipy.misc
 import scipy.io
+import scipy.misc
 import numpy as np
 import matplotlib.cm
 import matplotlib.pyplot as plt
 
 # Local Imports
 
-#import matplotlib.pyplot as plt
-## Show the original image
-#plt.subplot(1, 2, 1)
-#plt.imshow(self.db[:, :, :, 1])
-
 def immap(X, rows, cols, scale=None, offset=0):
     """Visualize image data tensor in a grid.
 
     Parameters
     ----------
-    X : array_like -uint8
+    X : `array_like` -uint8
         2D Data tensor that contains images.
 
         Format for color images: (Samples x H x W x CH).
@@ -32,15 +34,15 @@ def immap(X, rows, cols, scale=None, offset=0):
         Number of columns in the grid.
 
     scale : int, optional
-        Scale factor. (Default value = None, no scale operation required).
+        Scale factor. (Default value = None).
 
     offset : int, optional
-        Offset to the first image (value = 0, start from zero).
+        Offset to the first image (Default value = 0).
 
     Returns
     -------
-    image_map : array_like -uint8
-        2D Data tensor that contains image grid.
+    `array_like`
+        2D data tensor that contains image grid.
 
     Examples
     --------
@@ -72,23 +74,7 @@ def immap(X, rows, cols, scale=None, offset=0):
     ------
     >> %matplotlib qt     - when you want graphs in a separate window and
     >> %matplotlib inline - when you want an inline plot
-
-    Copyright 2015-2016 Nadith Pathirage, Curtin University.
-    (chathurdara@gmail.com).
     """
-    # Examples
-    # --------
-    # Show an image grid of 5 rows and 8 cols (5x8 cells).
-    # show_image_map(db, 5, 8)
-    #
-    # Show an image grid of 5 rows and 8 cols (5x8 cells).
-    # half resolution.
-    # show_image_map(db, 5, 8, 0.5)
-    #
-    # Show an image grid of 5 rows and 8 cols (5x8 cells).
-    # start from 10th image.
-    # show_image_map(db, 5, 8, [], 10)
-
     # Error handling for arguments
     if (len(X.shape) != 4): raise Exception('ARG_ERR: X: 4D tensor in the format H x W x CH x N')  # noqa: E701, E501
 
