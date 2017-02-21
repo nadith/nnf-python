@@ -15,12 +15,12 @@ import os
 # Local Imports
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
-from nnf.db.MnistDb import MnistDb
 from nnf.db.Dataset import Dataset
 from nnf.db.NNPatch import NNPatch
 from nnf.db.DbSlice import DbSlice
 from nnf.db.Selection import Select
 from nnf.db.Selection import Selection
+from nnf.db.preloaded.MnistDb import MnistDb
 from nnf.core.NNCfg import DAEPreCfg, DAECfg
 from nnf.core.NNPatchMan import NNPatchMan
 from nnf.core.models.DAEModel import DAEModel

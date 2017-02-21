@@ -14,7 +14,7 @@ from keras.utils import np_utils
 import numpy as np
 
 # Local Imports
-from nnf.db.PreLoadedDb import PreLoadedDb
+from nnf.db.preloaded.PreLoadedDb import PreLoadedDb
 from nnf.core.models.Autoencoder import Autoencoder
 from nnf.core.models.CNNModel import CNNModel
 from nnf.core.models.DAEModel import DAEModel

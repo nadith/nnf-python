@@ -15,12 +15,13 @@ import numpy as np
 # Local Imports
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
-from nnf.db.MnistDb import MnistDb
 from nnf.db.Dataset import Dataset
 from nnf.db.NNPatch import NNPatch
 from nnf.db.DbSlice import DbSlice
 from nnf.db.Selection import Select
 from nnf.db.Selection import Selection
+from nnf.db.preloaded.MnistDb import MnistDb
+from nnf.db.preloaded.Cifar10Db import Cifar10Db
 from nnf.core.NNCfg import AECfg
 from nnf.core.NNPatchMan import NNPatchMan
 from nnf.core.models.Autoencoder import Autoencoder
@@ -47,6 +48,7 @@ class TestAEModel(object):
     def Test_preloaded_db(self):
         nnpatchman = NNPatchMan(AEPatchGen())
         aecfg = AECfg([784, 500, 784], preloaded_db=MnistDb(debug=True))
+        #aecfg = AECfg([3072, 1000, 3072], preloaded_db=Cifar10Db(debug=True))
         aecfg.numepochs = 20
         aecfg.nb_val_samples = 800
         aecfg.samples_per_epoch = 600

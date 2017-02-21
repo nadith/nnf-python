@@ -15,12 +15,13 @@ import os
 # Local Imports
 from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
-from nnf.db.MnistDb import MnistDb
 from nnf.db.Dataset import Dataset
 from nnf.db.NNPatch import NNPatch
 from nnf.db.DbSlice import DbSlice
 from nnf.db.Selection import Select
 from nnf.db.Selection import Selection
+from nnf.db.preloaded.MnistDb import MnistDb
+from nnf.db.preloaded.Cifar10Db import Cifar10Db
 from nnf.core.NNCfg import CNNCfg
 from nnf.core.NNPatchMan import NNPatchMan
 from nnf.core.models.CNNModel import CNNModel
@@ -48,6 +49,7 @@ class TestCNNModel(object):
         nnpatchman = NNPatchMan(CNNPatchGen())
         cnncfg = CNNCfg()
         cnncfg.preloaded_db = MnistDb(debug=True)
+        #cnncfg.preloaded_db = Cifar10Db(debug=True)
         cnncfg.numepochs = 20
         cnncfg.nb_val_samples = 800
         cnncfg.samples_per_epoch = 600
