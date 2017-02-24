@@ -64,9 +64,14 @@ class PreLoadedDb (object):
         return False
 
     @abstractmethod
-    def get_input_shape(self):
+    def get_input_shape(self, nnmodel):
         """Fetch the size of a single image/data sample
-    
+
+        Parameters
+        ----------
+        nnmodel : :obj:`NNModel`
+            The `NNModel` that invokes this method.
+
         Returns
         -------
         :obj:`tuple` :

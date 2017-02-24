@@ -32,141 +32,20 @@ class VGG16Model(CNNModel):
     # Public Interface
     ##########################################################################
     def __init__(self, callbacks=None):
-        """describe"""
-        super().__init__(callbaks=callbacks)
+        """Constructs :obj:`VGG16Model` instance."""
+        super().__init__(callbacks=callbacks)
 
     ##########################################################################
     # Protected: CNNModel Overrides
     ##########################################################################
-    def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
-        """Test the :obj:`Autoencoder`.
+    def _model_prefix(self):
+        """Fetch the prefix for the file to be saved/loaded."""
 
-        Parameters
-        ----------
-        cfg : :obj:`NNCfg`
-            Neural Network configuration used in training.
+        return "VGG16"
 
-        patch_idx : int
-            Patch's index in this model.
-
-        dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of each `nnpatch`.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-        """    
-        # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.TEST, list_iterstore, dict_iterstore)
-
-        # Pre-condition asserts
-        assert((cfg.use_db is None and Xte_gen is not None) or 
-                (cfg.use_db is not None))
-
-        if (Xte_target_gen is not None):
-            # No. of testing and testing target samples must be equal
-            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
-
-        # 1st Priority, Load the saved model with weights
-        if (cfg.load_dir is not None):
-            fpath = self._get_saved_model_name(patch_idx, cfg.load_dir)
-            self.net = load_model(fpath)
-            if (cfg.weights_path is not None):
-                warning('ARG_CONFLICT: Model weights will not be loaded from cfg.weights_path')
-
-        # 2nd Priority, Load the saved weights but not the model
-        elif (cfg.weights_path is not None):
-            self._build(cfg, Xte_gen)
-            self.net.load_weights(cfg.weights_path)
-
-        assert(self.net is not None)
-
-        # Preloaded databases for quick deployment
-        if (cfg.use_db == 'mnist'):
-            Xte_L, Xte_target = MnistAE.LoadTeDb() 
-
-        # Test without generators
-        if (cfg.use_db is not None):
-            super()._start_test(patch_idx, Xte_L, Xte_target) 
-
-        # Test with generators
-        super()._start_test(patch_idx, Xte_gen=Xte_gen, Xte_target_gen=Xte_target_gen)
-
-    def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
-        """Predict the :obj:`Autoencoder`.
-
-        Parameters
-        ----------
-        cfg : :obj:`NNCfg`
-            Neural Network configuration used in training.
-
-        patch_idx : int
-            Patch's index in this model.
-
-        dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of each `nnpatch`.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-        """    
-        # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(NNModelPhase.PREDICT, list_iterstore, dict_iterstore)
-
-        # Pre-condition asserts
-        assert((cfg.use_db is None and Xte_gen is not None) or 
-                (cfg.use_db is not None))
-
-        if (Xte_target_gen is not None):
-            # No. of testing and testing target samples must be equal
-            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
-
-        # 1st Priority, Load the saved model with weights
-        if (cfg.load_dir is not None):
-            fpath = self._get_saved_model_name(patch_idx, cfg.load_dir)
-            self.net = load_model(fpath)
-            if (cfg.weights_path is not None):
-                warning('ARG_CONFLICT: Model weights will not be loaded from cfg.weights_path')
-
-        # 2nd Priority, Load the saved weights but not the model
-        elif (cfg.weights_path is not None):
-            self._build(cfg, Xte_gen)
-            self.net.load_weights(cfg.weights_path)
-
-        assert(self.net is not None)
-
-        # Preloaded databases for quick deployment
-        if (cfg.use_db == 'mnist'):
-            Xte_L, _ = MnistAE.LoadTeDb() 
-
-        # Test without generators
-        if (cfg.use_db is not None):
-            Xte =  Xte_L[0]
-            super()._start_predict(patch_idx, Xte) 
-
-        # Test with generators
-        super()._start_predict(patch_idx, Xte_gen=Xte_gen)
-
-    def _predict_feature_size(self):
-        return 4096
-
-    def _predict_feature(self, Xte):
-        return self.fn_predict_feature([Xte, 0])[0]
-
-    def _build(self, cfg, X_gen):
-
-        if (cfg.use_db is not None):
-            input_shape = MnistAE.image_shape
-            nb_class = MnistAE.nb_class
-        else:
-            input_shape = X_gen.image_shape # <- 'tf' format (default)
-            nb_class = X_gen.nb_class
-
-        assert(X_gen.dim_ordering == 'th')  
+    def _build(self, input_shape, nb_class, dim_ordering):
+        """Build the keras VGG16."""
+        assert(dim_ordering == 'th')  
         assert(input_shape == (3,224,224)) # and nb_class == 1000)                 
 
         self.net = Sequential()
@@ -214,8 +93,5 @@ class VGG16Model(CNNModel):
         self.net.add(Dense(1000, activation='softmax'))   
        
         sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
-        self.net.compile(optimizer=sgd, loss='categorical_crossentropy')
-
-        self.fn_predict_feature = K.function([self.net.layers[0].input, K.learning_phase()],
-                                  [self.net.layers[34].output]) 
+        self.net.compile(optimizer=sgd, loss='categorical_crossentropy') 
       

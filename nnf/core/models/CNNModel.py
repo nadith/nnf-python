@@ -461,7 +461,7 @@ class CNNModel(NNModel):
         """Build the keras CNN."""
         if (cfg.preloaded_db is not None):
             cfg.preloaded_db.reinit('default')
-            input_shape = cfg.preloaded_db.get_input_shape()
+            input_shape = cfg.preloaded_db.get_input_shape(self)
             nb_class = cfg.preloaded_db.get_nb_class()
             dim_ordering = cfg.preloaded_db.dim_ordering
         else:

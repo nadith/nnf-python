@@ -10,15 +10,18 @@
 # Global Imports
 from abc import ABCMeta, abstractmethod
 import os
+import scipy
 import numpy as np
 from keras import backend as K
 from keras.utils import np_utils
 from keras.datasets.cifar import load_batch
 from keras.utils.data_utils import get_file
 
+
 # Local Imports
 from nnf.db.preloaded.PreLoadedDb import PreLoadedDb
 from nnf.core.models.Autoencoder import Autoencoder
+from nnf.core.models.VGG16Model import VGG16Model
 from nnf.core.models.CNNModel import CNNModel
 from nnf.core.models.DAEModel import DAEModel
 from nnf.core.models.DAERegModel import DAERegModel
@@ -93,7 +96,7 @@ class Cifar10Db(PreLoadedDb):
             self.X_lbl = self.X_lbl[0:10]
             self.Xte_lbl = self.Xte_lbl[0:10]
 
-    def get_input_shape(self):
+    def get_input_shape(self, nnmodel):
         """Fetch the size of a single image/data sample.
     
         Returns
@@ -102,7 +105,13 @@ class Cifar10Db(PreLoadedDb):
             Indicates (height, width, ch) or (height, width, ch)
             depending on the `self.dim_ordering` property.
         """
-        target_shape = (32, 32)
+
+        if (isinstance(nnmodel, VGG16Model)):
+            # Original VGG16 model is compatible with:
+            target_shape = (224, 224)
+        else:
+            target_shape = (32, 32)
+
         if self.dim_ordering == 'tf':
             input_shape =  target_shape + (3,)
         else:
@@ -153,8 +162,8 @@ class Cifar10Db(PreLoadedDb):
         X_lbl = self.X_lbl[:tr_offset]
         Xval_lbl= self.X_lbl[tr_offset:tr_offset + val_offset]
 
-        if (isinstance(nnmodel, DAEModel) or
-            isinstance(nnmodel, DAERegModel)):
+        if (isinstance(nnmodel, DAERegModel) or
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the tr. input/target
             db = np.reshape(X, (len(X), np.prod(X.shape[1:])))
@@ -210,8 +219,8 @@ class Cifar10Db(PreLoadedDb):
         Xval_lbl= self.X_lbl[tr_offset:tr_offset + val_offset]
 
         if (isinstance(nnmodel, Autoencoder) or 
-            isinstance(nnmodel, DAEModel) or 
-            isinstance(nnmodel, DAERegModel)):
+            isinstance(nnmodel, DAERegModel) or 
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the tr. input/target
             db = np.reshape(X, (len(X), np.prod(X.shape[1:])))
@@ -223,6 +232,11 @@ class Cifar10Db(PreLoadedDb):
 
             return X_L, db, X_L_val, db_val
 
+        # Child model should be checked first before parent model
+        elif (isinstance(nnmodel, VGG16Model)):
+            # Original VGG expects 1000 class database
+            assert(False)  
+
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
             nb_class = self.get_nb_class()
@@ -231,6 +245,9 @@ class Cifar10Db(PreLoadedDb):
 
             # Model expects no target information
             return X_L, None, X_L_val, None
+
+        else:
+            raise Exception("NNModel is not supported")
 
     def LoadTeDb(self, nnmodel):
         """Load the testing dataset.
@@ -269,21 +286,32 @@ class Cifar10Db(PreLoadedDb):
         Xte_lbl = self.Xte_lbl
 
         if (isinstance(nnmodel, Autoencoder) or 
-            isinstance(nnmodel, DAEModel) or 
-            isinstance(nnmodel, DAERegModel)):
+            isinstance(nnmodel, DAERegModel) or 
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the pred. input/target
             db = np.reshape(Xte, (len(Xte), np.prod(Xte.shape[1:])))            
             X_L_te = (db, None)  # Model expects no label information
             return X_L_te, db
 
+        # Child model should be checked first before parent model
+        elif (isinstance(nnmodel, VGG16Model)):
+            # Original VGG expects 1000 class database
+            assert(False)
+
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
             nb_class = self.get_nb_class()
-            X_L_te = (self.__process(Xte), np_utils.to_categorical(Xte_lbl, nb_class).astype('float32'))
+            X_L_te = (self.__process(Xte), np_utils.to_categorical(
+                                                        Xte_lbl,
+                                                        nb_class)
+                                                        .astype('float32'))
 
             # Model expects no target information
             return X_L_te, None
+
+        else:
+            raise Exception("NNModel is not supported")
 
     def LoadPredDb(self, nnmodel):
         """Load the dataset for predictions.
@@ -321,9 +349,9 @@ class Cifar10Db(PreLoadedDb):
         Xte = self.Xte
         Xte_lbl = self.Xte_lbl
 
-        if (isinstance(nnmodel, Autoencoder) or 
-            isinstance(nnmodel, DAEModel) or 
-            isinstance(nnmodel, DAERegModel)):
+        if (isinstance(nnmodel, Autoencoder) or
+            isinstance(nnmodel, DAERegModel) or
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the pred. input/target
             db = np.reshape(Xte, (len(Xte), np.prod(Xte.shape[1:])))
@@ -332,13 +360,49 @@ class Cifar10Db(PreLoadedDb):
             X_L_te = (db, None)
             return X_L_te, db
 
-        elif (isinstance(nnmodel, CNNModel)):
-            # Fix categorical labels for CNN
-            nb_class = self.get_nb_class()
-            X_L_te = (self.__process(Xte), np_utils.to_categorical(Xte_lbl, nb_class).astype('float32'))
+        # Child model should be checked first before parent model
+        elif (isinstance(nnmodel, VGG16Model)):
+
+            if (self.dim_ordering == 'tf'):
+                im_count, h, w, ch = Xte.shape
+            else:
+                im_count, ch, h, w = Xte.shape
+
+            scale = (224, 224)
+            if (np.isscalar(scale)):
+                newXte = np.zeros((im_count, ch, h*scale, w*scale), Xte.dtype)
+            else:
+                newXte = np.zeros((im_count, ch, scale[0], scale[1]), Xte.dtype)               
+
+            for i in range(im_count):
+                # Scale the image (low dimension/resolution)
+                cimg = np.transpose(Xte[i], (1, 2, 0))  # scipy format
+                cimg = scipy.misc.imresize(cimg, scale)
+                newXte[i] = np.rollaxis(cimg, 2, 0)  # VGG16 format
+
+                # Fix categorical labels for VGG16
+                nb_class = self.get_nb_class()
+                X_L_te = (self.__process(newXte), np_utils.to_categorical(
+                                                            Xte_lbl,
+                                                            nb_class)
+                                                            .astype('float32'))
 
             # Model expects no target information
             return X_L_te, None
+
+        elif (isinstance(nnmodel, CNNModel)):
+            # Fix categorical labels for CNN
+            nb_class = self.get_nb_class()
+            X_L_te = (self.__process(Xte), np_utils.to_categorical(
+                                                            Xte_lbl,
+                                                            nb_class)
+                                                            .astype('float32'))
+
+            # Model expects no target information
+            return X_L_te, None
+
+        else:
+            raise Exception("NNModel is not supported")
 
     ##########################################################################
     # Private Interface

@@ -39,8 +39,8 @@ imdb_obj = matStruct['imdb_obj']
 #nndb = NNdb('Original', db, 8, True, format=Format.N_H_W_CH)
 #nndb.show(5, 8)
 
-# Database Slicing ##########################################################
-#############################################################################
+# Database Slicing ###########################################################
+##############################################################################
 #from nnf.db.NNdb import NNdb
 #from nnf.db.DbSlice import DbSlice
 #from nnf.db.Selection import Selection
@@ -146,8 +146,8 @@ imdb_obj = matStruct['imdb_obj']
 #nndbs_tr[3].show()
 
 ##############################################################################
-# ML Algorithms #############################################################
-#############################################################################
+# ML Algorithms ##############################################################
+##############################################################################
 #from nnf.alg.LDA import LDA
 #from nnf.alg.Util import Util
 #from nnf.db.NNdb import NNdb
@@ -181,7 +181,7 @@ imdb_obj = matStruct['imdb_obj']
 #TestAEModel().Test_preloaded_db()
 
 
-##2: DAE Model ################################################################
+##2: DAE Model ###############################################################
 #from nnf.test.dl.TestDAEModel import TestDAEModel
 #TestDAEModel().Test()
 
@@ -194,7 +194,7 @@ imdb_obj = matStruct['imdb_obj']
 #TestDAEModel().Test_preloaded_db()
 
 
-##3: DAEReg Model #############################################################
+##3: DAEReg Model ############################################################
 #from nnf.test.dl.TestDAERegModel import TestDAERegModel
 #TestDAERegModel().Test()
 
@@ -203,7 +203,7 @@ imdb_obj = matStruct['imdb_obj']
 #TestDAERegModel().Test_preloaded_db()
 
 
-##4: CNN Model ################################################################
+##4: CNN Model ###############################################################
 #from nnf.test.dl.TestCNNModel import TestCNNModel
 #TestCNNModel().Test()
 
@@ -212,6 +212,10 @@ imdb_obj = matStruct['imdb_obj']
 #TestCNNModel().Test_preloaded_db()
 
 
-#5: TODO: VGG16 Model ########################################################
+##5: VGG16 Model #############################################################
 #from nnf.test.dl.TestVGG16Model import TestVGG16Model
 #TestVGG16Model().Test()
+
+##5.1: VGG16 Model (pre-loaded database) 
+#from nnf.test.dl.TestVGG16Model import TestVGG16Model
+#TestVGG16Model().Test_preloaded_db()

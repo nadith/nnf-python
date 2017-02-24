@@ -18,6 +18,7 @@ from nnf.db.preloaded.PreLoadedDb import PreLoadedDb
 from nnf.core.models.Autoencoder import Autoencoder
 from nnf.core.models.CNNModel import CNNModel
 from nnf.core.models.DAEModel import DAEModel
+from nnf.core.models.VGG16Model import VGG16Model
 from nnf.core.models.DAERegModel import DAERegModel
 
 class MnistDb(PreLoadedDb):
@@ -90,7 +91,7 @@ class MnistDb(PreLoadedDb):
             self.X_lbl = self.X_lbl[0:10]
             self.Xte_lbl = self.Xte_lbl[0:10]
 
-    def get_input_shape(self):
+    def get_input_shape(self, nnmodel):
         """Fetch the size of a single image/data sample
     
         Returns
@@ -150,8 +151,8 @@ class MnistDb(PreLoadedDb):
         X_lbl = self.X_lbl[:tr_offset]
         Xval_lbl= self.X_lbl[tr_offset:tr_offset + val_offset]
 
-        if (isinstance(nnmodel, DAEModel) or
-            isinstance(nnmodel, DAERegModel)):
+        if (isinstance(nnmodel, DAERegModel) or
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the tr. input/target
             db = np.reshape(X, (len(X), np.prod(X.shape[1:])))
@@ -207,8 +208,8 @@ class MnistDb(PreLoadedDb):
         Xval_lbl= self.X_lbl[tr_offset:tr_offset + val_offset]
 
         if (isinstance(nnmodel, Autoencoder) or 
-            isinstance(nnmodel, DAEModel) or 
-            isinstance(nnmodel, DAERegModel)):
+            isinstance(nnmodel, DAERegModel) or 
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the tr. input/target
             db = np.reshape(X, (len(X), np.prod(X.shape[1:])))
@@ -219,6 +220,11 @@ class MnistDb(PreLoadedDb):
             X_L_val = (db_val, None)  # Model expects no label information
 
             return X_L, db, X_L_val, db_val
+
+        # Child model should be checked first before parent model
+        elif (isinstance(nnmodel, VGG16Model)):
+            # Original VGG expects 1000 class, color (ch=3) database
+            assert(False)  
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
@@ -266,13 +272,18 @@ class MnistDb(PreLoadedDb):
         Xte_lbl = self.Xte_lbl
 
         if (isinstance(nnmodel, Autoencoder) or 
-            isinstance(nnmodel, DAEModel) or 
-            isinstance(nnmodel, DAERegModel)):
+            isinstance(nnmodel, DAERegModel) or 
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the pred. input/target
             db = np.reshape(Xte, (len(Xte), np.prod(Xte.shape[1:])))            
             X_L_te = (db, None)  # Model expects no label information
             return X_L_te, db
+
+        # Child model should be checked first before parent model
+        elif (isinstance(nnmodel, VGG16Model)):
+            # Original VGG expects 1000 class, color (ch=3) database
+            assert(False)  
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
@@ -319,8 +330,8 @@ class MnistDb(PreLoadedDb):
         Xte_lbl = self.Xte_lbl
 
         if (isinstance(nnmodel, Autoencoder) or 
-            isinstance(nnmodel, DAEModel) or 
-            isinstance(nnmodel, DAERegModel)):
+            isinstance(nnmodel, DAERegModel) or 
+            isinstance(nnmodel, DAEModel)):
 
             # Vectorize the pred. input/target
             db = np.reshape(Xte, (len(Xte), np.prod(Xte.shape[1:])))
@@ -328,6 +339,16 @@ class MnistDb(PreLoadedDb):
             # Model expects no label information
             X_L_te = (db, None)
             return X_L_te, db
+
+        # Child model should be checked first before parent model
+        elif (isinstance(nnmodel, VGG16Model)):
+            # Original VGG expects 1000 class, color (ch=3) database
+            assert(False)  
+
+        # Child model should be checked first before parent model
+        elif (isinstance(nnmodel, VGG16Model)):
+            # Original VGG expects 1000 class, color (ch=3) database
+            assert(False)  
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
