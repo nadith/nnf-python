@@ -85,6 +85,15 @@ class DAERegModel(DAEModel):
     ##########################################################################
     # Protected: DAEModel Overrides
     ##########################################################################
+    def _model_prefix(self):
+        """Fetch the prefix for the file to be saved/loaded.
+
+        Note
+        ----
+        Override this method for custom prefix.
+        """
+        return "DAEReg"
+
     def _validate_cfg(self, ephase, cfg):
         """Validate NN Configuration for this model"""
         super()._validate_cfg(ephase, cfg)

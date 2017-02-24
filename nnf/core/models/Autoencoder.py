@@ -174,15 +174,8 @@ class Autoencoder(NNModel):
                 (cfg.preloaded_db is not None) or
                 (self.X_L is not None))
 
-        in_dim = cfg.arch[0]
-        hid_dim = cfg.arch[1]
-        out_dim = cfg.arch[2]
-
         # Build the Autoencoder
-        self.__build(cfg, in_dim, hid_dim, out_dim, 
-                    cfg.act_fns[1], None, 
-                    cfg.act_fns[2], None,
-                    cfg.loss_fn)
+        self._build(cfg)
 
         # Preloaded databases for quick deployment
         if ((cfg.preloaded_db is not None) and
@@ -196,15 +189,19 @@ class Autoencoder(NNModel):
         if (cfg.preloaded_db is not None or 
             (self.X_L is not None)):
             super()._start_train(cfg, self.X_L, self.Xt, self.X_L_val, self.Xt_val)
-            return (self.X_L, self.Xt, self.X_L_val, self.Xt_val)
+            ret = (self.X_L, self.Xt, self.X_L_val, self.Xt_val)
 
         # Training with generators
-        super()._start_train(cfg, X_gen=X_gen, X_val_gen=X_val_gen)
+        else:        
+            super()._start_train(cfg, X_gen=X_gen, X_val_gen=X_val_gen)
+            ret = (None, None, None, None)
+
+        # Model prefix
+        prefix = self._model_prefix()
 
         # Save the trained model
-        self._try_save(cfg, patch_idx, "AE")
-
-        return (None, None, None, None)
+        self._try_save(cfg, patch_idx, prefix)
+        return ret
 
     def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
@@ -241,14 +238,16 @@ class Autoencoder(NNModel):
             # No. of testing and testing target samples must be equal
             assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
 
-        # 1st Priority, Load the saved model with weights
-        is_loaded = self._try_load(cfg, patch_idx, "AE")
+        # Model prefix
+        prefix = self._model_prefix()
 
-        # 2nd Priority, Load the saved weights but not the model
-        if (not is_loaded and cfg.weights_path is not None):
-            assert(False)
-            #self._build(cfg, Xte_gen) # TODO: X_gen.nb_class is used. Since it needs to follow training phase
-            #self.net.load_weights(daecfg.weights_path) 
+        # Checks whether keras net should be pre-built to
+        # load weights or the net itself
+        if (self._need_prebuild(cfg, patch_idx, prefix)):
+            self._build(cfg)
+
+        # Try to load the saved model or weights
+        self._try_load(daecfg, patch_idx, prefix)
 
         assert(self.net is not None)
 
@@ -302,14 +301,16 @@ class Autoencoder(NNModel):
             # No. of testing and testing target samples must be equal
             assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
 
-        # 1st Priority, Load the saved model with weights
-        is_loaded = self._try_load(cfg, patch_idx, "AE")
+        # Model prefix
+        prefix = self._model_prefix()
 
-        # 2nd Priority, Load the saved weights but not the model
-        if (not is_loaded and cfg.weights_path is not None):
-            assert(False)
-            #self._build(cfg, Xte_gen) # TODO: X_gen.nb_class is used. Since it needs to follow training phase
-            #self.net.load_weights(daecfg.weights_path)
+        # Checks whether keras net should be pre-built to
+        # load weights or the net itself
+        if (self._need_prebuild(cfg, patch_idx, prefix)):
+            self._build(cfg)
+
+        # Try to load the saved model or weights
+        self._try_load(cfg, patch_idx, prefix)
 
         assert(self.net is not None)
 
@@ -331,6 +332,15 @@ class Autoencoder(NNModel):
     ##########################################################################
     # Protected Interface
     ##########################################################################
+    def _model_prefix(self):
+        """Fetch the prefix for the file to be saved/loaded.
+
+        Note
+        ----
+        Override this method for custom prefix.
+        """
+        return "AE"
+
     def _encode(self, X):
         """Encode the data.
 
@@ -378,26 +388,20 @@ class Autoencoder(NNModel):
 
         return X_gen, X_val_gen
 
-    ##########################################################################
-    # Private Interface
-    ##########################################################################
-    def __build(self, cfg, input_dim=784,  hidden_dim=32, output_dim=784, 
-                enc_activation='sigmoid', enc_weights=None, 
-                dec_activation='sigmoid', dec_weights=None,
-                loss_fn='mean_squared_error', use_early_stop=False, 
+    def _build(self, cfg, use_early_stop=False, 
                 cb_early_stop=EarlyStopping(monitor='val_loss', patience=0, verbose=0, mode='auto')):
-        """Build the keras Autoencoder."""  
+        """Build the keras Autoencoder."""
         # Set early stop for later use
         self.cb_early_stop = cb_early_stop
 
         # this is our input placeholder
-        input_img = Input(shape=(input_dim,))
+        input_img = Input(shape=(cfg.arch[0],))
 
         # "encoded" is the encoded representation of the input
-        encoded = Dense(hidden_dim, activation=enc_activation, weights=enc_weights)(input_img)
+        encoded = Dense(cfg.arch[1], activation=cfg.act_fns[1])(input_img)
 
         # "decoded" is the lossy reconstruction of the input
-        decoded = Dense(output_dim, activation=dec_activation, weights=dec_weights)(encoded)
+        decoded = Dense(cfg.arch[2], activation=cfg.act_fns[2])(encoded)
 
         # this model maps an input to its reconstruction
         self.net = Model(input=input_img, output=decoded)
@@ -418,10 +422,9 @@ class Autoencoder(NNModel):
         ## Ref: NNModel._init_predict_feature_fns()
         ## self.decoder = Model(input=encoded_input, output=decoder_layer(encoded_input))
 
-        print('Autoencoder: {0}, {1}, {2}, {3}, {4}'.format(input_dim, hidden_dim, enc_activation, dec_activation, loss_fn))
         print(self.net.summary())
 
-        self.net.compile(optimizer='adadelta', loss=loss_fn)
+        self.net.compile(optimizer='adadelta', loss=cfg.loss_fn)
         self._init_fns_predict_feature(cfg)  
 
     ##########################################################################

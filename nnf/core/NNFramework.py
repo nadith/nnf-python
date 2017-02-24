@@ -21,6 +21,7 @@ from nnf.core.iters.disk.DskDataIterator import DskDataIterator
 from nnf.core.iters.disk.DirectoryIterator import DirectoryIterator
 from nnf.db.Dataset import Dataset
 from nnf.db.Selection import Selection
+from nnf.core.models.NNModel import NNModel
 
 class NNFramework(object):
     """`NNFramework` represents the base class of the Neural Network Framework.
@@ -55,6 +56,9 @@ class NNFramework(object):
             List of user dbparams, each describing a database.
         """
         self._dict_diskman = {}
+
+        # Reset the uid at the entry of the test case
+        NNModel.reset_uid()
 
     @abstractmethod
     def pre_train(self, precfgs=None, cfg=None):
@@ -357,12 +361,15 @@ class NNFramework(object):
 
         Parameters
         ----------
-        iter_pp_param : :obj:`list`
+        iter_pp_param : :obj:`list` or :obj:`dict`
             List of `dict` element, `tuple` element in the following format.
             [{default_pp_params}, 
             (Dataset.TR, {pp_params}), 
             (Dataset.VAL, {pp_params}), 
-            ((Dataset.TE, Dataset.TE_OUT), {pp_params})]                
+            ((Dataset.TE, Dataset.TE_OUT), {pp_params})]
+
+            OR
+            `dict` indicating the {default_pp_params}
 
         Returns
         -------

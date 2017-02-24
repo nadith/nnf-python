@@ -83,7 +83,7 @@ class NNBigDataDiskMan(NNDiskMan):
         self.target_size = self._iter_param['target_size'] if ('target_size' in self._iter_param) else None        
 
     ##########################################################################
-    # Protected: NNDiskMan Overrides
+    # Public: NNDiskMan Overrides
     ##########################################################################
     def init(self):
         """Initialize the :obj:`NNBigDataDiskMan` instance."""
@@ -93,6 +93,9 @@ class NNBigDataDiskMan(NNDiskMan):
         if (self._save_file is not None):
             self._save_file.close()
 
+    ##########################################################################
+    # Protected: NNDiskMan Overrides
+    ##########################################################################
     def _create_dskman_dskdataiter(self, db_pp_params):
         """Create the :obj:`DskmanDskBigDataIterator` instance to iterate the disk.
 

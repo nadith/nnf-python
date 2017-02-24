@@ -45,14 +45,27 @@ class TestCNNModel(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def Test_preloaded_db(self):
+    def Test_preloaded_db(self):    
+        cwd = os.getcwd()
+        model_folder = os.path.join(cwd, "ModelFolder")
+
         nnpatchman = NNPatchMan(CNNPatchGen())
         cnncfg = CNNCfg()
+
+        # Utilizing preloaded db
         cnncfg.preloaded_db = MnistDb(debug=True)
         #cnncfg.preloaded_db = Cifar10Db(debug=True)
-        cnncfg.numepochs = 20
-        cnncfg.nb_val_samples = 800
-        cnncfg.samples_per_epoch = 600
+
+        # To save the model & weights
+        # cnncfg.model_dir = model_folder
+
+        # To save the weights only      
+        # cnncfg.weights_dir = model_folder
+
+        cnncfg.numepochs = 2 #20
+        cnncfg.nb_val_samples = 8 #800
+        cnncfg.samples_per_epoch = 6 #600
+
         nnpatchman.train(cnncfg)
         #nnpatchman.test(cnncfg)
         nnpatchman.predict(cnncfg)
@@ -61,6 +74,7 @@ class TestCNNModel(object):
         # Get the current working directory, define a `DataFolder`
         cwd = os.getcwd()
         data_folder = os.path.join(cwd, "DataFolder")
+        model_folder = os.path.join(cwd, "ModelFolder")
 
         # Load image database `AR`
         matStruct = scipy.io.loadmat(os.path.join(data_folder, 'IMDB_66_66_AR_8.mat'),
@@ -83,13 +97,13 @@ class TestCNNModel(object):
         db_dir = os.path.join(data_folder, "disk_db")
 
         # Use nndb, iterators read from the memory
-        # list_dbparams = self.__inmem_dbparams(nndb, sel)
+        list_dbparams = self.__inmem_dbparams(nndb, sel)
 
         # Use database at db_dir, write the processed data on to the disk, iterators read from the disk
         # list_dbparams = self.__indsk_dbparams(os.path.join(db_dir, "_processed_DB1"), sel)
 
         # Use nndb, write the processed data on to the disk, iterators read from the disk.
-        list_dbparams = self.__mem_to_dsk_indsk_dbparams(nndb, db_dir, sel)
+        #list_dbparams = self.__mem_to_dsk_indsk_dbparams(nndb, db_dir, sel)
 
         # Use nndb, write the processed data on to the disk, but iterators read from the memory.
         # list_dbparams = self.__mem_to_dsk_inmem_dbparams(nndb, db_dir, sel)
@@ -97,11 +111,19 @@ class TestCNNModel(object):
         nnpatchman = NNPatchMan(CNNPatchGen(), list_dbparams)
 
         cnncfg = CNNCfg()
-        cnncfg.numepochs = 20
-        cnncfg.nb_val_samples = 800
-        cnncfg.samples_per_epoch = 600
+        
+        # To save the model & weights
+        # cnncfg.model_dir = model_folder
+
+        # To save the weights only      
+        # cnncfg.weights_dir = model_folder
+
+        cnncfg.numepochs = 2 #20
+        cnncfg.nb_val_samples = 8 #800
+        cnncfg.samples_per_epoch = 6 #600
         nnpatchman.train(cnncfg)
-        #nnpatchman.predict(daecfg)
+        #nnpatchman.test(cnncfg)
+        nnpatchman.predict(cnncfg)
 
     ##########################################################################
     # Private Interface

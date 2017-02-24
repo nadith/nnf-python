@@ -45,6 +45,9 @@ class TestDAEModel(object):
     # Public Interface
     ##########################################################################
     def Test_preloaded_db(self, pretrain=True):
+        cwd = os.getcwd()
+        model_folder = os.path.join(cwd, "ModelFolder")
+
         nnpatchman = NNPatchMan(DAEPatchGen())
         daepcfgs = []
         daecfg = DAECfg([784, 512, 400, 512, 784], 
@@ -52,9 +55,36 @@ class TestDAEModel(object):
                         preloaded_db=MnistDb(debug=True))
 
         if (pretrain):
-            daepcfgs.append(DAEPreCfg([784, 512, 784], preloaded_db=MnistDb(debug=True)))
-            daepcfgs.append(DAEPreCfg([512, 400, 512]))        
+            pre_cfg = DAEPreCfg([784, 512, 784], preloaded_db=MnistDb(debug=True))
+
+            # To save the model & weights
+            # pre_cfg.model_dir = model_folder
+
+            # To save the weights only
+            # pre_cfg.weights_dir = model_folder
+
+            # Append `pre_cfg` to `daepcfgs` list
+            daepcfgs.append(pre_cfg)
+                
+            pre_cfg = DAEPreCfg([512, 400, 512])
+
+            # To save the model & weights
+            # pre_cfg.model_dir = model_folder
+
+            # To save the weights only  
+            # pre_cfg.weights_dir = model_folder
+
+            # Append `pre_cfg` to `daepcfgs` list
+            daepcfgs.append(pre_cfg)
+
+            # Peform pre-training
             nnpatchman.pre_train(daepcfgs, daecfg)
+
+        # To save the model & weights
+        # daecfg.model_dir = model_folder
+
+        # To save the weights only      
+        # daecfg.weights_dir = model_folder
 
         nnpatchman.train(daecfg)
         #nnpatchman.test(daecfg)

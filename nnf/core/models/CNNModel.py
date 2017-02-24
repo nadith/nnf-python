@@ -22,7 +22,6 @@ from nnf.db.NNdb import NNdb
 from nnf.db.Format import Format
 from nnf.db.Dataset import Dataset
 from nnf.core.models.NNModel import NNModel
-from nnf.core.models.Autoencoder import Autoencoder
 from nnf.core.models.NNModelPhase import NNModelPhase
 from nnf.core.iters.DataIterator import DataIterator
 from nnf.core.iters.memory.MemDataIterator import MemDataIterator
@@ -185,7 +184,7 @@ class CNNModel(NNModel):
             assert(not (X_gen.nb_class is None or X_val_gen.nb_class is None))
 
         # Build the CNN
-        self._build(cfg, X_gen)
+        self.__build(cfg, X_gen)
 
         # Preloaded databases for quick deployment
         if ((cfg.preloaded_db is not None) and
@@ -194,17 +193,18 @@ class CNNModel(NNModel):
             self.X_L, self.Xt, self.X_L_val, self.Xt_val = cfg.preloaded_db.LoadTrDb(self)
 
         # Training without generators
-        if (cfg.preloaded_db is not None):  
+        if (cfg.preloaded_db is not None):
             super()._start_train(cfg, self.X_L, self.Xt, self.X_L_val, self.Xt_val)
-            return (self.X_L, self.Xt, self.X_L_val, self.Xt_val)
+            ret = (self.X_L, self.Xt, self.X_L_val, self.Xt_val)
 
         # Training with generators
-        super()._start_train(cfg, X_gen=X_gen, X_val_gen=X_val_gen)
+        else:
+            super()._start_train(cfg, X_gen=X_gen, X_val_gen=X_val_gen)
+            ret = (None, None, None, None)
 
         # Save the trained model
-        self._try_save(cfg, patch_idx, "CNN")
-
-        return (None, None, None, None)
+        self._try_save(cfg, patch_idx, self._model_prefix())
+        return ret
 
     def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
@@ -229,33 +229,36 @@ class CNNModel(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(
+        X_te_gen, Xt_te_gen = self._init_data_generators(
                                                     NNModelPhase.TEST,
                                                     list_iterstore,
                                                     dict_iterstore)
+
         # Pre-condition asserts
-        assert((cfg.preloaded_db is None and Xte_gen is not None) or 
+        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
                 (cfg.preloaded_db is not None))
 
-        if (Xte_target_gen is not None):
+        if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
-            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
+            assert(X_te_gen.nb_sample == Xt_te_gen.nb_sample)
 
-        # 1st Priority, Load the saved model with weights
-        is_loaded = self._try_load(cfg, patch_idx, "CNN")
+        # Model prefix
+        prefix = self._model_prefix()
 
-        # 2nd Priority, Load the saved weights but not the model
-        if (not is_loaded and cfg.weights_path is not None):
-            assert(False)
-            #self._build(cfg, Xte_gen) # TODO: X_gen.nb_class is used. Since it needs to follow training phase
-            #self.net.load_weights(daecfg.weights_path) 
+        # Checks whether keras net should be pre-built to
+        # load weights or the net itself
+        if (self._need_prebuild(cfg, patch_idx, prefix)):
+            self.__build(cfg, X_te_gen)
+
+        # Try to load the saved model or weights
+        self._try_load(cfg, patch_idx, prefix)
 
         assert(self.net is not None)
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
             cfg.preloaded_db.reinit('default')
-            X_L_te, Xt_te = cfg.preloaded_db.LoadTeDb(self)     
+            X_L_te, Xt_te = cfg.preloaded_db.LoadTeDb(self)
 
         # Test without generators
         if (cfg.preloaded_db is not None):
@@ -264,8 +267,8 @@ class CNNModel(NNModel):
 
         # Test with generators
         super()._start_test(patch_idx,
-                            Xte_gen=Xte_gen,
-                            Xte_target_gen=Xte_target_gen)
+                            X_te_gen=X_te_gen,
+                            Xt_te_gen=Xt_te_gen)
 
     def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
@@ -290,26 +293,28 @@ class CNNModel(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(
+        X_te_gen, Xt_te_gen = self._init_data_generators(
                                                 NNModelPhase.PREDICT, 
                                                 list_iterstore, 
                                                 dict_iterstore)
         # Pre-condition asserts
-        assert((cfg.preloaded_db is None and Xte_gen is not None) or 
+        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
                 (cfg.preloaded_db is not None))
 
-        if (Xte_target_gen is not None):
+        if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
-            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
+            assert(Xte_gen.nb_sample == Xt_te_gen.nb_sample)
 
-        # 1st Priority, Load the saved model with weights
-        is_loaded = self._try_load(cfg, patch_idx, "CNN")
+        # Model prefix
+        prefix = self._model_prefix()
 
-        # 2nd Priority, Load the saved weights but not the model
-        if (not is_loaded and cfg.weights_path is not None):
-            assert(False)
-            #self._build(cfg, Xte_gen) # TODO: X_gen.nb_class is used. Since it needs to follow training phase
-            #self.net.load_weights(daecfg.weights_path)
+        # Checks whether keras net should be pre-built to
+        # load weights or the net itself
+        if (self._need_prebuild(cfg, patch_idx, prefix)):
+            self.__build(cfg, X_te_gen)
+
+        # Try to load the saved model or weights
+        self._try_load(cfg, patch_idx, prefix)
 
         assert(self.net is not None)
 
@@ -325,8 +330,8 @@ class CNNModel(NNModel):
 
         # Predict with generators
         super()._start_predict(patch_idx, 
-                                Xte_gen=Xte_gen, 
-                                Xte_target_gen=Xte_target_gen)
+                                X_te_gen=X_te_gen, 
+                                Xt_te_gen=Xt_te_gen)
 
     ##########################################################################
     # Protected Interface
@@ -363,16 +368,22 @@ class CNNModel(NNModel):
 
         return X_gen, X_val_gen
 
-    def _build(self, cfg, X_gen):
-        """Build the keras CNN."""
-        if (cfg.preloaded_db is not None):
-            cfg.preloaded_db.reinit('default')
-            input_shape = cfg.preloaded_db.get_input_shape()
-            nb_class = cfg.preloaded_db.get_nb_class()
-        else:
-            input_shape = X_gen.image_shape # <- 'tf' format (default)
-            nb_class = X_gen.nb_class
+    def _model_prefix(self):
+        """Fetch the prefix for the file to be saved/loaded.
 
+        Note
+        ----
+        Override this method for custom prefix.
+        """
+        return "CNN"
+
+    def _build(self, input_shape, nb_class, dim_ordering):
+        """Build the keras CNN.
+
+        Note
+        ----
+        Override this method for custom CNN builds.
+        """
         self.net = Sequential()
 
         ## input: 100x100 images with 3 channels -> (3, 100, 100) tensors.
@@ -433,8 +444,7 @@ class CNNModel(NNModel):
         print(self.net.summary())
         self.net.compile(loss='categorical_crossentropy',
                       optimizer='rmsprop',
-                      metrics=['accuracy'])
-        self._init_fns_predict_feature(cfg)      
+                      metrics=['accuracy'])    
 
         #rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
         #self.net.compile(loss='categorical_crossentropy',
@@ -443,4 +453,23 @@ class CNNModel(NNModel):
 
         #sgd = SGD(lr=0.5, decay=1e-6, momentum=0.1, nesterov=True)
         #self.net.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+
+    ##########################################################################
+    # Private Interface
+    ##########################################################################
+    def __build(self, cfg, X_gen):
+        """Build the keras CNN."""
+        if (cfg.preloaded_db is not None):
+            cfg.preloaded_db.reinit('default')
+            input_shape = cfg.preloaded_db.get_input_shape()
+            nb_class = cfg.preloaded_db.get_nb_class()
+            dim_ordering = cfg.preloaded_db.dim_ordering
+        else:
+            input_shape = X_gen.image_shape # <- 'tf' format (default)
+            nb_class = X_gen.nb_class
+            dim_ordering = X_gen.dim_ordering
+
+        self._build(input_shape, nb_class, dim_ordering)
+        self._init_fns_predict_feature(cfg)  
+        
 

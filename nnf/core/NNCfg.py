@@ -63,7 +63,7 @@ class BaseCfg(object):
 
         # PERF:
         self.model_dir = None  # Location to save/load compiled models
-        self.weights_path = None  # Model is not saved, but weights
+        self.weights_dir = None  # Model is not saved, but weights
 
 class CNNCfg(BaseCfg):
     """Training configuration for convolutional neural network."""

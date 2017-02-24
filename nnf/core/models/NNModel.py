@@ -9,8 +9,10 @@
 
 # Global Imports
 from abc import ABCMeta, abstractmethod
-import numpy as np
+import os
 import math
+import numpy as np
+from warnings import warn as warning
 from keras.models import load_model
 from warnings import warn as warning
 from keras import backend as K
@@ -63,6 +65,10 @@ class NNModel(object):
     # Public Interface
     ##########################################################################
     
+    #  [STATIC] Constants
+    _W_FILE_EXT = ".weights.h5"
+    _M_FILE_EXT = ".model.h5"
+
     # [STATIC] Unique id dynamic base value
     _UID_BASE = -1
 
@@ -79,6 +85,11 @@ class NNModel(object):
         """
         NNModel._UID_BASE = NNModel._UID_BASE + 1
         return NNModel._UID_BASE
+
+    @staticmethod
+    def reset_uid():
+        """[STATIC] Reset the static uid in each test case in the test suit."""
+        NNModel._UID_BASE = -1
 
     def __init__(self, uid=None):
         """Constructor of the abstract class :obj:`NNModel`.
@@ -328,7 +339,44 @@ class NNModel(object):
             self._predict(cfg, patch_idx,  dbparam_save_dirs, list_iterstore, dict_iterstore)
 
     @abstractmethod
-    def _pre_train(self, precfgs, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+    def generate_nnpatches(self):
+        """Generate list of :obj:`NNPatch` for Neural Network Model Based Framework.
+
+        Returns
+        -------
+        List of :obj:`NNPatch`
+            `nnpatches` for Neural Network Model Based Framework.
+
+        Notes
+        -----
+        Invoked by :obj:`NNModelMan`. 
+
+        Note
+        ----
+        Used only in Model Based Framework. Extend this method to implement custom 
+        generation of `nnpatches`.    
+        """
+        nnpatches = []
+        nnpatches.append(nnf.db.NNPatch.NNPatch(33, 33, (0, 0)))
+        nnpatches.append(nnf.db.NNPatch.NNPatch(33, 33, (10, 10)))
+        return nnpatches
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    @abstractmethod
+    def _model_prefix(self):
+        """Fetch the prefix for the file to be saved/loaded.
+
+        Note
+        ----
+        Override this method for custom prefix.
+        """
+        return "PFX"
+
+    @abstractmethod
+    def _pre_train(self, precfgs, cfg, patch_idx=None, dbparam_save_dirs=None,
+                                    list_iterstore=None, dict_iterstore=None):
         """Pre-train the :obj:`NNModel`.
 
         Parameters
@@ -355,7 +403,8 @@ class NNModel(object):
         pass
 
     @abstractmethod
-    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None,
+                                    list_iterstore=None, dict_iterstore=None):
         """Train the :obj:`NNModel`.
 
         Parameters
@@ -378,7 +427,8 @@ class NNModel(object):
         pass
 
     @abstractmethod
-    def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+    def _test(self, cfg, patch_idx=None, dbparam_save_dirs=None,
+                                    list_iterstore=None, dict_iterstore=None):
         """Test the :obj:`NNModel`.
 
         Parameters
@@ -401,7 +451,8 @@ class NNModel(object):
         pass
 
     @abstractmethod
-    def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, list_iterstore=None, dict_iterstore=None):
+    def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None,
+                                    list_iterstore=None, dict_iterstore=None):
         """Predict the :obj:`NNModel`.
 
         Parameters
@@ -422,29 +473,6 @@ class NNModel(object):
             Dictonary of iterstores for :obj:`DataIterator`.
         """
         pass
-
-    @abstractmethod
-    def generate_nnpatches(self):
-        """Generate list of :obj:`NNPatch` for Neural Network Model Based Framework.
-
-        Returns
-        -------
-        List of :obj:`NNPatch`
-            `nnpatches` for Neural Network Model Based Framework.
-
-        Notes
-        -----
-        Invoked by :obj:`NNModelMan`. 
-
-        Note
-        ----
-        Used only in Model Based Framework. Extend this method to implement custom 
-        generation of `nnpatches`.    
-        """
-        nnpatches = []
-        nnpatches.append(nnf.db.NNPatch.NNPatch(33, 33, (0, 0)))
-        nnpatches.append(nnf.db.NNPatch.NNPatch(33, 33, (10, 10)))
-        return nnpatches
 
     ##########################################################################
     # Protected Interface
@@ -832,7 +860,7 @@ class NNModel(object):
 
         for i, f_idx in enumerate(cfg.feature_layers):
             f_layer = self.net.layers[f_idx]
-            
+
             if (hasattr(f_layer, 'output_dim')):
                 self.feature_sizes.append(f_layer.output_dim)
 
@@ -840,8 +868,8 @@ class NNModel(object):
                 self.feature_sizes.append(f_layer.output_shape[1])
 
             else:
-                raise Exception("Feature layers chosen are invalid. `cfg.feature_layers`")
-
+                raise Exception("Feature layers chosen are invalid. " +
+                                                    "`cfg.feature_layers`")
 
             # IMPORTANT: 
             # Retrieves the output tensor(s) of a layer at a given node.
@@ -856,7 +884,7 @@ class NNModel(object):
                                     [f_layer.output]))
 
     def _try_save(self, cfg, patch_idx, prefix="PREFIX"):
-        """Attempt to save keras/teano model in `nnmodel`.
+        """Attempt to save keras/teano model or weights in `nnmodel`.
 
         Parameters
         ----------
@@ -867,50 +895,147 @@ class NNModel(object):
             Patch's index in this model.
 
         prefix : str, optional
-            Prefix string for the file to be saved. (Default value = 'PREFIX').
-
-        Returns
-        -------
-        bool :
-            True if succeeded. False otherwise.
-        """
-        assert(self.net is not None)
-        if (cfg.model_dir is not None):
-            fpath = self._get_saved_model_name(patch_idx, cfg.model_dir, prefix)
-            self.net.save(fpath)
-            return True
-        return False
-    
-    def _try_load(self, cfg, patch_idx, prefix="PREFIX"):
-        """Attempt to load keras/teano model in `nnmodel`.
-
-        Parameters
-        ----------
-        cfg : :obj:`NNCfg`
-            NN Configuration.
-
-        patch_idx : int
-            Patch's index in this model.
-
-        prefix : str, optional
-            Prefix string for the file to be loaded. (Default value = 'PREFIX').
+            Prefix string for the file to be saved.
+            (Default value = 'PREFIX').
 
         Returns
         -------
         bool
             True if succeeded. False otherwise.
         """
+        assert(self.net is not None)
+
+        ext = None
         if (cfg.model_dir is not None):
-            fpath = self._get_saved_model_name(patch_idx, cfg.model_dir, prefix)
+            ext = NNModel._M_FILE_EXT
+            dir  = cfg.model_dir
+
+        elif (cfg.weights_dir is not None):
+            ext = NNModel._W_FILE_EXT
+            dir  = cfg.weights_dir
+
+        else:
+            return False
+
+        # Fetch a unique file path
+        fpath = self._get_saved_model_name(patch_idx,
+                                            dir,
+                                            prefix, ext)
+
+        if (cfg.model_dir is not None):
+
+            # Check the existance of the file
+            if (os.path.isfile(fpath)):
+                warning("The saved model at " + fpath + " will be overridden.")
+
+            self.net.save(fpath)
+            return True
+
+        elif (cfg.weights_dir is not None):
+
+            # Check the existance of the file
+            if (os.path.isfile(fpath)):
+                warning("The saved weights at " + fpath + " will be overridden.")
+
+            self.net.save_weights(fpath)
+            return True
+
+    def _need_prebuild(self, cfg, patch_idx, prefix="PREFIX"):
+        """Whether to build the keras net to load the weights from
+            `cfg.weights_dir` or the net itself from `cfg.model_dir`.
+
+        Returns
+        -------
+        bool
+            True if `cfg.weights_dir` or `cfg.model_dir` defines a 
+            valid path, False otherwise.
+        """
+        ext = None
+        dir = None
+        if (cfg.model_dir is not None):
+            ext = NNModel._M_FILE_EXT
+            dir  = cfg.model_dir
+
+        elif (cfg.weights_dir is not None):
+            ext = NNModel._W_FILE_EXT
+            dir  = cfg.weights_dir
+
+        else:
+            return False
+
+        fpath = self._get_saved_model_name(patch_idx,
+                                            dir,
+                                            prefix, 
+                                            ext)
+
+        # Check the existance of the file
+        return os.path.isfile(fpath)
+
+    def _try_load(self, cfg, patch_idx, prefix="PREFIX", raise_err=False):
+        """Attempt to load keras/teano model or weights in `nnmodel`.
+
+        Parameters
+        ----------
+        cfg : :obj:`NNCfg`
+            NN Configuration.
+
+        patch_idx : int
+            Patch's index in this model.
+
+        prefix : str, optional
+            Prefix string for the file to be loaded.
+            (Default value = 'PREFIX').
+
+        Returns
+        -------
+        bool
+            True if succeeded. False otherwise.
+        """
+        ext = None
+        dir = None
+        if (cfg.model_dir is not None):
+            ext = NNModel._M_FILE_EXT
+            dir  = cfg.model_dir
+
+        elif (cfg.weights_dir is not None):
+            ext = NNModel._W_FILE_EXT
+            dir  = cfg.weights_dir
+
+        else:
+            return False
+
+        # Fetch a unique file path
+        fpath = self._get_saved_model_name(patch_idx,
+                                            dir,
+                                            prefix, ext)
+
+        # Check the existance of the file
+        if (not os.path.isfile(fpath)):
+            if (raise_err):
+                raise Exception("File: " + fpath +" does not exist.")
+            else:
+                return False
+        
+        if (cfg.model_dir is not None):
+
+            # Load the model and weights
             self.net = load_model(fpath)
-            if (cfg.weights_path is not None):
-                warning('ARG_CONFLICT: Model weights will not be used since a' + 
+
+            # Error handling
+            if (cfg.weights_dir is not None):
+                warning('ARG_CONFLICT: Model weights will not be used since a' +
                         ' saved model is already loaded.')
             return True
-        return False
 
-    def _get_saved_model_name(self, patch_idx, cfg_save_dir, prefix):
-        """Generate a file path for the keras/teano model to be saved or loaded.
+        elif (cfg.weights_dir is not None):
+
+            # Load only the weights
+            self.net.load_weights(fpath)
+            return True
+
+    def _get_saved_model_name(self, patch_idx, cfg_save_dir, prefix, ext):
+        """Generate a file path for the keras/teano model to be 
+            saved or loaded.
 
         Parameters
         ----------
@@ -929,7 +1054,7 @@ class NNModel(object):
         str :
             File path.
         """
-        fname = prefix + "_p_" + str(patch_idx) + ".m_" + str(self.uid) + ".model.h5"
+        fname = prefix + "_p_" + str(patch_idx) + ".m_" + str(self.uid) + ext
         fpath = os.path.join(cfg_save_dir, fname)
         return fpath
 
