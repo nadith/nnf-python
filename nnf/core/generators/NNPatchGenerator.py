@@ -39,7 +39,8 @@ class NNPatchGenerator:
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, im_h=None, im_w=None, pat_h=None, pat_w=None, xstrip=None, ystrip=None):
+    def __init__(self, im_h=None, im_w=None, pat_h=None, pat_w=None, 
+                                                    xstrip=None, ystrip=None):
         """Constructs :obj:`NNPatchGenerator` instance.
 
         Parameters

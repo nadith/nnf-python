@@ -226,17 +226,17 @@ class Autoencoder(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """  
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(
+        X_te_gen, Xt_te_gen = self._init_data_generators(
                                                     NNModelPhase.TEST,
                                                     list_iterstore,
                                                     dict_iterstore)
         # Pre-condition asserts
-        assert((cfg.preloaded_db is None and Xte_gen is not None) or 
+        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
                 (cfg.preloaded_db is not None))
 
-        if (Xte_target_gen is not None):
+        if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
-            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
+            assert(X_te_gen.nb_sample == Xt_te_gen.nb_sample)
 
         # Model prefix
         prefix = self._model_prefix()
@@ -263,8 +263,8 @@ class Autoencoder(NNModel):
 
         # Test with generators
         super()._start_test(patch_idx,
-                            Xte_gen=Xte_gen,
-                            Xte_target_gen=Xte_target_gen)
+                            X_te_gen=X_te_gen,
+                            Xt_te_gen=Xt_te_gen)
 
     def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
@@ -289,17 +289,17 @@ class Autoencoder(NNModel):
             Dictonary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        Xte_gen, Xte_target_gen = self._init_data_generators(
+        X_te_gen, Xt_te_gen = self._init_data_generators(
                                                     NNModelPhase.PREDICT,
                                                     list_iterstore,
                                                     dict_iterstore)
         # Pre-condition asserts
-        assert((cfg.preloaded_db is None and Xte_gen is not None) or 
+        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
                 (cfg.preloaded_db is not None))
 
-        if (Xte_target_gen is not None):
+        if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
-            assert(Xte_gen.nb_sample == Xte_target_gen.nb_sample)
+            assert(X_te_gen.nb_sample == Xt_te_gen.nb_sample)
 
         # Model prefix
         prefix = self._model_prefix()
@@ -326,8 +326,8 @@ class Autoencoder(NNModel):
 
         # Predict with generators
         super()._start_predict(patch_idx,
-                                Xte_gen=Xte_gen, 
-                                Xte_target_gen=Xte_target_gen)
+                                X_te_gen=X_te_gen, 
+                                Xt_te_gen=Xt_te_gen)
 
     ##########################################################################
     # Protected Interface

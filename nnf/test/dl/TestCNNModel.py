@@ -33,9 +33,6 @@ class CNNPatch(NNPatch):
         return CNNModel(callbacks={'predict':TestCNNModel._fn_predict})
 
 class CNNPatchGen(NNPatchGenerator):
-    def __init__(self): 
-        super().__init__()
-
     def new_nnpatch(self, h, w, offset):
         return CNNPatch(h, w, offset, True)
 

@@ -33,9 +33,6 @@ class AEPatch(NNPatch):
         return Autoencoder(callbacks={'predict':TestAEModel._fn_predict})
 
 class AEPatchGen(NNPatchGenerator):
-    def __init__(self): 
-        super().__init__()
-
     def new_nnpatch(self, h, w, offset):
         return AEPatch(h, w, offset, True)
 
@@ -99,7 +96,7 @@ class TestAEModel(object):
         aecfg.nb_val_samples = 800
         aecfg.samples_per_epoch = 600
         nnpatchman.train(aecfg)
-        #nnpatchman.predict(daecfg)
+        nnpatchman.predict(aecfg)
 
     ##########################################################################
     # Private Interface

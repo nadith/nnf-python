@@ -32,9 +32,6 @@ class DAERegPatch(NNPatch):
         return DAERegModel({'predict':TestDAERegModel._fn_predict})
 
 class DAERegPatchGen(NNPatchGenerator):
-    def __init__(self): 
-        super().__init__()
-
     def new_nnpatch(self, h, w, offset):
         return DAERegPatch(h, w, offset, True)
 

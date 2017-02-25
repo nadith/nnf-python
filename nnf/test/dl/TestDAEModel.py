@@ -32,9 +32,6 @@ class DAEPatch(NNPatch):
         return DAEModel({'predict':TestDAEModel._fn_predict})
 
 class DAEPatchGen(NNPatchGenerator):
-    def __init__(self): 
-        super().__init__()
-
     def new_nnpatch(self, h, w, offset):
         return DAEPatch(h, w, offset, True)
 
