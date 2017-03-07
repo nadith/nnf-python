@@ -50,7 +50,7 @@ class NumpyArrayIterator(Iterator):
 
         else:
             self.input_vectorized = params['input_vectorized'] if ('input_vectorized' in params) else False
-            _image_shape = params.setdefault('_image_shape', 'default')  # internal use
+            _image_shape = params.setdefault('_image_shape', tuple(X.shape[1:]))  # internal use
             dim_ordering = params['dim_ordering'] if ('dim_ordering' in params) else 'default'
             class_mode = params['class_mode'] if ('class_mode' in params) else None
             batch_size = params['batch_size'] if ('batch_size' in params) else 32
@@ -69,18 +69,18 @@ class NumpyArrayIterator(Iterator):
 
         self.X = np.asarray(X)
 
-        #if self.X.ndim != 4:
-        #    raise ValueError('Input data in `NumpyArrayIterator` '
-        #                     'should have rank 4. You passed an array '
-        #                     'with shape', self.X.shape)
-        #channels_axis = 3 if dim_ordering == 'tf' else 1
-        #if self.X.shape[channels_axis] not in {1, 3, 4}:
-        #    raise ValueError('NumpyArrayIterator is set to use the '
-        #                     'dimension ordering convention "' + dim_ordering + '" '
-        #                     '(channels on axis ' + str(channels_axis) + '), i.e. expected '
-        #                     'either 1, 3 or 4 channels on axis ' + str(channels_axis) + '. '
-        #                     'However, it was passed an array with shape ' + str(self.X.shape) +
-        #                     ' (' + str(self.X.shape[channels_axis]) + ' channels).')
+        if self.X.ndim != 4:
+            raise ValueError('Input data in `NumpyArrayIterator` '
+                             'should have rank 4. You passed an array '
+                             'with shape', self.X.shape)
+        channels_axis = 3 if dim_ordering == 'tf' else 1
+        if self.X.shape[channels_axis] not in {1, 3, 4}:
+            raise ValueError('NumpyArrayIterator is set to use the '
+                             'dimension ordering convention "' + dim_ordering + '" '
+                             '(channels on axis ' + str(channels_axis) + '), i.e. expected '
+                             'either 1, 3 or 4 channels on axis ' + str(channels_axis) + '. '
+                             'However, it was passed an array with shape ' + str(self.X.shape) +
+                             ' (' + str(self.X.shape[channels_axis]) + ' channels).')
 
         if y is not None:
             self.y = np.asarray(y)
