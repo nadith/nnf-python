@@ -29,10 +29,10 @@ class NNPatchGenerator:
     w : int
         Patch width.
 
-    xstrip : int
+    xstride : int
         Sliding amount in pixels (x direction).
 
-    ystrip : int
+    ystride : int
         Sliding amount in pixels (y direction).
     """
 
@@ -40,7 +40,7 @@ class NNPatchGenerator:
     # Public Interface
     ##########################################################################
     def __init__(self, im_h=None, im_w=None, pat_h=None, pat_w=None, 
-                                                    xstrip=None, ystrip=None):
+                                                    xstride=None, ystride=None):
         """Constructs :obj:`NNPatchGenerator` instance.
 
         Parameters
@@ -57,18 +57,18 @@ class NNPatchGenerator:
         w : int
             Patch width.
 
-        xstrip : int
+        xstride : int
             Sliding amount in pixels (x direction).
 
-        ystrip : int
+        ystride : int
             Sliding amount in pixels (y direction).
         """
         self.im_h = im_h
         self.im_w = im_w
         self.h = pat_h
         self.w = pat_w
-        self.xstrip = xstrip
-        self.ystrip = ystrip
+        self.xstride = xstride
+        self.ystride = ystride
 
     def generate_nnpatches(self):
         """Generate the `nnpatches` for the nndb database.
@@ -82,23 +82,23 @@ class NNPatchGenerator:
             self.im_w == None or
             self.h == None or
             self.w == None or
-            self.xstrip == None or
-            self.ystrip == None):
+            self.xstride == None or
+            self.ystride == None):
                 
             nnpatch = self.new_nnpatch(self.h, self.w, (0, 0))
             assert(nnpatch.is_holistic)  # Must contain the whole image
             return [nnpatch]  # Must be a list
 
         # Error handling
-        if ((self.xstrip != 0) and (self.im_w - self.w) % self.xstrip > 0):
+        if ((self.xstride != 0) and (self.im_w - self.w) % self.xstride > 0):
             warning('Patch division will loose some information from the original (x-direction)')
              
-        if ((self.ystrip != 0) and (self.im_h - self.h) % self.ystrip > 0):
+        if ((self.ystride != 0) and (self.im_h - self.h) % self.ystride > 0):
             warning('WARN: Patch division will loose some information from the original (y-direction)')
 
         # No. of steps towards x,y direction
-        x_steps = ((self.im_w - self.w) // self.xstrip) + 1 if (self.xstrip !=0) else 1
-        y_steps = ((self.im_h - self.h) // self.ystrip) + 1 if (self.ystrip !=0) else 1
+        x_steps = ((self.im_w - self.w) // self.xstride) + 1 if (self.xstride !=0) else 1
+        y_steps = ((self.im_h - self.h) // self.ystride) + 1 if (self.ystride !=0) else 1
             
         # Init  variables
         offset = [0, 0]
@@ -114,10 +114,10 @@ class NNPatchGenerator:
                 nnpatches.append(self.new_nnpatch(self.h, self.w, tuple(offset)))
 
                 # Update the x direction of the offset
-                offset[1] = offset[1] + self.xstrip;
+                offset[1] = offset[1] + self.xstride;
                                 
             # Update the y direction of the offset, reset x direction offset
-            offset[0] = offset[0] + self.ystrip;
+            offset[0] = offset[0] + self.ystride;
             offset[1] = 0;
 
         return nnpatches
