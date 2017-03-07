@@ -19,7 +19,7 @@ class LDA(object):
     """LDA represents Linear Discriminant Analysis algorithm and varients.
 
         Refer method specific help for more details.
-    
+
         Currently Support:
         ------------------
         - LDA.fl2 (fisher L2)
@@ -27,7 +27,7 @@ class LDA(object):
         - LDA.l2  (regularized L2)
         - LDA.r1  (rotational invariant - l1)
     """
-    
+
     ##########################################################################
     # Public Interface
     ##########################################################################
@@ -65,9 +65,13 @@ class LDA(object):
          >>> import nnf.alg.LDA
          >>> W, info = LDA.l2(nndb_tr)        
         """        
+        # svd solver issues:
+        # Ref: http://stats.stackexchange.com/questions/29385/collinear-variables-in-multiclass-lda-training
+        # Ref: https://github.com/scikit-learn/scikit-learn/issues/1649
+
         # Set defaults
-        solver = info['solver'] if ('solver' in info) else 'lsqr'
-        shrinkage = info['shrinkage'] if ('shrinkage' in info) else 'auto'
+        solver = info['solver'] if ('solver' in info) else 'eigen' #'svd' #'eigen' #'lsqr'
+        shrinkage = info['shrinkage'] if ('shrinkage' in info) else 'auto' #None #'auto' #'auto'
         priors = info['priors'] if ('priors' in info) else None
         n_components = info['n_components'] if ('n_components' in info) else None
         store_covariance = info['store_covariance'] if ('store_covariance' in info) else False
