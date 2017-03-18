@@ -23,7 +23,8 @@ class Selection:
     Selection Structure (with defaults)
     -----------------------------------
     sel.tr_col_indices      = None    # Training column indices
-    sel.tr_noise_rate       = None    # Rate or noise types for the above field
+    sel.tr_noise_rate      = None    # Rate or noise types for column index
+    sel.tr_occlusion_rate  = None    # Occlusion rate for column index
     sel.tr_out_col_indices  = None    # Training target column indices
     sel.val_col_indices     = None    # Validation column indices
     sel.val_out_col_indices = None    # Validation target column indices
@@ -55,7 +56,8 @@ class Selection:
         """Constructs :obj:`Selection` instance."""
 
         self.tr_col_indices      = None    # Training column indices
-        self.tr_noise_rate       = None    # Rate or noise types for the above field
+        self.tr_noise_rate       = None    # Rate or noise types for column index
+        self.tr_occlusion_rate   = None    # Occlusion rate for column index
         self.tr_out_col_indices  = None    # Training target column indices
         self.val_col_indices     = None    # Validation column indices
         self.val_out_col_indices = None    # Validation target column indices
@@ -102,6 +104,7 @@ class Selection:
         sel = Selection()
         sel.tr_col_indices      = self.tr_col_indices        # Training column indices
         sel.tr_noise_rate       = self.tr_noise_rate         # Rate or noise types for the above field
+        sel.tr_occlusion_rate   = self.tr_occlusion_rate     # Occlusion rate for column index
         sel.tr_out_col_indices  = self.tr_out_col_indices    # Training target column indices
         sel.val_col_indices     = self.val_col_indices       # Validation column indices
         sel.val_out_col_indices = self.val_out_col_indices   # Validation target column indices
@@ -140,6 +143,7 @@ class Selection:
         iseq = False
         if (np.array_equal(self.tr_col_indices, sel.tr_col_indices) and
             np.array_equal(self.tr_noise_rate, sel.tr_noise_rate) and
+            np.array_equal(self.tr_occlusion_rate, sel.tr_occlusion_rate) and
             np.array_equal(self.tr_out_col_indices, sel.tr_out_col_indices) and
             np.array_equal(self.val_col_indices, sel.val_col_indices) and
             np.array_equal(self.val_out_col_indices, sel.val_out_col_indices) and
