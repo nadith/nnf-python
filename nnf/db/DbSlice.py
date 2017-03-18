@@ -34,6 +34,7 @@ class DbSlice(object):
     -----------------------------------
     sel.tr_col_indices      = None    # Training column indices
     sel.tr_noise_rate       = None    # Rate or noise types for the above field
+    sel.tr_occlusion_rate   = None    # Rate or noise types for the above field
     sel.tr_out_col_indices  = None    # Training target column indices
     sel.val_col_indices     = None    # Validation column indices
     sel.val_out_col_indices = None    # Validation target column indices
@@ -215,11 +216,6 @@ class DbSlice(object):
                         np.zeros(patch_loop_max_n, 'uint16'),
                         np.zeros(patch_loop_max_n, 'uint16')]
 
-        # Noise required indices
-        noise_req_indices = []
-        if (sel.tr_noise_rate is not None):
-            noise_req_indices = np.where(sel.tr_noise_rate != 0)[0]
-        
         # Initialize the generator
         data_generator.init(cls_ranges, col_ranges, True)
 
@@ -268,9 +264,14 @@ class DbSlice(object):
                     # Extract the patch
                     pimg = cimg[y:y+h, x:x+w, :]
 
-                # Iterate through datasets
-                for edataset, is_new_class in datasets:
 
+                # The offset/index for the col_index in the tr_col_indices vector
+                tci_offsets = None
+
+                # Iterate through datasets                
+                for dsi, tup_dataset in enumerate(datasets):
+                    edataset = tup_dataset[0]
+                    is_new_class = tup_dataset[1]
                     # Fetch patch databases, if None, create
                     nndbs = dict_nndbs.setdefault(edataset, None)
                     if (nndbs is None):
@@ -286,21 +287,28 @@ class DbSlice(object):
                     # Build Traiing DB
                     if (edataset == Dataset.TR):
 
-                        # Check whether col_idx is a noise required index 
-                        process_noise = False
-                        noise_rate = None
-                        for nri in noise_req_indices:
-                            if ((nri < sel.tr_col_indices.size) and
-                                (nri < sel.tr_noise_rate.size) and
-                                (0 != sel.tr_noise_rate[nri]) and
-                                (col_idx == sel.tr_col_indices[nri])):
+                         #If noise or occlusion is required
+                        if (((sel.tr_noise_rate is not None) or 
+                            (sel.tr_occlusion_rate is not None))
+                            and (tci_offsets is None)):
+                            tci_offsets = np.where(sel.tr_col_indices == col_idx)[0]
 
-                                process_noise = True
-                                noise_rate = sel.tr_noise_rate[nri]
-                                break
+                        # Check whether col_idx is a noise required index 
+                        noise_rate = None
+                        if ((sel.tr_noise_rate is not None) and
+                            (tci_offsets[dsi] < sel.tr_noise_rate.size) and
+                            (0 != sel.tr_noise_rate[tci_offsets[dsi]])):
+                            noise_rate = sel.tr_noise_rate[tci_offsets[dsi]]
+              
+                        # Check whether col_idx is a occlusion required index 
+                        occl_rate = None
+                        if ((sel.tr_occlusion_rate is not None) and
+                            (tci_offsets[dsi] <sel.tr_occlusion_rate.size) and
+                            (0 != sel.tr_occlusion_rate[tci_offsets[dsi]])):
+                            occl_rate = sel.tr_occlusion_rate[tci_offsets[dsi]]
 
                         [nndbs, samples] =\
-                            DbSlice._build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, process_noise, noise_rate)  # noqa E501
+                            DbSlice._build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, noise_rate, occl_rate)  # noqa E501
 
                     # Build Training Output DB
                     elif(edataset == Dataset.TR_OUT):
@@ -726,7 +734,7 @@ class DbSlice(object):
         nndb.cls_lbl = np.concatenate((nndb.cls_lbl, np.array([cls_lbl], dtype='uint16')))
 
     @staticmethod
-    def _build_nndb_tr(nndbs, pi, samples, is_new_class, img, process_noise, noise_rate):
+    def _build_nndb_tr(nndbs, pi, samples, is_new_class, img, noise_rate, occlusion_rate):
         """Build the nndb training database.
 
         Parameters
@@ -760,21 +768,36 @@ class DbSlice(object):
         if (nndbs is None): return nndbs, samples  # noqa E701
         nndb = nndbs[pi]    
 
-        if (process_noise):
+        if ((occlusion_rate is not None) or (noise_rate is not None)):
 
             h, w, ch = img.shape
 
-            # Add different noise depending on the type or rate
+            #Adding different occlusions depending on the precentage
+            if (occlusion_rate is not None):
+                sh = np.uint16(np.floor((1-occlusion_rate) * h))
+                img =  np.copy(img)
+                occl_patch = np.zeros((h-sh+1, w), dtype=img.dtype)
+                #For grey scale
+                
+                if (ch == 1):
+                    img[sh-1:, :] = occl_patch
+                else:
+                    for ich in range(ch):
+                        img[sh-1:, :, ich] = occl_patch
+
+            # Add different noise depending on the type
             # (ref. Enums/Noise)
-            if (noise_rate == Noise.G):
+            elif ((noise_rate is not None) and (noise_rate == Noise.G)):
                 pass
                 # img = imnoise(img, 'gaussian')
                 # #img = imnoise(img, 'gaussian')
                 # #img = imnoise(img, 'gaussian')
                 # #img = imnoise(img, 'gaussian')
 
-            else:
-                # Perform random corruption
+            # Perform random corruption with the rate
+            elif (noise_rate is not None):
+                img =  np.copy(img)
+                
                 # Corruption Size (H x W)
                 cs = [np.uint16(h*noise_rate), np.uint16(w*noise_rate)]
 
@@ -784,13 +807,13 @@ class DbSlice(object):
                 sw = np.uint8(1 + rand()*(w-cs[1]-1))
 
                 # Set the corruption
-                cimg = np.uint8(DbSlice._rand_corrupt(cs[0], cs[1])).astype('uint8')  # noqa E501
+                corrupt_patch = np.uint8(DbSlice._rand_corrupt(cs[0], cs[1])).astype('uint8')  # noqa E501
 
                 if (ch == 1):
-                    img[sh:sh+cs[1], sw:sw+cs[2]] = cimg
+                    img[sh:sh+cs[1], sw:sw+cs[2]] = corrupt_patch
                 else:
                     for ich in range(ch):
-                        img[sh:sh+cs[0], sw:sw+cs[1], ich] = cimg
+                        img[sh:sh+cs[0], sw:sw+cs[1], ich] = corrupt_patch
 
         # Add data to nndb
         nndb.add_data(img)
