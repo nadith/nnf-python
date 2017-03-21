@@ -44,14 +44,21 @@ class TestDAERegModel(object):
     def Test_preloaded_db(self, pretrain=True):
         nnpatchman = NNPatchMan(DAERegPatchGen())
 
+        # Get the file path for mnist database
+        cwd = os.getcwd()
+        db_file_path = os.path.join(cwd, "DataFolder", "keras", "mnist.npz")
+
+        # Get the file path for Cifar10 database
+        # db_file_path = os.path.join(cwd, "DataFolder", "keras", "cifar-10-batches-py")
+
         daepcfgs = []
         daecfg = DAERegCfg([784, 512, 400, 320, 200, 784], 
                             act_fns=['input', 'relu', 'relu', 'sigmoid', 'sigmoid', 'sigmoid'],
                             lp=['input', 'dr', 'dr', 'rg', 'rg', 'output'],
-                            preloaded_db=MnistDb(debug=True))
+                            preloaded_db=MnistDb(db_file_path, debug=True))
 
         if (pretrain):
-            daepcfgs.append(DAEPreCfg([784, 512, 784], preloaded_db=MnistDb(debug=True)))
+            daepcfgs.append(DAEPreCfg([784, 512, 784], preloaded_db=MnistDb(db_file_path, debug=True)))
             daepcfgs.append(DAEPreCfg([512, 400, 512]))
             daepcfgs.append(DAEPreCfg([400, 320, 784])) 
             daepcfgs.append(DAEPreCfg([320, 200, 784])) 

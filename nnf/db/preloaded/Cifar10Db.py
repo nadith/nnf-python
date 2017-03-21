@@ -32,8 +32,7 @@ class Cifar10Db(PreLoadedDb):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, dirpath=r'F:\#Research Data\keras\cifar-10-batches-py', 
-                                                                debug=False):
+    def __init__(self, dirpath, debug=False):
         """Initialize the `PreLoadedDb` instance.
     
             Invoked by the NNF.
@@ -52,23 +51,22 @@ class Cifar10Db(PreLoadedDb):
     ##########################################################################
     # Public: PreLoadedDb Overrides
     ##########################################################################
-    def reinit(self, dim_ordering='default'):
+    def reinit(self, data_format=None):
         """Initialize the `PreLoadedDb` instance.
 
         Parameters
         ----------
-        dim_ordering : str
-            'th' or 'tf'. In 'th' mode, the channels dimension
-            (the depth) is at index 1, in 'tf' mode it is at index 3.
-            It defaults to the `image_dim_ordering` value found in your
+        data_format: 'channels_first' or 'channels_last'. In 'channels_first' mode, the channels dimension
+            (the depth) is at index 1, in 'channels_last' mode it is at index 3.
+            It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
-            If you never set it, then it will be "th".
+            If you never set it, then it will be "channels_last".
 
         Note
         ----
         This method may be invoked multiple times by the NNF.
         """
-        already_init = super().reinit(dim_ordering)
+        already_init = super().reinit(data_format)
         if (already_init): return  # PERF
 
         (X, X_lbl), (Xte, Xte_lbl) = self.__load_data(self.dirpath)
@@ -103,7 +101,7 @@ class Cifar10Db(PreLoadedDb):
         -------
         :obj:`tuple` :
             Indicates (height, width, ch) or (height, width, ch)
-            depending on the `self.dim_ordering` property.
+            depending on the `self.data_format` property.
         """
 
         if (isinstance(nnmodel, VGG16Model)):
@@ -112,7 +110,7 @@ class Cifar10Db(PreLoadedDb):
         else:
             target_shape = (32, 32)
 
-        if self.dim_ordering == 'tf':
+        if self.data_format == 'channels_last':
             input_shape =  target_shape + (3,)
         else:
             input_shape = (3,) + target_shape
@@ -363,7 +361,7 @@ class Cifar10Db(PreLoadedDb):
         # Child model should be checked first before parent model
         elif (isinstance(nnmodel, VGG16Model)):
 
-            if (self.dim_ordering == 'tf'):
+            if (self.data_format == 'channels_last'):
                 im_count, h, w, ch = Xte.shape
             else:
                 im_count, ch, h, w = Xte.shape
@@ -408,7 +406,7 @@ class Cifar10Db(PreLoadedDb):
     # Private Interface
     ##########################################################################
     def __process(self, X):
-        """Process the data tensor according to `dim_ordering` specified."""
+        """Process the data tensor according to `data_format` specified."""
         
         # No need of further processing for CIFAR10, since it's already
         # processed in __load_data() method.
@@ -437,7 +435,7 @@ class Cifar10Db(PreLoadedDb):
         y_train = np.reshape(y_train, (len(y_train), 1))
         y_test = np.reshape(y_test, (len(y_test), 1))
 
-        if K.image_dim_ordering() == 'tf':
+        if K.image_data_format() == 'channels_last':
             X_train = X_train.transpose(0, 2, 3, 1)
             X_test = X_test.transpose(0, 2, 3, 1)
 

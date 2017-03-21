@@ -64,13 +64,13 @@ class MemDataIterator(DataIterator):
         params = {} if (params is None) else params
 
         # Set db and _image_shape (important for convonets, and fit() method below)
-        dim_ordering = params['dim_ordering'] if ('dim_ordering' in params) else 'default'
-        dim_ordering = K.image_dim_ordering() if (dim_ordering == 'default') else dim_ordering
+        data_format = params['data_format'] if ('data_format' in params) else None
+        data_format = K.image_data_format() if (data_format is None) else data_format
         target_size = (self.nndb.h, self.nndb.w)
 
         db = None
         if (self.nndb.ch == 3):  # 'rgb'
-            if dim_ordering == 'tf':
+            if data_format == 'channels_last':
                 params['_image_shape'] = target_size + (3,)
                 db = self.nndb.db_convo_tf
             else:
@@ -78,7 +78,7 @@ class MemDataIterator(DataIterator):
                 db = self.nndb.db_convo_th
 
         else:
-            if dim_ordering == 'tf':
+            if data_format == 'channels_last':
                 params['_image_shape'] = target_size + (1,)
                 db = self.nndb.db_convo_tf
             else:

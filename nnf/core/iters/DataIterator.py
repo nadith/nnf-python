@@ -222,13 +222,13 @@ class DataIterator(object):
         return self._gen_next.image_shape
 
     @property
-    def dim_ordering(self):
+    def data_format(self):
         """:obj:`tuple` : shape of the image that is natively producted by this iterator."""
         # This property is only supported by the core iterator      
         if (self._gen_next is None or
             isinstance(self._gen_next , types.GeneratorType)):
             return None  
-        return self._gen_next.dim_ordering
+        return self._gen_next.data_format
 
     ##########################################################################
     # Protected Interface

@@ -181,7 +181,7 @@ class Autoencoder(NNModel):
         if ((cfg.preloaded_db is not None) and
             (self.X_L is None and self.X_L_val is None and
             self.Xt is None and self.Xt_val is None)):
-            cfg.preloaded_db.reinit('default')
+            cfg.preloaded_db.reinit()
             self.X_L, self.Xt, self.X_L_val, self.Xt_val =\
                                             cfg.preloaded_db.LoadTrDb(self)
 
@@ -253,7 +253,7 @@ class Autoencoder(NNModel):
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
-            cfg.preloaded_db.reinit('default')
+            cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadTeDb(self)     
 
         # Test without generators
@@ -316,7 +316,7 @@ class Autoencoder(NNModel):
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
-            cfg.preloaded_db.reinit('default')
+            cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadPredDb(self)
 
         # Predict without generators
@@ -404,11 +404,11 @@ class Autoencoder(NNModel):
         decoded = Dense(cfg.arch[2], activation=cfg.act_fns[2])(encoded)
 
         # this model maps an input to its reconstruction
-        self.net = Model(input=input_img, output=decoded)
+        self.net = Model(inputs=input_img, outputs=decoded)
     
         #
         # this model maps an input to its encoded representation
-        self.encoder = Model(input=input_img, output=encoded)
+        self.encoder = Model(inputs=input_img, outputs=encoded)
     
         ##
         ## create a placeholder for an encoded (32-dimensional) input

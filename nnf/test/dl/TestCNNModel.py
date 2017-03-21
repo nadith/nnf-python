@@ -49,9 +49,15 @@ class TestCNNModel(object):
         nnpatchman = NNPatchMan(CNNPatchGen())
         cnncfg = CNNCfg()
 
+        # Get the file path for mnist database
+        # db_file_path = os.path.join(cwd, "DataFolder", "keras", "mnist.npz")
+
+        # Get the file path for Cifar10 database
+        db_file_path = os.path.join(cwd, "DataFolder", "keras", "cifar-10-batches-py")
+
         # Utilizing preloaded db
-        cnncfg.preloaded_db = MnistDb(debug=True)
-        #cnncfg.preloaded_db = Cifar10Db(debug=True)
+        # cnncfg.preloaded_db = MnistDb(db_file_path, debug=True)
+        cnncfg.preloaded_db = Cifar10Db(db_file_path, debug=True)
 
         # To save the model & weights
         # cnncfg.model_dir = model_folder
@@ -59,9 +65,9 @@ class TestCNNModel(object):
         # To save the weights only      
         # cnncfg.weights_dir = model_folder
 
-        cnncfg.numepochs = 2 #20
+        cnncfg.numepochs = 5
         cnncfg.nb_val_samples = 8 #800
-        cnncfg.samples_per_epoch = 6 #600
+        cnncfg.steps_per_epoch = 5 #600
 
         nnpatchman.train(cnncfg)
         #nnpatchman.test(cnncfg)
@@ -108,16 +114,16 @@ class TestCNNModel(object):
         nnpatchman = NNPatchMan(CNNPatchGen(), list_dbparams)
 
         cnncfg = CNNCfg()
-        
+
         # To save the model & weights
         # cnncfg.model_dir = model_folder
 
-        # To save the weights only      
+        # To save the weights only
         # cnncfg.weights_dir = model_folder
 
-        cnncfg.numepochs = 2 #20
+        cnncfg.numepochs = 2
         cnncfg.nb_val_samples = 8 #800
-        cnncfg.samples_per_epoch = 6 #600
+        cnncfg.steps_per_epoch = 5 #600
         nnpatchman.train(cnncfg)
         #nnpatchman.test(cnncfg)
         nnpatchman.predict(cnncfg)

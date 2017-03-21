@@ -20,12 +20,11 @@ class PreLoadedDb (object):
 
     Attributes
     ----------
-    dim_ordering : str
-        'th' or 'tf'. In 'th' mode, the channels dimension
-        (the depth) is at index 1, in 'tf' mode it is at index 3.
-        It defaults to the `image_dim_ordering` value found in your
+    data_format: 'channels_first' or 'channels_last'. In 'channels_first' mode, the channels dimension
+        (the depth) is at index 1, in 'channels_last' mode it is at index 3.
+        It defaults to the `image_data_format` value found in your
         Keras config file at `~/.keras/keras.json`.
-        If you never set it, then it will be "th".
+        If you never set it, then it will be "channels_last".
     """
     __metaclass__ = ABCMeta
 
@@ -34,19 +33,18 @@ class PreLoadedDb (object):
     ##########################################################################
     def __init__(self):
         """Constructor of the abstract class :obj:`PreLoadedDb`."""
-        self.dim_ordering = None
+        self.data_format = None
 
-    def reinit(self, dim_ordering='default'):
+    def reinit(self, data_format=None):
         """Initialize the `PreLoadedDb` instance.
 
         Parameters
         ----------
-        dim_ordering : str
-            'th' or 'tf'. In 'th' mode, the channels dimension
-            (the depth) is at index 1, in 'tf' mode it is at index 3.
-            It defaults to the `image_dim_ordering` value found in your
+        data_format: 'channels_first' or 'channels_last'. In 'channels_first' mode, the channels dimension
+            (the depth) is at index 1, in 'channels_last' mode it is at index 3.
+            It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
-            If you never set it, then it will be "th".
+            If you never set it, then it will be "channels_last".
 
         Returns
         -------
@@ -57,10 +55,10 @@ class PreLoadedDb (object):
         ----
         This method may be invoked multiple times by the NNF.
         """
-        if (self.dim_ordering is not None): return True
-        self.dim_ordering = K.image_dim_ordering()\
-                                if (dim_ordering == 'default')\
-                                            else dim_ordering
+        if (self.data_format is not None): return True
+        self.data_format = K.image_data_format()\
+                                if (data_format is None)\
+                                            else data_format
         return False
 
     @abstractmethod
@@ -76,7 +74,7 @@ class PreLoadedDb (object):
         -------
         :obj:`tuple` :
             Indicates (height, width, ch) or (height, width, ch)
-            depending on the `self.dim_ordering` property.            
+            depending on the `self.data_format` property.            
         """
         pass
 

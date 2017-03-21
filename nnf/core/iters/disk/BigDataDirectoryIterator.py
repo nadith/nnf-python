@@ -97,14 +97,14 @@ class BigDataDirectoryIterator(DirectoryIterator):
         if (self.binary_data):
             assert(len(self.target_size) == 1)  # Current support: Target should be 1-dimentional
             x = np.fromfile(f, dtype='float32', count=self.target_size[0])
-            if self.dim_ordering == 'tf':
+            if self.data_format == 'channels_last':
                 x = np.expand_dims(x, axis=1)
             else:
                 x = np.expand_dims(x, axis=0)
 
         else:
             x = np.array(f.readline().split(), dtype='float32')
-            if self.dim_ordering == 'tf':
+            if self.data_format == 'channels_last':
                 x = np.expand_dims(x, axis=1)
             else:
                 x = np.expand_dims(x, axis=0)

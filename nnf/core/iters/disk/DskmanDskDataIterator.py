@@ -178,7 +178,7 @@ class DskmanDskDataIterator(DskmanDataIterator):
         cimg = None
         if (self._read_data):
             cimg = load_img(impath, grayscale=False, target_size=None)
-            cimg = img_to_array(cimg, dim_ordering='tf')
+            cimg = img_to_array(cimg, data_format='channels_last')
 
         return cimg, [impath, np.uint8(0), np.uint16(cls_idx)]  # [fpath, fpos, cls_lbl]
 

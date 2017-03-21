@@ -45,14 +45,17 @@ class TestDAEModel(object):
         cwd = os.getcwd()
         model_folder = os.path.join(cwd, "ModelFolder")
 
+        # Get the file path for mnist database
+        db_file_path = os.path.join(cwd, "DataFolder", "keras", "mnist.npz")
+        
         nnpatchman = NNPatchMan(DAEPatchGen())
         daepcfgs = []
         daecfg = DAECfg([784, 512, 400, 512, 784], 
                         act_fns=['input', 'relu', 'relu', 'sigmoid', 'sigmoid'],
-                        preloaded_db=MnistDb(debug=True))
+                        preloaded_db=MnistDb(db_file_path, debug=True))
 
         if (pretrain):
-            pre_cfg = DAEPreCfg([784, 512, 784], preloaded_db=MnistDb(debug=True))
+            pre_cfg = DAEPreCfg([784, 512, 784], preloaded_db=MnistDb(db_file_path, debug=True))
 
             # To save the model & weights
             # pre_cfg.model_dir = model_folder

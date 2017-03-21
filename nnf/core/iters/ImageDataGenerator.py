@@ -41,11 +41,11 @@ class ImageDataGenerator(object):
             The function will run before any other modification on it.
             The function should take one argument: one image (Numpy tensor with rank 3),
             and should output a Numpy tensor with the same shape.
-        dim_ordering: 'th' or 'tf'. In 'th' mode, the channels dimension
-            (the depth) is at index 1, in 'tf' mode it is at index 3.
-            It defaults to the `image_dim_ordering` value found in your
+        data_format: 'channels_first' or 'channels_last'. In 'channels_first' mode, the channels dimension
+            (the depth) is at index 1, in 'channels_last' mode it is at index 3.
+            It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
-            If you never set it, then it will be "th".
+            If you never set it, then it will be "channels_last".
     '''
     def __init__(self, params):
 
@@ -67,7 +67,7 @@ class ImageDataGenerator(object):
             self.vertical_flip = False
             rescale = None
             preprocessing_function = None
-            dim_ordering = 'default'
+            data_format = None
 
             # To invoke fit() function to calculate 
             # featurewise_center, featurewise_std_normalization and zca_whitening
@@ -93,7 +93,7 @@ class ImageDataGenerator(object):
             self.vertical_flip = params['vertical_flip'] if ('vertical_flip' in params) else False
             rescale = params['rescale'] if ('rescale' in params) else None
             preprocessing_function = params['preprocessing_function'] if ('preprocessing_function' in params) else None
-            dim_ordering = params['dim_ordering'] if ('dim_ordering' in params) else 'default'
+            data_format = params['data_format'] if ('data_format' in params) else None
     
             # To invoke fit() function to calculate 
             # featurewise_center, featurewise_std_normalization and zca_whitening
@@ -101,8 +101,8 @@ class ImageDataGenerator(object):
             self.rounds = params['rounds'] if ('rounds' in params) else 1
             self.seed = params['seed'] if ('seed' in params) else None           
           
-        if dim_ordering == 'default':
-            dim_ordering = K.image_dim_ordering()
+        if data_format is None:
+            data_format = K.image_data_format()
         #self.__dict__.update(locals())
         self.mean = None
         self.std = None
@@ -110,16 +110,17 @@ class ImageDataGenerator(object):
         self.rescale = rescale
         self.preprocessing_function = preprocessing_function
 
-        if dim_ordering not in {'tf', 'th'}:
-            raise ValueError('dim_ordering should be "tf" (channel after row and '
-                             'column) or "th" (channel before row and column). '
-                             'Received arg: ', dim_ordering)
-        self.dim_ordering = dim_ordering
-        if dim_ordering == 'th':
+        if data_format not in {'channels_last', 'channels_first'}:
+            raise ValueError('data_format should be "channels_last" (channel after row and '
+                             'column) or "channels_first" (channel before row and column). '
+                             'Received arg: ', data_format)
+
+        self.data_format = data_format
+        if data_format == 'channels_first':
             self.channel_index = 1
             self.row_index = 2
             self.col_index = 3
-        if dim_ordering == 'tf':
+        if data_format == 'channels_last':
             self.channel_index = 3
             self.row_index = 1
             self.col_index = 2
@@ -138,7 +139,7 @@ class ImageDataGenerator(object):
         return NumpyArrayIterator(
             X, y, self,
             batch_size=batch_size, shuffle=shuffle, seed=seed,
-            dim_ordering=self.dim_ordering,
+            data_format=self.data_format,
             save_to_dir=save_to_dir, save_prefix=save_prefix, save_format=save_format)
 
     def flow_from_directory(self, directory,
@@ -151,7 +152,7 @@ class ImageDataGenerator(object):
             directory, self,
             target_size=target_size, color_mode=color_mode,
             classes=classes, class_mode=class_mode,
-            dim_ordering=self.dim_ordering,
+            data_format=self.data_format,
             batch_size=batch_size, shuffle=shuffle, seed=seed,
             save_to_dir=save_to_dir, save_prefix=save_prefix, save_format=save_format,
             follow_links=follow_links)
@@ -296,7 +297,7 @@ class ImageDataGenerator(object):
         if X.shape[self.channel_index] not in {1, 3, 4}:
             raise ValueError(
                 'Expected input to be images (as Numpy array) '
-                'following the dimension ordering convention "' + self.dim_ordering + '" '
+                'following the dimension ordering convention "' + self.data_format + '" '
                 '(channels on axis ' + str(self.channel_index) + '), i.e. expected '
                 'either 1, 3 or 4 channels on axis ' + str(self.channel_index) + '. '
                 'However, it was passed an array with shape ' + str(X.shape) +

@@ -13,7 +13,7 @@ import numpy as np
 from keras.models import Model, Sequential
 from keras.layers import Input
 from keras.layers.core import Dense, Dropout, Activation, Flatten
-from keras.layers.convolutional import Convolution2D, MaxPooling2D,ZeroPadding2D
+from keras.layers.convolutional import Conv2D, MaxPooling2D,ZeroPadding2D
 #from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD,RMSprop,adam
 
@@ -257,7 +257,7 @@ class CNNModel(NNModel):
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
-            cfg.preloaded_db.reinit('default')
+            cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadTeDb(self)
 
         # Test without generators
@@ -320,7 +320,7 @@ class CNNModel(NNModel):
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
-            cfg.preloaded_db.reinit('default')
+            cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadPredDb(self)    
 
         # Predict without generators
@@ -377,7 +377,7 @@ class CNNModel(NNModel):
         """
         return "CNN"
 
-    def _build(self, input_shape, nb_class, dim_ordering):
+    def _build(self, input_shape, nb_class, data_format):
         """Build the keras CNN.
 
         Note
@@ -388,16 +388,16 @@ class CNNModel(NNModel):
 
         ## input: 100x100 images with 3 channels -> (3, 100, 100) tensors.
         ## this applies 32 convolution filters of size 3x3 each.
-        #self.net.add(Convolution2D(32, 3, 3, border_mode='valid', input_shape=input_shape))
+        #self.net.add(Conv2D(32, (3, 3), padding='valid', input_shape=input_shape))
         #self.net.add(Activation('relu'))
-        #self.net.add(Convolution2D(32, 3, 3))
+        #self.net.add(Conv2D(32, (3, 3)))
         #self.net.add(Activation('relu'))
         #self.net.add(MaxPooling2D(pool_size=(2, 2)))
         #self.net.add(Dropout(0.25))
 
-        #self.net.add(Convolution2D(64, 3, 3, border_mode='valid'))
+        #self.net.add(Conv2D(64, (3, 3), padding='valid'))
         #self.net.add(Activation('relu'))
-        #self.net.add(Convolution2D(64, 3, 3))
+        #self.net.add(Conv2D(64, (3, 3)))
         #self.net.add(Activation('relu'))
         #self.net.add(MaxPooling2D(pool_size=(2, 2)))
         #self.net.add(Dropout(0.25))
@@ -421,15 +421,15 @@ class CNNModel(NNModel):
         # input: 150x150 images with 3 channels -> (3, 100, 100) tensors.
 
         self.net = Sequential()
-        self.net.add(Convolution2D(32, 3, 3, input_shape=input_shape))
+        self.net.add(Conv2D(32, (3, 3), input_shape=input_shape))
         self.net.add(Activation('relu'))
         self.net.add(MaxPooling2D(pool_size=(2, 2)))
 
-        self.net.add(Convolution2D(32, 3, 3))
+        self.net.add(Conv2D(32, (3, 3)))
         self.net.add(Activation('relu'))
         self.net.add(MaxPooling2D(pool_size=(2, 2)))
 
-        self.net.add(Convolution2D(64, 3, 3))
+        self.net.add(Conv2D(64, (3, 3)))
         self.net.add(Activation('relu'))
         self.net.add(MaxPooling2D(pool_size=(2, 2)))
 
@@ -460,16 +460,16 @@ class CNNModel(NNModel):
     def __build(self, cfg, X_gen):
         """Build the keras CNN."""
         if (cfg.preloaded_db is not None):
-            cfg.preloaded_db.reinit('default')
+            cfg.preloaded_db.reinit()
             input_shape = cfg.preloaded_db.get_input_shape(self)
             nb_class = cfg.preloaded_db.get_nb_class()
-            dim_ordering = cfg.preloaded_db.dim_ordering
+            data_format = cfg.preloaded_db.data_format
         else:
             input_shape = X_gen.image_shape # <- 'tf' format (default)
             nb_class = X_gen.nb_class
-            dim_ordering = X_gen.dim_ordering
+            data_format = X_gen.data_format
 
-        self._build(input_shape, nb_class, dim_ordering)
+        self._build(input_shape, nb_class, data_format)
         self._init_fns_predict_feature(cfg)  
         
 

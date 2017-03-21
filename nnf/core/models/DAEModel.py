@@ -156,7 +156,7 @@ class DAEModel(NNModel):
         # For Preloaded Databases
         X_L = Xt = X_L_val = Xt_val = None
         is_preloaded_db = (daecfg.preloaded_db is not None)
-        if (is_preloaded_db): daecfg.preloaded_db.reinit('default')
+        if (is_preloaded_db): daecfg.preloaded_db.reinit()
 
         # map of iterators for TR|VAL|TE|... datasets in Autoencoder
         ae_iterstore = {}
@@ -178,7 +178,7 @@ class DAEModel(NNModel):
                 # Create a simple AE
                 if (X_L is None and Xt is None and 
                     X_L_val is None and Xt_val is None):
-                    daeprecfg.preloaded_db.reinit('default')
+                    daeprecfg.preloaded_db.reinit()
                     X_L, Xt, X_L_val, Xt_val =\
                                     daeprecfg.preloaded_db.LoadPreTrDb(self)
 
@@ -287,7 +287,7 @@ class DAEModel(NNModel):
 
         # Preloaded databases for quick deployment
         if (daecfg.preloaded_db is not None):
-            daecfg.preloaded_db.reinit('default')
+            daecfg.preloaded_db.reinit()
             X_L, Xt, X_L_val, Xt_val = daecfg.preloaded_db.LoadTrDb(self)
  
         # Training without generators
@@ -357,7 +357,7 @@ class DAEModel(NNModel):
 
         # Preloaded databases for quick deployment
         if (daecfg.preloaded_db is not None):
-            daecfg.preloaded_db.reinit('default')
+            daecfg.preloaded_db.reinit()
             X_L_te, Xt_te = daecfg.preloaded_db.LoadTeDb(self)     
 
         # Test without generators
@@ -420,7 +420,7 @@ class DAEModel(NNModel):
 
         # Preloaded databases for quick deployment
         if (daecfg.preloaded_db is not None):
-            daecfg.preloaded_db.reinit('default')
+            daecfg.preloaded_db.reinit()
             X_L_te, Xt_te = daecfg.preloaded_db.LoadPredDb(self)
 
         # Predict without generators
@@ -629,7 +629,7 @@ class DAEModel(NNModel):
         for i in range(1, len(layers)):
             out_tensor = layers[i](out_tensor)
         
-        self.net = Model(input=in_tensor, output=out_tensor)
+        self.net = Model(inputs=in_tensor, outputs=out_tensor)
         print(self.net.summary())
 
         self.net.compile(optimizer=daecfg.opt_fn, loss=daecfg.loss_fn)

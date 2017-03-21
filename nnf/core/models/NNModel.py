@@ -584,11 +584,11 @@ class NNModel(object):
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
 
                 # Train with targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
 
             else:
                 X, lbl = X_L
@@ -596,23 +596,23 @@ class NNModel(object):
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
+                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
 
                 # Train without targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, nb_epoch=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
+                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
                   
         # Train from data generators
         else:
             if (X_val_gen is not None):
                 self.net.fit_generator(
-                        X_gen, samples_per_epoch=cfg.samples_per_epoch,
-                        nb_epoch=cfg.numepochs,
-                        validation_data=X_val_gen, nb_val_samples=cfg.nb_val_samples) # callbacks=[self.cb_early_stop]
+                        X_gen, steps_per_epoch=cfg.steps_per_epoch,
+                        epochs=cfg.numepochs,
+                        validation_data=X_val_gen, validation_steps=cfg.nb_val_samples) # callbacks=[self.cb_early_stop]
             else:
                 self.net.fit_generator(
-                        X_gen, samples_per_epoch=cfg.samples_per_epoch,
-                        nb_epoch=cfg.numepochs)
+                        X_gen, steps_per_epoch=cfg.steps_per_epoch,
+                        epochs=cfg.numepochs)
 
     def _start_test(self, patch_idx=None, X_L_te=None, Xt_te=None, 
                                             X_te_gen=None, Xt_te_gen=None):

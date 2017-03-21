@@ -27,8 +27,7 @@ class MnistDb(PreLoadedDb):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, filepath=r'F:\#Research Data\keras\mnist.pkl.gz', 
-                                                                debug=False):
+    def __init__(self, filepath, debug=False):
         """Initialize the `PreLoadedDb` instance.
     
             Invoked by the NNF.
@@ -47,23 +46,22 @@ class MnistDb(PreLoadedDb):
     ##########################################################################
     # Public: PreLoadedDb Overrides
     ##########################################################################
-    def reinit(self, dim_ordering='default'):
+    def reinit(self, data_format=None):
         """Initialize the `PreLoadedDb` instance.
 
         Parameters
         ----------
-        dim_ordering : str
-            'th' or 'tf'. In 'th' mode, the channels dimension
-            (the depth) is at index 1, in 'tf' mode it is at index 3.
-            It defaults to the `image_dim_ordering` value found in your
+        data_format: 'channels_first' or 'channels_last'. In 'channels_first' mode, the channels dimension
+            (the depth) is at index 1, in 'channels_last' mode it is at index 3.
+            It defaults to the `image_data_format` value found in your
             Keras config file at `~/.keras/keras.json`.
-            If you never set it, then it will be "th".
+            If you never set it, then it will be "channels_last".
 
         Note
         ----
         This method may be invoked multiple times by the NNF.
         """
-        already_init = super().reinit(dim_ordering)
+        already_init = super().reinit(data_format)
         if (already_init): return  # PERF
 
         (X, X_lbl), (Xte, Xte_lbl) = mnist.load_data(self.filepath)
@@ -98,10 +96,10 @@ class MnistDb(PreLoadedDb):
         -------
         :obj:`tuple` :
             Indicates (height, width, ch) or (height, width, ch)
-            depending on the `self.dim_ordering` property.            
+            depending on the `self.data_format` property.            
         """
         target_shape = (28, 28)
-        if self.dim_ordering == 'tf':
+        if self.data_format == 'channels_last':
             input_shape =  target_shape + (1,)
         else:
             input_shape = (1,) + target_shape
@@ -362,8 +360,8 @@ class MnistDb(PreLoadedDb):
     # Private Interface
     ##########################################################################
     def __process(self, X):
-        """Process the data tensor according to `dim_ordering` specified."""
-        if self.dim_ordering == 'tf':
+        """Process the data tensor according to `data_format` specified."""
+        if self.data_format == 'channels_last':
             X = X[:, :, :, np.newaxis]
         else:
             X = X[:, np.newaxis, :, :]

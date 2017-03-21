@@ -44,11 +44,19 @@ class TestAEModel(object):
     ##########################################################################
     def Test_preloaded_db(self):
         nnpatchman = NNPatchMan(AEPatchGen())
-        aecfg = AECfg([784, 500, 784], preloaded_db=MnistDb(debug=True))
-        #aecfg = AECfg([3072, 1000, 3072], preloaded_db=Cifar10Db(debug=True))
-        aecfg.numepochs = 20
+
+        # Get the file path for mnist database
+        cwd = os.getcwd()
+        db_file_path = os.path.join(cwd, "DataFolder", "keras", "mnist.npz")
+
+        # Get the file path for Cifar10 database
+        # db_file_path = os.path.join(cwd, "DataFolder", "keras", "cifar-10-batches-py")
+
+        aecfg = AECfg([784, 500, 784], preloaded_db=MnistDb(db_file_path, debug=True))
+        #aecfg = AECfg([3072, 1000, 3072], preloaded_db=Cifar10Db(db_file_path, debug=True))
+        aecfg.numepochs = 10
         aecfg.nb_val_samples = 800
-        aecfg.samples_per_epoch = 600
+        aecfg.steps_per_epoch = 5
         nnpatchman.train(aecfg)
         #nnpatchman.test(aecfg)
         nnpatchman.predict(aecfg)
@@ -78,7 +86,7 @@ class TestAEModel(object):
         db_dir = os.path.join(data_folder, "disk_db")
 
         # Use nndb, iterators read from the memory
-        #list_dbparams = self.__inmem_dbparams(nndb, sel)
+        # list_dbparams = self.__inmem_dbparams(nndb, sel)
 
         # Use database at db_dir, write the processed data on to the disk, iterators read from the disk
         # list_dbparams = self.__indsk_dbparams(os.path.join(db_dir, "_processed_DB1"), sel)
@@ -87,14 +95,14 @@ class TestAEModel(object):
         list_dbparams = self.__mem_to_dsk_indsk_dbparams(nndb, db_dir, sel)
 
         # Use nndb, write the processed data on to the disk, but iterators read from the memory.
-        #list_dbparams = self.__mem_to_dsk_inmem_dbparams(nndb, db_dir, sel)
+        # list_dbparams = self.__mem_to_dsk_inmem_dbparams(nndb, db_dir, sel)
 
         nnpatchman = NNPatchMan(AEPatchGen(), list_dbparams)
 
         aecfg = AECfg()
-        aecfg.numepochs = 20
+        aecfg.numepochs = 10
         aecfg.nb_val_samples = 800
-        aecfg.samples_per_epoch = 600
+        aecfg.steps_per_epoch = 5
         nnpatchman.train(aecfg)
         nnpatchman.predict(aecfg)
 

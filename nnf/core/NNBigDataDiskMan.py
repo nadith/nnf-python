@@ -130,7 +130,7 @@ class NNBigDataDiskMan(NNDiskMan):
         return pdata
 
     def _save_data(self, pdata, patch_id, cls_idx, col_idx, 
-                                        dim_ordering='default', scale=False):
+                                        data_format=None, scale=False):
         """Save data to the disk.
 
         Parameters
@@ -148,14 +148,11 @@ class NNBigDataDiskMan(NNDiskMan):
         col_idx : int
             Column index. Belongs to `union_col_range`.
 
-        dim_ordering : str
-            One of {"th", "tf"}. "tf" mode means that the images should have 
-            shape  (samples, height, width, channels), 
-            "th" mode means that the images should have shape  
-            (samples, channels, height, width). 
-            It defaults to the image_dim_ordering value found in your Keras 
-            config file at  ~/.keras/keras.json. If you never set it, then 
-            it will be "tf".
+        data_format: 'channels_first' or 'channels_last'. In 'channels_first' mode, the channels dimension
+            (the depth) is at index 1, in 'channels_last' mode it is at index 3.
+            It defaults to the `image_data_format` value found in your
+            Keras config file at `~/.keras/keras.json`.
+            If you never set it, then it will be "channels_last".
 
         scale : bool
             Whether to scale the data range to 0-255.

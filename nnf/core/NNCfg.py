@@ -51,7 +51,7 @@ class BaseCfg(object):
         self.mr = 0  
         self.non_sparse_penalty = 0
         self.weight_decay_L2 = 0
-        self.batch_size = 1             # Only used in PreLoadedDb test cases
+        self.batch_size = 1             # When no data generators are used
         self.numepochs = 2
         self.loss_fn = 'mean_squared_error'
         self.preloaded_db = None        # PreLoadedDb instance
@@ -59,7 +59,7 @@ class BaseCfg(object):
 
         # When data generators are used to train
         self.nb_val_samples = 100
-        self.samples_per_epoch = 300
+        self.steps_per_epoch = 5
 
         # PERF:
         self.model_dir = None  # Location to save/load compiled models

@@ -43,7 +43,7 @@ class NumpyArrayIterator(Iterator):
         if (params is None):
             self.input_vectorized = False
             _image_shape = tuple(X.shape[1:])
-            dim_ordering = 'default'
+            data_format = None
             class_mode = None
             batch_size = 32; shuffle = True; seed = None
             save_to_dir = None; save_prefix = ''; save_format = 'jpeg'
@@ -51,7 +51,7 @@ class NumpyArrayIterator(Iterator):
         else:
             self.input_vectorized = params['input_vectorized'] if ('input_vectorized' in params) else False
             _image_shape = params.setdefault('_image_shape', tuple(X.shape[1:]))  # internal use
-            dim_ordering = params['dim_ordering'] if ('dim_ordering' in params) else 'default'
+            data_format = params['data_format'] if ('data_format' in params) else None
             class_mode = params['class_mode'] if ('class_mode' in params) else None
             batch_size = params['batch_size'] if ('batch_size' in params) else 32
             shuffle = params['shuffle'] if ('shuffle' in params) else True
@@ -64,8 +64,8 @@ class NumpyArrayIterator(Iterator):
             raise ValueError('X (images tensor) and y (labels) '
                              'should have the same length. '
                              'Found: X.shape = %s, y.shape = %s' % (np.asarray(X).shape, np.asarray(y).shape))
-        if dim_ordering == 'default':
-            dim_ordering = K.image_dim_ordering()
+        if data_format is None:
+            data_format = K.image_data_format()
 
         self.X = np.asarray(X)
 
@@ -73,14 +73,14 @@ class NumpyArrayIterator(Iterator):
             raise ValueError('Input data in `NumpyArrayIterator` '
                              'should have rank 4. You passed an array '
                              'with shape', self.X.shape)
-        channels_axis = 3 if dim_ordering == 'tf' else 1
+        channels_axis = 3 if data_format == 'channels_last' else 1
         if self.X.shape[channels_axis] not in {1, 3, 4}:
             raise ValueError('NumpyArrayIterator is set to use the '
-                             'dimension ordering convention "' + dim_ordering + '" '
+                             'data format convention "' + data_format + '" '
                              '(channels on axis ' + str(channels_axis) + '), i.e. expected '
                              'either 1, 3 or 4 channels on axis ' + str(channels_axis) + '. '
-                             'However, it was passed an array with shape ' + str(self.X.shape) +
-                             ' (' + str(self.X.shape[channels_axis]) + ' channels).')
+                             'However, it was passed an array with shape ' + str(self.x.shape) +
+                             ' (' + str(self.x.shape[channels_axis]) + ' channels).')
 
         if y is not None:
             self.y = np.asarray(y)
@@ -88,7 +88,7 @@ class NumpyArrayIterator(Iterator):
             self.y = None
 
         self.image_data_generator = image_data_pp
-        self.dim_ordering = dim_ordering
+        self.data_format = data_format
         self.image_shape = _image_shape
 
         if class_mode not in {'categorical', 'binary', 'sparse', None}:
@@ -148,7 +148,7 @@ class NumpyArrayIterator(Iterator):
         # optionally save augmented images to disk for debugging purposes
         if self.save_to_dir:
             for i in range(current_batch_size):
-                img = array_to_img(batch_x[i], self.dim_ordering, scale=True)
+                img = array_to_img(batch_x[i], self.data_format, scale=True)
                 fname = '{prefix}_{index}_{hash}.{format}'.format(prefix=self.save_prefix,
                                                                   index=current_index + i,
                                                                   hash=np.random.randint(1e4),

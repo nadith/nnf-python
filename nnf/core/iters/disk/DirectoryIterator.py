@@ -24,7 +24,7 @@ class DirectoryIterator(Iterator):
     color_mode : <describe>.
         <describe>.
 
-    dim_ordering : <describe>.
+    data_format : <describe>.
         <describe>.
 
     classes : <describe>
@@ -76,7 +76,7 @@ class DirectoryIterator(Iterator):
         if (params is None):
             self.input_vectorized = False 
             target_size = (66, 66)
-            dim_ordering='default'
+            data_format = None
             color_mode = 'rgb'
             class_mode = 'categorical'
             batch_size = 32; shuffle = True; seed = None
@@ -85,7 +85,7 @@ class DirectoryIterator(Iterator):
     
         else:
             self.input_vectorized = params['input_vectorized'] if ('input_vectorized' in params) else False
-            dim_ordering = params['dim_ordering'] if ('dim_ordering' in params) else 'default'
+            data_format = params['data_format'] if ('data_format' in params) else None
             class_mode = params['class_mode'] if ('class_mode' in params) else None
             batch_size = params['batch_size'] if ('batch_size' in params) else 32
             shuffle = params['shuffle'] if ('shuffle' in params) else True
@@ -97,23 +97,23 @@ class DirectoryIterator(Iterator):
             color_mode = params['color_mode'] if ('color_mode' in params) else 'rgb'
             follow_links = params['follow_links'] if ('follow_links' in params) else False
            
-        if dim_ordering == 'default':
-            dim_ordering = K.image_dim_ordering()
+        if data_format is None:
+            data_format = K.image_data_format()
         self.image_data_generator = image_data_pp
         self.target_size = tuple(target_size)
         if color_mode not in {'rgb', 'grayscale', None}:
             raise ValueError('Invalid color mode:', color_mode,
                              '; expected "rgb" or "grayscale" or None.')
         self.color_mode = color_mode
-        self.dim_ordering = dim_ordering
+        self.data_format = data_format
         if self.color_mode == 'rgb':
-            if self.dim_ordering == 'tf':
+            if self.data_format == 'channels_last':
                 self.image_shape = self.target_size + (3,)
             else:
                 self.image_shape = (3,) + self.target_size
 
         else:
-            if self.dim_ordering == 'tf':
+            if self.data_format == 'channels_last':
                 self.image_shape = self.target_size + (1,)
             else:
                 self.image_shape = (1,) + self.target_size
@@ -177,7 +177,7 @@ class DirectoryIterator(Iterator):
         # optionally save augmented images to disk for debugging purposes
         if self.save_to_dir:
             for i in range(current_batch_size):
-                img = array_to_img(batch_x[i], self.dim_ordering, scale=True)
+                img = array_to_img(batch_x[i], self.data_format, scale=True)
                 fname = '{prefix}_{index}_{hash}.{format}'.format(prefix=self.save_prefix,
                                                                   index=current_index + i,
                                                                   hash=np.random.randint(1e4),
@@ -230,7 +230,7 @@ class DirectoryIterator(Iterator):
         img = load_img(fpath,
                         grayscale=grayscale,
                         target_size=self.target_size)
-        x = img_to_array(img, dim_ordering=self.dim_ordering)
+        x = img_to_array(img, data_format=self.data_format)
         x, _ = self.image_data_generator.random_transform(x)
         x = self.image_data_generator.standardize(x)
 

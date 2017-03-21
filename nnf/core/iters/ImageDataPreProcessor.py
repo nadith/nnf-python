@@ -13,7 +13,6 @@
 from nnf.core.iters.ImageDataGenerator import ImageDataGenerator
 from nnf.core.iters.memory.NumpyArrayIterator import NumpyArrayIterator
 from nnf.core.iters.disk.DirectoryIterator import DirectoryIterator
-from nnf.core.ImagePreProcessingParam import ImagePreProcessingParam
 
 class ImageDataPreProcessor(ImageDataGenerator):
     """ImageDataPreProcessor represents the pre-processor for image data.
