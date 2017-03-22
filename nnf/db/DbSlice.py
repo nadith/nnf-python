@@ -393,7 +393,8 @@ class DbSlice(object):
 
         return cimg
 
-    def examples(imdb_8):
+    @staticmethod
+    def examples(imdb,im_per_class):
         """Extensive set of examples.
 
         # Full set of options
@@ -425,16 +426,16 @@ class DbSlice(object):
         """
         #
         # Select 1st 2nd 4th images of each identity for training.
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         [nndb_tr, _, _, _, _, _, _] = DbSlice.slice(nndb, sel) # nndb_tr = DbSlice.slice(nndb, sel) # noqa E501
-
+        nndb_tr.show(8,3)
 
         #
         # Select 1st 2nd 4th images of each identity for training.
         # Divide into nnpatches
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         patch_gen = NNPatchGenerator(nndb.h, nndb.w, 33, 33, 33, 33)
@@ -451,42 +452,45 @@ class DbSlice(object):
         #
         # Select 1st 2nd 4th images of each identity for training.
         # Select 3rd 5th images of each identity for testing.
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         [nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
-
-
+        nndb_tr.show(8,3)
+        nndb_te.show(8,3)
         #
         # Select 1st 2nd 4th images of identities denoted by class_range for training. # noqa E501
         # Select 3rd 5th images of identities denoted by class_range for testing. # noqa E501
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.class_range = np.arange(10)                         # First ten identities # noqa E501
         [nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
-
+        nndb_tr.show(10,3)
+        nndd_te.show(10,2)
 
         # 
         # Select 1st 2nd 4th images of identities denoted by class_range for training.
         # Select 1st 2nd 4th images images of identities denoted by class_range for validation.   
         # Select 3rd 5th images of identities denoted by class_range for testing. 
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.val_col_indices= np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.class_range    = np.arange(10)
         [nndb_tr, nndb_val, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel);
-            
+        nndb_tr.show(10,3)
+        nndd_te.show(10,3)  
+        nndd_te.show(10,2)    
             
         # 
         # Select 1st 2nd 4th images of identities denoted by class_range for training.
         # Select 1st 2nd 4th images images of identities denoted by val_class_range for validation.   
         # Select 3rd 5th images of identities denoted by te_class_range for testing. \
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.val_col_indices= np.array([0, 1, 3])
@@ -503,7 +507,7 @@ class DbSlice(object):
         # Select 3rd 5th images of identities denoted by te_class_range for testing.
         # Select 1st 1st 1st images of identities denoted by class_range for training target.
         # Select 1st 1st images of identities denoted by val_class_range for validation target.
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.val_col_indices= np.array([2, 3])
@@ -526,7 +530,7 @@ class DbSlice(object):
         # Using special enumeration values
         # Training column will consists of first 60% of total columns avaiable
         # Testing column will consists of first 40% of total columns avaiable
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices      = Select.PERCENT_60
         sel.te_col_indices      = Select.PERCENT_40
@@ -542,72 +546,77 @@ class DbSlice(object):
         #               add various noise types @ random locations of varying degree. # noqa E501
         #               default noise type: random black and white dots.
         # Select 3rd 5th images of each identity for testing.
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.tr_noise_rate = np.array([0, 0.5, 0, 0.5, 0, 0.5]) # percentage of corruption # noqa E501
         # sel.tr_noise_rate  = [0 0.5 0 0.5 0 Noise.G]         # last index with Gauss noise # noqa E501
         [nndb_tr, _, _, _, _, _, _] = DbSlice.slice(nndb, sel)
-
+        nndb_tr.show(10,3)
 
         #
         # To prepare regression datasets, training dataset and training target dataset # noqa E501
         # Select 1st 2nd 4th images of each identity for training.
         # Select 1st 1st 1st image of each identity for corresponding training target # noqa E501
         # Select 3rd 5th images of each identity for testing.
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.tr_out_col_indices = np.array([1, 1, 1])  # [1 1 1] (Regression 1->1, 2->1, 4->1) # noqa E501
         sel.te_col_indices = np.array([2, 4])
         [nndb_tr, nndb_tr_out, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
-
-
+        nndb_tr.show(10,3)
+        nndb_te.show(10,2)
+        
         #
         # Resize images by 0.5 scale factor.
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.scale = 0.5
         [nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
-
+        nndb_tr.show(10,3)
+        nndb_te.show(10,2)
 
         #
         # Use gray scale images.
         # Perform histrogram equalization.
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.use_rgb = False
         sel.histeq = True
         [nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
-
-
-        #
+        nndb_tr.show(10,3)
+        nndb_te.show(10,2)
+         
         # Use gray scale images.
         # Perform histrogram match. This will be performed with the 1st image
         #  of each identity irrespective of the selection choice.
         # (refer code for more details)
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.use_rgb = False
         sel.histmatch_col_index = 0
         [nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
-
+        nndb_tr.show(10,3)
+        nndb_te.show(10,2)
 
         #
         # If imdb_8 supports many color channels
-        nndb = NNdb('original', imdb_8, 8, True)
+        nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
         sel.te_col_indices = np.array([2, 4])
         sel.use_rgb = False
         sel.color_indices = 5  # color channel denoted by 5th index
         [nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
+        nndb_tr.show(10,3)
+        nndb_te.show(10,2)
 
     ##########################################################################
     # Protected Interface
