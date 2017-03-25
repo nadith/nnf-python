@@ -75,7 +75,7 @@ class NNdb(object):
     >>> nndb = NNdb('any_name', imdb, [4 3 3 1], true)
 
     Database with given class labels
-    >>> nndb = NNdb('any_name', imdb, [4 3], false, [1 1 1 1 2 2 2])
+    >>> nndb = NNdb('any_name', imdb, [4 3], False, [1 1 1 1 2 2 2])
     """
     ##########################################################################
     # Public Interface
@@ -93,7 +93,7 @@ class NNdb(object):
             No. images per each class. (Default value = None).
 
         build_cls_lbl : bool, optional
-            Build the class indices or not. (Default value = false).
+            Build the class indices or not. (Default value = False).
 
         cls_lbl : vector -uint16 or scalar, optional
             Class index array. (Default value = None).
@@ -120,7 +120,42 @@ class NNdb(object):
 
         # Set values for instance variables
         self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, format)
-    
+    def merge(self,nndb):
+        """merge `nndb` instance with `self` instance.
+        Parameters
+        ----------
+        nndb : NNdb
+        NNdb object that represents the dataset.
+        """
+        assert(self.h == nndb.h and self.w == nndb.w and self.ch == nndb.ch)
+        assert(self.cls_n == nndb.cls_n)
+        
+        db = np.zeros((self.h, self.w, self.ch, (self.n+nndb.n)), dtype='uint8')
+        cls_lbl =  np.zeros((self.n + nndb.n), dtype='uint16')
+        en = 0
+        for i in range(0, self.cls_n):
+            #Fetch data from db1
+
+            cls_st = self.cls_st[i]
+            cls_end = cls_st + np.uint32(self.n_per_class[i]) 
+            
+            st = en 
+            en = st + self.n_per_class[i] 
+            db[:,:,:,st:en] = self.db[:,:,:,cls_st:cls_end]
+            cls_lbl[st:en] = np.uint16(i+1) * np.ones(self.n_per_class[i], dtype='uint16')
+         
+            #Fetch data from db2
+            cls_st = nndb.cls_st[i]
+            cls_end = cls_st + np.uint32(nndb.n_per_class[i]) 
+            
+            st = en 
+            en = st + nndb.n_per_class[i] 
+            db[:,:,:,st:en] = nndb.db[:,:,:,cls_st:cls_end]
+            cls_lbl[st:en] = np.uint16(i+1) * np.ones(self.n_per_class[i], dtype='uint16')
+
+        nndb = NNdb('merged', db, [], False, cls_lbl)
+        return nndb
+
     def init_db_fields(self):
         if (self.format == Format.H_W_CH_N):
             self.h, self.w, self.ch, self.n = self.db.shape
@@ -295,7 +330,7 @@ class NNdb(object):
                 if (self.cls_n > 1):
                     st = n_per_class[0]
                     for i in range(self.cls_n):
-                        self.cls_st[i] = st
+                        self.cls_st[i] = st 
                         st += n_per_class[i]
 
         # Set class labels
