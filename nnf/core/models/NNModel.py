@@ -59,6 +59,10 @@ class NNModel(object):
 
     feature_sizes :
         Feature size for each prediction.
+
+    callbacks : :obj:`dict`
+        Callback dictionary. Supported callbacks.
+        {`test`, `predict`, `get_data_generators`}
     """
     __metaclass__ = ABCMeta
 
@@ -1086,7 +1090,7 @@ class NNModel(object):
             for patch_idx, stores_tup in enumerate(self._iteratorstores):
                 list_iterstore, dict_iterstore = stores_tup
                 
-                # For in memory databases, dbparam_save_dirs = None
+                # For in memory databases, dbparam_save_dirs = None.
                 # For disk databases, dbparam_save_dirs can be used as a 
                 # temporary directory for each patch to store temporary data.
                 # FUTURE_USE: Currently used in DAEModel pre_train(...) only.
