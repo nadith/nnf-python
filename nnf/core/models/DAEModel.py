@@ -232,7 +232,7 @@ class DAEModel(NNModel):
         assert((daecfg.preloaded_db is None and X_gen is not None) or 
                 (daecfg.preloaded_db is not None))
 
-        # Build the DAE if not already built (no-pretraining)
+        # Build the DAE if not already built (no pre-training)
         if (self.net is None):
             self._direct_build(daecfg)
 
@@ -581,7 +581,7 @@ class DAEModel(NNModel):
     def _direct_build(self, daecfg):
         """Build the DAE directly from the NN configuration.
         
-            Invoked when the network needs to be built without pretraining.
+            Invoked when the network needs to be built without pre-training.
         """
         layers = [Input(shape=(daecfg.arch[0],))]
         mid = (len(daecfg.arch) + 1) // 2
