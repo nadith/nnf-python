@@ -31,12 +31,6 @@ from nnf.core.iters.memory.BigDataNumpyArrayIterator import BigDataNumpyArrayIte
 class DAEModel(NNModel):
     """Generic deep autoencoder model.
 
-    Attributes
-    ----------
-    callbacks : :obj:`dict`
-        Callback dictionary. Supported callbacks.
-        {`test`, `predict`, `get_data_generators`}
-
     Note
     ----
     Extend this class to implement custom deep autoencoder models.
@@ -92,7 +86,9 @@ class DAEModel(NNModel):
         # Initialize parameters
         save_to_dir = None
         if (dbparam_save_dirs is not None):
-            save_to_dir = dbparam_save_dirs[0]  # save_to_dir for dbparam1
+            # For all dbparams use dbparam1 since it 
+            # overwrites the temporary data before use.
+            save_to_dir = dbparam_save_dirs[0]  
 
         # Initialize data generators
         X_gen, X_val_gen = self._init_data_generators(NNModelPhase.PRE_TRAIN,

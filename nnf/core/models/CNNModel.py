@@ -32,10 +32,6 @@ class CNNModel(NNModel):
 
     Attributes
     ----------
-    callbacks : :obj:`dict`
-        Callback dictionary. Supported callbacks.
-        {`test`, `predict`, `get_data_generators`}
-
     X_L : :obj:`tuple`
         In the format (`array_like` data tensor, labels).
         If the `nnmodel` is not expecting labels, set it to None.
@@ -65,14 +61,13 @@ class CNNModel(NNModel):
     def __init__(self, X_L=None, Xt=None, X_L_val=None, Xt_val=None,
                                                             callbacks=None):
         """Constructs :obj:`CNNModel` instance."""
-        super().__init__()
+        super().__init__(callbacks=callbacks)
 
         # Used when data is fetched from no iterators
         self.X_L = X_L          # (X, labels)
         self.Xt = Xt            # X target
         self.X_L_val = X_L_val  # (X_val, labels_val)
-        self.Xt_val = Xt_val    # X_val target
-        pass      
+        self.Xt_val = Xt_val    # X_val target              
 
     def pre_train(self, precfgs, cfg, patch_idx=None):
         """Pre-train the :obj:`CNNModel`.

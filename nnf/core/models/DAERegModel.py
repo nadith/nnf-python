@@ -27,8 +27,7 @@ class DAERegModel(DAEModel):
     ----------
     callbacks : :obj:`dict`
         Callback dictionary. Supported callbacks.
-        {`test`, `predict`, 
-        `get_data_generators`, `get_target_data_generators`}
+        {common `NNModel` callbacks, `get_target_data_generators`}
     """
     ##########################################################################
     # Public Interface
