@@ -11,7 +11,6 @@
 from warnings import warn as warning
 from keras.layers import Input, Dense
 from keras.models import Model
-from keras.callbacks import EarlyStopping
 import numpy as np
 
 # Local Imports
@@ -59,19 +58,11 @@ class Autoencoder(NNModel):
     ##########################################################################
     def __init__(self, uid=None, X_L=None, Xt=None, X_L_val=None, Xt_val=None,
                                                             callbacks=None):
-        super().__init__(uid)
+        super().__init__(uid, callbacks)
 
         # Initialize variables
         self.encoder = None
         #self.decoder = None
-
-        # Set defaults for arguments
-        self.callbacks = {} if (callbacks is None) else callbacks
-        self.callbacks.setdefault('test', None)
-        self.callbacks.setdefault('predict', None)
-        get_dat_gen = self.callbacks.setdefault('get_data_generators', None)
-        if (get_dat_gen is None):
-            self.callbacks['get_data_generators'] = self.get_data_generators
         
         # Used when data is fetched from no iterators
         self.X_L = X_L          # (X, labels)
@@ -98,50 +89,13 @@ class Autoencoder(NNModel):
         """
         warning('Pre-training is not supported in Autoencoder')
 
-    def get_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """Get data generators for pre-training, training, testing, prediction.
-
-        Parameters
-        ----------
-        ephase : :obj:`NNModelPhase`
-            Phase of which the data generators are required.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-
-        Returns
-        -------
-        :obj:`tuple`
-            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
-            then 
-                Generators for training and validation.
-                Refer https://keras.io/preprocessing/image/
-
-            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
-            then
-                Generators for testing and testing target.
-        """
-        if (ephase == NNModelPhase.TRAIN):
-            # Iteratorstore for dbparam1
-            X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
-            X2_gen = list_iterstore[0].setdefault(Dataset.VAL, None)
-    
-        elif (ephase == NNModelPhase.TEST or ephase == NNModelPhase.PREDICT):
-            # Iteratorstore for dbparam1
-            X1_gen = list_iterstore[0].setdefault(Dataset.TE, None)
-            X2_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
-
-        else:
-            raise Exception('Unsupported NNModelPhase')
-
-        return X1_gen, X2_gen
-
     ##########################################################################
     # Protected: NNModel Overrides
     ##########################################################################
+    def _model_prefix(self):
+        """Fetch the prefix for the file to be saved/loaded."""
+        return "AE"
+
     def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
         """Train the :obj:`Autoencoder`.
@@ -175,7 +129,7 @@ class Autoencoder(NNModel):
                 (self.X_L is not None))
 
         # Build the Autoencoder
-        self._build(cfg)
+        self.__build(cfg)
 
         # Preloaded databases for quick deployment
         if ((cfg.preloaded_db is not None) and
@@ -244,7 +198,7 @@ class Autoencoder(NNModel):
         # Checks whether keras net should be pre-built to
         # load weights or the net itself
         if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self._build(cfg)
+            self.__build(cfg)
 
         # Try to load the saved model or weights
         self._try_load(daecfg, patch_idx, prefix)
@@ -307,7 +261,7 @@ class Autoencoder(NNModel):
         # Checks whether keras net should be pre-built to
         # load weights or the net itself
         if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self._build(cfg)
+            self.__build(cfg)
 
         # Try to load the saved model or weights
         self._try_load(cfg, patch_idx, prefix)
@@ -332,15 +286,6 @@ class Autoencoder(NNModel):
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def _model_prefix(self):
-        """Fetch the prefix for the file to be saved/loaded.
-
-        Note
-        ----
-        Override this method for custom prefix.
-        """
-        return "AE"
-
     def _encode(self, X):
         """Encode the data.
 
@@ -356,44 +301,11 @@ class Autoencoder(NNModel):
         """
         return self.encoder.predict(X)
 
-    def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """Initialize data generators for pre-training, training, testing, 
-            prediction.
-
-        Parameters
-        ----------
-        ephase : :obj:`NNModelPhase`
-            Phase of which the data generators are required.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-
-        Returns
-        -------
-        :obj:`tuple`
-            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
-            then 
-                Generators for training and validation.
-
-            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
-            then
-                Generators for testing and testing target.
-        """
-        X_gen = None; X_val_gen = None
-        if (list_iterstore is not None):
-            X_gen, X_val_gen = self.callbacks['get_data_generators'](ephase, list_iterstore, dict_iterstore)
-
-        return X_gen, X_val_gen
-
-    def _build(self, cfg, use_early_stop=False, 
-                cb_early_stop=EarlyStopping(monitor='val_loss', patience=0, verbose=0, mode='auto')):
+    ##########################################################################
+    # Private Interface
+    ##########################################################################
+    def __build(self, cfg):
         """Build the keras Autoencoder."""
-        # Set early stop for later use
-        self.cb_early_stop = cb_early_stop
-
         # this is our input placeholder
         input_img = Input(shape=(cfg.arch[0],))
 
@@ -405,7 +317,7 @@ class Autoencoder(NNModel):
 
         # this model maps an input to its reconstruction
         self.net = Model(inputs=input_img, outputs=decoded)
-    
+
         #
         # this model maps an input to its encoded representation
         self.encoder = Model(inputs=input_img, outputs=encoded)
@@ -421,11 +333,13 @@ class Autoencoder(NNModel):
         ## hence decoder_layer.output cannot be used.
         ## Ref: NNModel._init_predict_feature_fns()
         ## self.decoder = Model(input=encoded_input, output=decoder_layer(encoded_input))
-
         print(self.net.summary())
+        self.net.compile(optimizer=cfg.optimizer,
+                            loss=cfg.loss_fn,
+                            metrics=cfg.metrics)
 
-        self.net.compile(optimizer='adadelta', loss=cfg.loss_fn)
-        self._init_fns_predict_feature(cfg)  
+        # For predict functionality, initialize theano sub functions
+        self._init_fns_predict_feature(cfg)
 
     ##########################################################################
     # Dependant Properties
@@ -435,7 +349,7 @@ class Autoencoder(NNModel):
         """Size of the encoding layer."""
         enc_layer = self.net.layers[1] 
         assert enc_layer == self.net.layers[-2]
-        return enc_layer.output_dim
+        return enc_layer.output_shape[1]
 
     @property
     def _encoder_weights(self):

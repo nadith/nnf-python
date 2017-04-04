@@ -67,14 +67,6 @@ class CNNModel(NNModel):
         """Constructs :obj:`CNNModel` instance."""
         super().__init__()
 
-        # Set defaults for arguments
-        self.callbacks = {} if (callbacks is None) else callbacks
-        self.callbacks.setdefault('test', None)
-        self.callbacks.setdefault('predict', None)
-        get_dat_gen = self.callbacks.setdefault('get_data_generators', None)
-        if (get_dat_gen is None):
-            self.callbacks['get_data_generators'] = self.get_data_generators
-
         # Used when data is fetched from no iterators
         self.X_L = X_L          # (X, labels)
         self.Xt = Xt            # X target
@@ -100,48 +92,7 @@ class CNNModel(NNModel):
             Patch's index in this model.
         """
         warning('Pre-training is not supported in CNN')
-
-    def get_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """Get data generators for pre-training, training, testing, prediction.
-
-        Parameters
-        ----------
-        ephase : :obj:`NNModelPhase`
-            Phase of which the data generators are required.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-
-        Returns
-        -------
-        :obj:`tuple`
-            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
-            then 
-                Generators for training and validation.
-                Refer https://keras.io/preprocessing/image/
-
-            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
-            then
-                Generators for testing and testing target.
-        """
-        if (ephase == NNModelPhase.TRAIN):
-            # Iteratorstore for dbparam1
-            X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
-            X2_gen = list_iterstore[0].setdefault(Dataset.VAL, None)
-    
-        elif (ephase == NNModelPhase.TEST or ephase == NNModelPhase.PREDICT):
-            # Iteratorstore for dbparam1
-            X1_gen = list_iterstore[0].setdefault(Dataset.TE, None)
-            X2_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
-
-        else:
-            raise Exception('Unsupported NNModelPhase')
-
-        return X1_gen, X2_gen
-
+        
     ##########################################################################
     # Protected: NNModel Overrides
     ##########################################################################
@@ -336,38 +287,6 @@ class CNNModel(NNModel):
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """Initialize data generators for pre-training, training, testing,
-            prediction.
-
-        Parameters
-        ----------
-        ephase : :obj:`NNModelPhase`
-            Phase of which the data generators are required.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-
-        Returns
-        -------
-        :obj:`tuple`
-            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
-            then 
-                Generators for training and validation.
-
-            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
-            then
-                Generators for testing and testing target.
-        """
-        X_gen = None; X_val_gen = None
-        if (list_iterstore is not None):
-            X_gen, X_val_gen = self.callbacks['get_data_generators'](ephase, list_iterstore, dict_iterstore)
-
-        return X_gen, X_val_gen
-
     def _model_prefix(self):
         """Fetch the prefix for the file to be saved/loaded.
 
@@ -384,40 +303,6 @@ class CNNModel(NNModel):
         ----
         Override this method for custom CNN builds.
         """
-        self.net = Sequential()
-
-        ## input: 100x100 images with 3 channels -> (3, 100, 100) tensors.
-        ## this applies 32 convolution filters of size 3x3 each.
-        #self.net.add(Conv2D(32, (3, 3), padding='valid', input_shape=input_shape))
-        #self.net.add(Activation('relu'))
-        #self.net.add(Conv2D(32, (3, 3)))
-        #self.net.add(Activation('relu'))
-        #self.net.add(MaxPooling2D(pool_size=(2, 2)))
-        #self.net.add(Dropout(0.25))
-
-        #self.net.add(Conv2D(64, (3, 3), padding='valid'))
-        #self.net.add(Activation('relu'))
-        #self.net.add(Conv2D(64, (3, 3)))
-        #self.net.add(Activation('relu'))
-        #self.net.add(MaxPooling2D(pool_size=(2, 2)))
-        #self.net.add(Dropout(0.25))
-
-        #self.net.add(Flatten())
-        ## Note: Keras does automatic shape inference.
-        #self.net.add(Dense(256))
-        #self.net.add(Activation('relu'))
-        #self.net.add(Dropout(0.5))
-
-        #self.net.add(Dense(nb_class))
-        #self.net.add(Activation('softmax'))
-
-        #sgd = SGD(lr=0.01, decay=1e-8, momentum=0.01, nesterov=True)
-        #self.net.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
-
-        #self.fn_predict_feature = K.function([self.net.layers[0].input, K.learning_phase()],
-        #                          [self.net.layers[13].output]) 
-
-
         # input: 150x150 images with 3 channels -> (3, 100, 100) tensors.
 
         self.net = Sequential()
@@ -441,19 +326,6 @@ class CNNModel(NNModel):
         self.net.add(Dense(nb_class))
         self.net.add(Activation('softmax'))
 
-        print(self.net.summary())
-        self.net.compile(loss='categorical_crossentropy',
-                      optimizer='rmsprop',
-                      metrics=['accuracy'])    
-
-        #rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
-        #self.net.compile(loss='categorical_crossentropy',
-        #              optimizer=rms,
-        #              metrics=['accuracy'])
-
-        #sgd = SGD(lr=0.5, decay=1e-6, momentum=0.1, nesterov=True)
-        #self.net.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
-
     ##########################################################################
     # Private Interface
     ##########################################################################
@@ -464,12 +336,19 @@ class CNNModel(NNModel):
             input_shape = cfg.preloaded_db.get_input_shape(self)
             nb_class = cfg.preloaded_db.get_nb_class()
             data_format = cfg.preloaded_db.data_format
+
         else:
             input_shape = X_gen.image_shape # <- 'tf' format (default)
             nb_class = X_gen.nb_class
             data_format = X_gen.data_format
 
         self._build(input_shape, nb_class, data_format)
+        print(self.net.summary())
+        self.net.compile(loss=cfg.loss_fn,
+                            optimizer=cfg.optimizer,
+                            metrics=cfg.metrics)
+
+        # For predict functionality, initialize theano sub functions
         self._init_fns_predict_feature(cfg)  
-        
+
 

@@ -42,9 +42,12 @@ class DAERegModel(DAEModel):
         get_target_dat_gen = self.callbacks.setdefault('get_target_data_generators', None)
         if (get_target_dat_gen is None):
             self.callbacks['get_target_data_generators'] =\
-                                            self.get_target_data_generators
+                                            self._get_target_data_generators
      
-    def get_target_data_generators(self, ephase, 
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    def _get_target_data_generators(self, ephase, 
                                             list_iterstore, dict_iterstore):
         """Get target data generators for pre-training, training only.
 
@@ -86,12 +89,7 @@ class DAERegModel(DAEModel):
     # Protected: DAEModel Overrides
     ##########################################################################
     def _model_prefix(self):
-        """Fetch the prefix for the file to be saved/loaded.
-
-        Note
-        ----
-        Override this method for custom prefix.
-        """
+        """Fetch the prefix for the file to be saved/loaded."""
         return "DAEReg"
 
     def _validate_cfg(self, ephase, cfg):

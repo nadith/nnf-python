@@ -47,60 +47,15 @@ class DAEModel(NNModel):
     ##########################################################################
     def __init__(self, callbacks=None):
         """Constructs :obj:`DAEModel` instance."""
-        super().__init__()
-
-        # Set defaults for arguments
-        self.callbacks = {} if (callbacks is None) else callbacks
-        self.callbacks.setdefault('test', None)
-        self.callbacks.setdefault('predict', None)
-        get_dat_gen = self.callbacks.setdefault('get_data_generators', None)
-        if (get_dat_gen is None):
-            self.callbacks['get_data_generators'] = self.get_data_generators
-
-    def get_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """Get data generators for pre-training, training, testing, prediction.
-
-        Parameters
-        ----------
-        ephase : :obj:`NNModelPhase`
-            Phase of which the data generators are required.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-
-        Returns
-        -------
-        :obj:`tuple`
-            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
-            then 
-                Generators for training and validation.
-                Refer https://keras.io/preprocessing/image/
-
-            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
-            then
-                Generators for testing and testing target.
-        """
-        if (ephase == NNModelPhase.PRE_TRAIN or ephase == NNModelPhase.TRAIN):
-            # Iteratorstore for dbparam1
-            X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
-            X2_gen = list_iterstore[0].setdefault(Dataset.VAL, None)
-
-        elif (ephase == NNModelPhase.TEST or ephase == NNModelPhase.PREDICT):
-            # Iteratorstore for dbparam1
-            X1_gen = list_iterstore[0].setdefault(Dataset.TE, None)
-            X2_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
-
-        else:
-            raise Exception('Unsupported NNModelPhase')
-
-        return X1_gen, X2_gen
+        super().__init__(callbacks=callbacks)
 
     ##########################################################################
     # Protected: NNModel Overrides
     ##########################################################################
+    def _model_prefix(self):
+        """Fetch the prefix for the file to be saved/loaded."""
+        return "DAE"
+
     def _pre_train(self, daeprecfgs, daecfg, patch_idx=None,
                     dbparam_save_dirs=None, 
                     list_iterstore=None, dict_iterstore=None):
@@ -247,7 +202,7 @@ class DAEModel(NNModel):
             layer_idx = layer_idx + 1
 
         # Build DAE
-        self.__build(layers, daecfg)
+        self.__build(daecfg, layers)
     
     def _train(self, daecfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
@@ -433,24 +388,6 @@ class DAEModel(NNModel):
                                 X_te_gen=X_te_gen,
                                 Xt_te_gen=Xt_te_gen)
 
-    ##########################################################################
-    # Protected Interface
-    ##########################################################################
-    def _model_prefix(self):
-        """Fetch the prefix for the file to be saved/loaded.
-
-        Note
-        ----
-        Override this method for custom prefix.
-        """
-        return "DAE"
-
-    def _validate_cfg(self, ephase, cfg):
-        """Validate NN Configuration for this model"""
-        if (len(cfg.arch) != len(cfg.act_fns)):
-            raise Exception('Activation function for each layer is not' + 
-            ' specified. (length of `cfg.arch` != length of `cfg.act_fns`).')       
-
     def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
         """Initialize data generators for pre-training, training, testing,
             prediction.
@@ -492,6 +429,56 @@ class DAEModel(NNModel):
                 X_val_gen = self._clone_iter(X_val_gen)
 
         return X_gen, X_val_gen
+
+    def _get_data_generators(self, ephase, list_iterstore, dict_iterstore):
+        """Get data generators for pre-training, training, testing, prediction.
+
+        Parameters
+        ----------
+        ephase : :obj:`NNModelPhase`
+            Phase of which the data generators are required.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+
+        Returns
+        -------
+        :obj:`tuple`
+            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
+            then 
+                Generators for training and validation.
+                Refer https://keras.io/preprocessing/image/
+
+            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
+            then
+                Generators for testing and testing target.
+        """
+        if (ephase == NNModelPhase.PRE_TRAIN or ephase == NNModelPhase.TRAIN):
+            # Iteratorstore for dbparam1
+            X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
+            X2_gen = list_iterstore[0].setdefault(Dataset.VAL, None)
+
+        elif (ephase == NNModelPhase.TEST or ephase == NNModelPhase.PREDICT):
+            # Iteratorstore for dbparam1
+            X1_gen = list_iterstore[0].setdefault(Dataset.TE, None)
+            X2_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
+
+        else:
+            raise Exception('Unsupported NNModelPhase')
+
+        return X1_gen, X2_gen
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    def _validate_cfg(self, ephase, cfg):
+        """Validate NN Configuration for this model"""
+        if (len(cfg.arch) != len(cfg.act_fns)):
+            raise Exception('Activation function for each layer is not' + 
+            ' specified. (length of `cfg.arch` != length of `cfg.act_fns`).')       
 
     def _pre_train_preprocess(self, layer_idx, daeprecfgs, daecfg,
                                                             X_gen, X_val_gen):
@@ -616,12 +603,12 @@ class DAEModel(NNModel):
                                     name="dec: " + str(layer_idx)))
 
         # Build DAE
-        self.__build(layers, daecfg)
+        self.__build(daecfg, layers)
 
     ##########################################################################
     # Private Interface
     ##########################################################################
-    def __build(self, layers, daecfg):
+    def __build(self, daecfg, layers):
         """Build the keras DAE."""
         in_tensor = layers[0]
         out_tensor = layers[0]
@@ -631,8 +618,11 @@ class DAEModel(NNModel):
         
         self.net = Model(inputs=in_tensor, outputs=out_tensor)
         print(self.net.summary())
+        self.net.compile(optimizer=daecfg.optimizer,
+                            loss=daecfg.loss_fn,
+                            metrics=daecfg.metrics)
 
-        self.net.compile(optimizer=daecfg.opt_fn, loss=daecfg.loss_fn)
+        # For predict functionality, initialize theano sub functions
         self._init_fns_predict_feature(daecfg)  
 
     def __get_genrators_at(self, patch_idx, save_to_dir, layer_idx, ae,

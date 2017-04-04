@@ -9,67 +9,49 @@
 
 # Global Imports
 from enum import Enum
+from keras.callbacks import EarlyStopping
 
 # Local Imports
 
 class BaseCfg(object):
-    """NNPreCfg describes the pre-training configuration for neural network.
-
-    Attributes
-    ----------
-    opt_fn : str
-        Optimization function.
-
-    lr : double
-        Learning rate.
-
-    mr : double
-        Momentum rate.
-
-    non_sparse_penalty : double
-        Non sparse penalty.
-
-    weight_decay_L2 : double
-        L2 weight decay.
-
-    batch_size : int
-        Batch size.
-
-    numepochs : int
-        Number of epochs.
-
-    loss_fn : str
-        Loss function.
-
-    use_db : str
-        Whther to use explicit database.
-    """
+    """BaseCfg describes the pre-training configuration for neural network."""
 
     def __init__(self):
-        self.opt_fn = 'adadelta'
-        self.lr = 0
-        self.mr = 0  
-        self.non_sparse_penalty = 0
-        self.weight_decay_L2 = 0
-        self.batch_size = 1             # When no data generators are used
-        self.numepochs = 2
         self.loss_fn = 'mean_squared_error'
-        self.preloaded_db = None        # PreLoadedDb instance
-        self.feature_layers = [-1, -2]  # Used to predict features
+        self.optimizer = 'adadelta'
 
-        # When data generators are used to train
+        # Only for pre-loaded dbs, when no data generators are used.
+        # When data generators are used, batch_size is expressed in 
+        # `iter_param`.
+        self.batch_size = 1    
+        
+        # Only when data generators are used in training.
         self.nb_val_samples = 100
         self.steps_per_epoch = 5
 
+        # For both pre-loaded dbs + data generators
+        self.numepochs = 2
+        self.callbacks = None
+        #self.callbacks = EarlyStopping(monitor='val_loss', patience=0, verbose=0, mode='auto')
+        self.metrics = None
+
+        self.preloaded_db = None        # `PreLoadedDb` instance
+        self.feature_layers = [-1, -2]  # Used to predict features
+        
         # PERF:
-        self.model_dir = None  # Location to save/load compiled models
-        self.weights_dir = None  # Model is not saved, but weights
+        self.model_dir = None   # Location to save/load compiled models
+        self.weights_dir = None # Model is not saved, but weights
 
 class CNNCfg(BaseCfg):
     """Training configuration for convolutional neural network."""
 
     def __init__(self):
         super().__init__()
+        self.loss_fn = 'categorical_crossentropy'
+        self.optimizer = 'rmsprop'
+        #self.optimizer = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
+        #self.optimizer = SGD(lr=0.5, decay=1e-6, momentum=0.1, nesterov=True)
+        self.metrics=['accuracy']
 
 class VGG16Cfg(CNNCfg):
     """Training configuration for vgg16 convolutional neural network."""

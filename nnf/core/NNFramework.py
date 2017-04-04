@@ -55,6 +55,7 @@ class NNFramework(object):
         dbparams : list of :obj:`dict`
             List of user dbparams, each describing a database.
         """
+        # Keep track of :obj:`NNDiskMan` objects for each `dbparam`
         self._dict_diskman = {}
 
         # Reset the uid at the entry of the test case
@@ -353,6 +354,7 @@ class NNFramework(object):
     def _release(self):
         """Release internal resources used by NNFramework."""
         del  self._dict_diskman
+
     ##########################################################################
     # Private Interface
     ##########################################################################
