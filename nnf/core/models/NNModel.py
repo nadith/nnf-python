@@ -30,7 +30,7 @@ class NNModel(object):
 
     .. warning:: abstract class and must not be instantiated.
 
-    Maintain assoiated 'nnpatches' along with the 'iteratorstores' and 
+    Maintain associated 'nnpatches' along with the 'iteratorstores' and 
     the related paths to the directories to save temporary data both
     user dbparam-wise and patch-wise. 
     (See also DAEModel)
@@ -55,7 +55,7 @@ class NNModel(object):
         Core network model (keras).
 
     fns_predict_feature :
-        Keras/teano sub functions to predict each feature.
+        Keras/theano sub functions to predict each feature.
 
     feature_sizes :
         Feature size for each prediction.
@@ -134,7 +134,7 @@ class NNModel(object):
         # Core network model (keras).
         self.net = None
 
-        # Keras/teano sub functions to predict each feature
+        # Keras/theano sub functions to predict each feature
         self.fns_predict_feature = []
 
         # Feature sizes for each prediction
@@ -374,7 +374,7 @@ class NNModel(object):
         If the original iterators need to be preserved for the second phase 
         of training.
         i.e 
-        In pretraing, clone the iterators, in training, use the originals
+        In pre-training, clone the iterators, in training, use the originals
         """
         return iter.clone() if (iter is not None) else None
 

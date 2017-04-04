@@ -180,7 +180,7 @@ class NNFramework(object):
             # Resolve conflicts with selection structure against other pre-processing parameters
             self.__resolve_conflicts(sel, iter_param, nndb, db_dir, nnpatches)
 
-            # If iterators are need for in memory databases
+            # If iterators are needed for in memory databases
             if (iter_in_mem):
 
                 # Warning

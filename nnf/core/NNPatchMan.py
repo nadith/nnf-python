@@ -13,7 +13,7 @@
 from nnf.core.NNFramework import NNFramework
 
 class NNPatchMan(NNFramework):
-    """`NNModelMan` represents model based sub framework in `NNFramework'.
+    """`NNPatchlMan` represents patch based sub framework in `NNFramework'.
 
     Attributes
     ----------
