@@ -19,6 +19,7 @@ from keras import backend as K
 
 # Local Imports
 from nnf.db.Dataset import Dataset
+from nnf.core.models.NNModelPhase import NNModelPhase
 
 # Circular Imports
 # ref:http://stackoverflow.com/questions/22187279/python-circular-importing
@@ -91,7 +92,7 @@ class NNModel(object):
         """[STATIC] Reset the static uid in each test case in the test suit."""
         NNModel._UID_BASE = -1
 
-    def __init__(self, uid=None):
+    def __init__(self, uid=None, callbacks=None):
         """Constructor of the abstract class :obj:`NNModel`.
 
         Notes
@@ -134,6 +135,16 @@ class NNModel(object):
 
         # Feature sizes for each prediction
         self.feature_sizes = []
+
+        # Set defaults for general callbacks
+        self.callbacks = {} if (callbacks is None) else callbacks
+        self.callbacks.setdefault('test', None)
+        self.callbacks.setdefault('predict', None)
+        get_dat_gen = self.callbacks.setdefault('get_data_generators', None)
+
+        # Use `_get_data_generators` method as default to fetch data generators
+        if (get_dat_gen is None):
+            self.callbacks['get_data_generators'] = self._get_data_generators
     
     def pre_train(self, precfgs, cfg, patch_idx=None):
         """Pre-train the :obj:`NNModel`.
@@ -157,44 +168,7 @@ class NNModel(object):
         stacked network.
         """
         print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< PRE-TRAIN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-
-        # If patch unique id is not given (Serial Processing)
-        if (patch_idx is None):
-
-            # Pretrain with itearators that belong to each patch
-            for patch_idx, stores_tup in enumerate(self._iteratorstores):
-                list_iterstore, dict_iterstore = stores_tup
-
-                # In memory databases will have dbparam_save_dirs = None
-                dbparam_save_dirs = None
-
-                # Note: Models created inside other models for temporary purpose
-                # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-                if (len(self._list_save_to_dirs) > 0):                    
-                    dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-                # Debug print
-                self._debug_print(list_iterstore)
-
-                self._pre_train(precfgs, cfg, patch_idx, dbparam_save_dirs, list_iterstore, dict_iterstore)
-            
-        else:
-            # If patch unique id is not None (Parallel Processing Level 2 Support) 
-            assert(patch_idx < len(self._iteratorstores))
-            list_iterstore, dict_iterstore = self._iteratorstores[patch_idx]
-
-            # In memory databases will have dbparam_save_dirs = None
-            dbparam_save_dirs = None
-
-            # Note: Models created inside other models for temporary purpose
-            # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-            if (len(self._list_save_to_dirs) > 0):                    
-                dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-            # Debug print
-            self._debug_print(list_iterstore)
-
-            self._pre_train(precfgs, cfg, patch_idx,  dbparam_save_dirs, list_iterstore, dict_iterstore)
+        self.__common_train_test_predict_routine(self._pre_train, cfg, patch_idx, True, precfgs=precfgs)
 
     def train(self, cfg, patch_idx=None):
         """Train the :obj:`NNModel`.
@@ -214,43 +188,7 @@ class NNModel(object):
         if (len(self._iteratorstores) == 0):            
             return self._train(cfg, patch_idx)
 
-        # If patch unique id is not given (Serial Processing)
-        if (patch_idx is None):
-
-            # Train with itearators that belong to each patch
-            for patch_idx, stores_tup in enumerate(self._iteratorstores):
-                list_iterstore, dict_iterstore = stores_tup
-                
-                # In memory databases will have dbparam_save_dirs = None
-                dbparam_save_dirs = None
-
-                # Note: Models created inside other models for temporary purpose
-                # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-                if (len(self._list_save_to_dirs) > 0):                    
-                    dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-                # Debug print
-                self._debug_print(list_iterstore)
-
-                self._train(cfg, patch_idx, dbparam_save_dirs, list_iterstore, dict_iterstore)
-            
-        else:
-            # If patch unique id is not None (Parallel Processing Level 2 Support) 
-            assert(patch_idx < len(self._iteratorstores))
-            list_iterstore, dict_iterstore = self._iteratorstores[patch_idx]
-
-            # In memory databases will have dbparam_save_dirs = None
-            dbparam_save_dirs = None
-
-            # Note: Models created inside other models for temporary purpose
-            # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-            if (len(self._list_save_to_dirs) > 0):                    
-                dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-            # Debug print
-            self._debug_print(list_iterstore)
-
-            self._train(cfg, patch_idx,  dbparam_save_dirs, list_iterstore, dict_iterstore)        
+        self.__common_train_test_predict_routine(self._train, cfg, patch_idx, True)
 
     def test(self, cfg, patch_idx=None):
         """Train the :obj:`NNModel`.
@@ -262,38 +200,9 @@ class NNModel(object):
 
         patch_idx : int, optional
             Patch's index in this model. (Default value = None).
-        """
-        # If patch unique id is not given (Serial Processing)
-        if (patch_idx is None):
-
-            # Test with itearators that belong to each patch
-            for patch_idx, stores_tup in enumerate(self._iteratorstores):
-                list_iterstore, dict_iterstore = stores_tup
-                
-                # In memory databases will have dbparam_save_dirs = None
-                dbparam_save_dirs = None
-
-                # Note: Models created inside other models for temporary purpose
-                # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-                if (len(self._list_save_to_dirs) > 0):                    
-                    dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-                self._test(cfg, patch_idx, dbparam_save_dirs, list_iterstore, dict_iterstore)
-            
-        else:
-            # If patch unique id is not None (Parallel Processing Level 2 Support) 
-            assert(patch_idx < len(self._iteratorstores))
-            list_iterstore, dict_iterstore = self._iteratorstores[patch_idx]
-
-            # In memory databases will have dbparam_save_dirs = None
-            dbparam_save_dirs = None
-
-            # Note: Models created inside other models for temporary purpose
-            # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-            if (len(self._list_save_to_dirs) > 0):                    
-                dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-            self._test(cfg, patch_idx,  dbparam_save_dirs, list_iterstore, dict_iterstore)
+        """        
+        print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< TEST >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        self.__common_train_test_predict_routine(self._test, cfg, patch_idx)
 
     def predict(self, cfg, patch_idx=None):
         """Train the :obj:`NNModel`.
@@ -305,38 +214,9 @@ class NNModel(object):
 
         patch_idx : int
             Patch's index in this model.
-        """   
-        # If patch unique id is not given (Serial Processing)
-        if (patch_idx is None):
-
-            # Predict with itearators that belong to each patch
-            for patch_idx, stores_tup in enumerate(self._iteratorstores):
-                list_iterstore, dict_iterstore = stores_tup
-
-                # In memory databases will have dbparam_save_dirs = None
-                dbparam_save_dirs = None
-
-                # Note: Models created inside other models for temporary purpose
-                # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-                if (len(self._list_save_to_dirs) > 0):                    
-                    dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-                self._predict(cfg, patch_idx, dbparam_save_dirs, list_iterstore, dict_iterstore)
-            
-        else:
-            # If patch unique id is not None (Parallel Processing Level 2 Support) 
-            assert(patch_idx < len(self._iteratorstores))
-            list_iterstore, dict_iterstore = self._iteratorstores[patch_idx]
-
-            # In memory databases will have dbparam_save_dirs = None
-            dbparam_save_dirs = None
-
-            # Note: Models created inside other models for temporary purpose
-            # i.e (DAEModel creating Autoencoder model) -> _list_save_to_dirs = []
-            if (len(self._list_save_to_dirs) > 0):                    
-                dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
-
-            self._predict(cfg, patch_idx,  dbparam_save_dirs, list_iterstore, dict_iterstore)
+        """
+        print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< PREDICT >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        self.__common_train_test_predict_routine(self._predict, cfg, patch_idx)
 
     @abstractmethod
     def generate_nnpatches(self):
@@ -538,6 +418,81 @@ class NNModel(object):
             __print_params(iterstore, Dataset.VAL_OUT)
             __print_params(iterstore, Dataset.TE_OUT)
 
+    def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
+        """Initialize data generators for [pre-training,] training, testing, prediction.
+
+        Parameters
+        ----------
+        ephase : :obj:`NNModelPhase`
+            Phase of which the data generators are required.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+
+        Returns
+        -------
+        :obj:`tuple`
+            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
+            then 
+                Generators for training and validation.
+
+            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
+            then
+                Generators for testing and testing target.
+        """
+        X_gen = None; X_val_gen = None
+        if (list_iterstore is not None):
+            X_gen, X_val_gen = self.callbacks['get_data_generators'](ephase, list_iterstore, dict_iterstore)
+
+        return X_gen, X_val_gen
+
+    def _get_data_generators(self, ephase, list_iterstore, dict_iterstore):
+        """Get data generators for [pre-training,] training, testing, prediction.
+
+        Parameters
+        ----------
+        ephase : :obj:`NNModelPhase`
+            Phase of which the data generators are required.
+
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+
+        Returns
+        -------
+        :obj:`tuple`
+            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
+            then 
+                Generators for training and validation.
+                Refer https://keras.io/preprocessing/image/
+
+            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
+            then
+                Generators for testing and testing target.
+        """
+        if (ephase == NNModelPhase.TRAIN):
+            # Iteratorstore for dbparam1
+            X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
+            X2_gen = list_iterstore[0].setdefault(Dataset.VAL, None)
+    
+        elif (ephase == NNModelPhase.TEST or ephase == NNModelPhase.PREDICT):
+            # Iteratorstore for dbparam1
+            X1_gen = list_iterstore[0].setdefault(Dataset.TE, None)
+            X2_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
+
+        else:
+            raise Exception('Unsupported NNModelPhase')
+
+        return X1_gen, X2_gen
+    
+    ##########################################################################
+    # Protected: Train, Test, Predict Common Routines Of Keras
+    ##########################################################################
     def _start_train(self, cfg, X_L=None, Xt=None, X_L_val=None, Xt_val=None, 
                                                 X_gen=None, X_val_gen=None):
         """Common routine to start the training phase of `NNModel`.
@@ -584,11 +539,11 @@ class NNModel(object):
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
 
                 # Train with targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
 
             else:
                 X, lbl = X_L
@@ -596,23 +551,23 @@ class NNModel(object):
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
+                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True) 
 
                 # Train without targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, shuffle=True) 
+                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True) 
                   
         # Train from data generators
         else:
             if (X_val_gen is not None):
                 self.net.fit_generator(
                         X_gen, steps_per_epoch=cfg.steps_per_epoch,
-                        epochs=cfg.numepochs,
+                        epochs=cfg.numepochs, callbacks=cfg.callbacks,
                         validation_data=X_val_gen, validation_steps=cfg.nb_val_samples) # callbacks=[self.cb_early_stop]
             else:
                 self.net.fit_generator(
                         X_gen, steps_per_epoch=cfg.steps_per_epoch,
-                        epochs=cfg.numepochs)
+                        epochs=cfg.numepochs, callbacks=cfg.callbacks)
 
     def _start_test(self, patch_idx=None, X_L_te=None, Xt_te=None, 
                                             X_te_gen=None, Xt_te_gen=None):
@@ -883,6 +838,9 @@ class NNModel(object):
                         K.function([self.net.layers[0].input, K.learning_phase()],
                                     [f_layer.output]))
 
+    ##########################################################################
+    # Protected: Save, Load [Weights or Model] Related
+    ##########################################################################
     def _try_save(self, cfg, patch_idx, prefix="PREFIX"):
         """Attempt to save keras/teano model or weights in `nnmodel`.
 
@@ -1058,6 +1016,9 @@ class NNModel(object):
         fpath = os.path.join(cfg_save_dir, fname)
         return fpath
 
+    ##########################################################################
+    # Protected: For Neural Network Framework Building
+    ##########################################################################
     def _init_nnpatches(self):
         """Generate and register `nnpatches` for this model.
 
@@ -1111,3 +1072,61 @@ class NNModel(object):
             Paths to temporary directories for each user dbparam of each `nnpatch`.
         """
         self._list_save_to_dirs.append(dbparam_save_dirs)
+
+    ##########################################################################
+    # Private Interface
+    ##########################################################################
+    def __common_train_test_predict_routine(self, exec_fn, cfg, 
+                                patch_idx=None, verbose=False, precfgs=None):
+        """Common routine for 'pre-train', `train`, `test`, `predict`(...) of :obj:`NNModel`."""
+        # If patch unique id is not given (Serial Processing)
+        if (patch_idx is None):
+
+            # Train with itearators that belong to each patch
+            for patch_idx, stores_tup in enumerate(self._iteratorstores):
+                list_iterstore, dict_iterstore = stores_tup
+                
+                # For in memory databases, dbparam_save_dirs = None
+                # For disk databases, dbparam_save_dirs can be used as a 
+                # temporary directory for each patch to store temporary data.
+                # FUTURE_USE: Currently used in DAEModel pre_train(...) only.
+                # For i.e Training a DAEModel will need to save temporary
+                # data in layerwise pre-training.
+                dbparam_save_dirs = None
+                if (len(self._list_save_to_dirs) > 0):                    
+                    dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
+
+                # Debug print
+                if (verbose):
+                    self._debug_print(list_iterstore)
+
+                if (precfgs is not None):
+                    exec_fn(precfgs, cfg, patch_idx, dbparam_save_dirs, 
+                                            list_iterstore, dict_iterstore)
+                else:
+                    exec_fn(cfg, patch_idx, dbparam_save_dirs, 
+                                            list_iterstore, dict_iterstore)
+            
+        else:
+            # If patch unique id is not None (Parallel Processing Level 2 Support) 
+            assert(patch_idx < len(self._iteratorstores))
+            list_iterstore, dict_iterstore = self._iteratorstores[patch_idx]
+
+            # For in memory databases, dbparam_save_dirs = None
+            # For disk databases, dbparam_save_dirs can be used as a 
+            # temporary directory for each patch to store temporary data.
+            # FUTURE_USE: Currently used in DAEModel pre_train(...) only.
+            dbparam_save_dirs = None
+            if (len(self._list_save_to_dirs) > 0):                    
+                dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
+
+            # Debug print
+            if (verbose):
+                self._debug_print(list_iterstore)
+
+            if (precfgs is not None):
+                exec_fn(precfgs, cfg, patch_idx, dbparam_save_dirs, 
+                                        list_iterstore, dict_iterstore)
+            else:
+                exec_fn(cfg, patch_idx, dbparam_save_dirs, 
+                                        list_iterstore, dict_iterstore)      

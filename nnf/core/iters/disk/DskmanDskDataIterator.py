@@ -66,7 +66,7 @@ class DskmanDskDataIterator(DskmanDataIterator):
         # INHERITED: Whether to read the data
         # self._read_data
 
-        # Future use
+        # FUTURE_USE:
         # Auto assigned class index to user assigned class name mapping.
         self.cls_idx_to_dir = {}
 

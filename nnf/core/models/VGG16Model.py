@@ -40,7 +40,6 @@ class VGG16Model(CNNModel):
     ##########################################################################
     def _model_prefix(self):
         """Fetch the prefix for the file to be saved/loaded."""
-
         return "VGG16"
 
     def _build(self, input_shape, nb_class, data_format):
@@ -90,8 +89,5 @@ class VGG16Model(CNNModel):
         self.net.add(Dropout(0.5))
         self.net.add(Dense(4096, activation='relu'))
         self.net.add(Dropout(0.5))
-        self.net.add(Dense(1000, activation='softmax'))   
-       
-        sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
-        self.net.compile(optimizer=sgd, loss='categorical_crossentropy') 
+        self.net.add(Dense(1000, activation='softmax'))
       
