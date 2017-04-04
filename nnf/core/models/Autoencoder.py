@@ -23,10 +23,6 @@ class Autoencoder(NNModel):
 
     Attributes
     ----------
-    callbacks : :obj:`dict`
-        Callback dictionary. Supported callbacks.
-        {`test`, `predict`, `get_data_generators`}
-
     X_L : :obj:`tuple`
         In the format (`array_like` data tensor, labels).
         If the `nnmodel` is not expecting labels, set it to None.
