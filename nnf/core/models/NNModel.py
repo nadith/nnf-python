@@ -447,11 +447,11 @@ class NNModel(object):
             then
                 Generators for testing and testing target.
         """
-        X_gen = None; X_val_gen = None
+        X1_gen = None; X2_gen = None
         if (list_iterstore is not None):
-            X_gen, X_val_gen = self.callbacks['get_data_generators'](ephase, list_iterstore, dict_iterstore)
+            X1_gen, X2_gen = self.callbacks['get_data_generators'](ephase, list_iterstore, dict_iterstore)
 
-        return X_gen, X_val_gen
+        return X1_gen, X2_gen
 
     def _get_data_generators(self, ephase, list_iterstore, dict_iterstore):
         """Get data generators for [pre-training,] training, testing, prediction.
