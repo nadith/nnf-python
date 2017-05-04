@@ -14,7 +14,10 @@ import numpy as np
 from nnf.pp.hist_eq import hist_eq
 
 def hist_eq_ch(cimg, ch_axis, number_bins=256):
-    """Histogram equalization on individual color channel."""
+    """Histogram equalization on individual color channel.
+
+    TODO: when ch_axis=0, check the hist_eq() + cimg[ich, :, :] will be invalid too.
+    """
 
     nch = np.size(cimg, ch_axis)
     for ich in range(nch):

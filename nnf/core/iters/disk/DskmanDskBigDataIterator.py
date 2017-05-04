@@ -188,6 +188,8 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         """Image channel axis.
 
             Since feature is 1 dimentional im_ch_axis=0
+            TODO: Revisit to see why im_ch_axis needs to be 0 for 1-dim data.
+                Check hist_eq functionality. What if `None` is used instead of 0 ?
         """
         return 0
 
