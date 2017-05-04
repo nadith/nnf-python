@@ -262,8 +262,13 @@ class DbSlice(object):
                     h = nnpatch.h
                         
                     # Extract the patch
-                    pimg = cimg[y:y+h, x:x+w, :]
+                    if (nndb.format == Format.H_W_CH_N or nndb.format == Format.N_H_W_CH):
+                        pimg = cimg[y:y+h, x:x+w, :]
 
+                    elif (nndb.format == Format.H_N or nndb.format == Format.N_H):
+                        # 1D axis is `h` if w > 1, otherwise 'w'
+                        pimg = cimg[x:x+w] if (w > 1) else cimg[y:y+h]
+                            
 
                 # The offset/index for the col_index in the tr_col_indices vector
                 tci_offsets = None
