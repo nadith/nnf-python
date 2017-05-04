@@ -45,16 +45,16 @@ class NNPatch(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, width, height, offset=(None, None), is_holistic=False):
+    def __init__(self, height, width, offset=(None, None), is_holistic=False):
         """Constructs :obj:`NNPatch` instance.
 
         Parameters
         ----------
-        width : int
-            Image width.
-
         height : int
             Patch height.
+
+        width : int
+            Image width.
 
         offset : (int, int)
             Position of the patch. (Y, X).
