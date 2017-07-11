@@ -192,7 +192,7 @@ class DAERegModel(DAEModel):
 
         return  X_L, Xt, X_L_val, Xt_val
 
-    def _stack_layers(self, ae, layer_idx, layers, daeprecfgs, daecfg):
+    def _stack_layers(self, ae, layer_idx, layers, daecfg):
         """Non tied weights"""
 
         # Layer purpose
@@ -212,12 +212,12 @@ class DAERegModel(DAEModel):
         # Adding encoding or regression layer for DAERegModel
         layers.insert(layer_idx, 
                         Dense(daecfg.arch[layer_idx], 
-                                activation='relu', 
+                                activation=daecfg.act_fns[layer_idx], 
                                 weights=ae._encoder_weights, 
                                 name=layer_name))
 
         # Last layer
-        if (layer_idx == len(daeprecfgs)):
+        if (layer_idx == len(daecfg.arch) - 2): # Pre-training is only for hidden layers
             # REQUIREMENT: Last layer must be a regression layer
             if (lp != 'rg'):
                 raise Exception("ARG_ERR: Last layer must be a regression layer.") 
@@ -228,7 +228,7 @@ class DAERegModel(DAEModel):
             last_i = len(daecfg.arch) - 1
             layers.insert(layer_idx + 1, 
                         Dense(daecfg.arch[last_i], 
-                                activation=dec_act, 
+                                activation=daecfg.act_fns[last_i], 
                                 weights=ae._decoder_weights, 
                                 name="dec_"+layer_name))
         return layers

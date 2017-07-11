@@ -28,7 +28,7 @@ from nnf.core.models.NNModelPhase import NNModelPhase
 from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
 
 class DAEPatch(NNPatch):
-    def generate_nnmodels(self):
+    def _generate_nnmodels(self):
         return DAEModel({'predict':TestDAEModel._fn_predict})
 
 class DAEPatchGen(NNPatchGenerator):

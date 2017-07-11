@@ -40,9 +40,10 @@ class NumpyArrayIterator(Iterator):
             Core iterator parameters. 
         """
         # Set defaults for params
+        _image_shape = tuple(X.shape[1:])
+
         if (params is None):
-            self.input_vectorized = False
-            _image_shape = tuple(X.shape[1:])
+            self.input_vectorized = False            
             data_format = None
             class_mode = None
             batch_size = 32; shuffle = True; seed = None
@@ -50,7 +51,7 @@ class NumpyArrayIterator(Iterator):
 
         else:
             self.input_vectorized = params['input_vectorized'] if ('input_vectorized' in params) else False
-            _image_shape = params.setdefault('_image_shape', tuple(X.shape[1:]))  # internal use
+            _image_shape = params.setdefault('_image_shape', _image_shape)  # internal use
             data_format = params['data_format'] if ('data_format' in params) else None
             class_mode = params['class_mode'] if ('class_mode' in params) else None
             batch_size = params['batch_size'] if ('batch_size' in params) else 32

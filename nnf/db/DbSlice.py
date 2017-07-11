@@ -193,7 +193,6 @@ class DbSlice(object):
         # Set patch iterating loop's max count and nnpatch list
         patch_loop_max_n = 1
         nnpatch_list = None
-        nnpatch = None
 
         if (sel.nnpatches is not None):
             # Must have atleast 1 patch to represent the whole image

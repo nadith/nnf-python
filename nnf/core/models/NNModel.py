@@ -42,6 +42,9 @@ class NNModel(object):
         id for models created inside another model. 
         Ref:`DAEModel` creating `Autoencoder`
 
+    net : :obj:`keras.Model`
+        Core network model (keras).
+
     nnpatches : list of :obj:`NNPatch`
         Associated `nnpatches` with this model.
 
@@ -51,13 +54,10 @@ class NNModel(object):
     _list_save_to_dirs : list of :obj:`list`
         List of paths to temporary directories for each user db-param of each `nnpatch`.
 
-    net : :obj:`keras.Model`
-        Core network model (keras).
-
-    fns_predict_feature :
+    _fns_predict_feature :
         Keras/theano sub functions to predict each feature.
 
-    feature_sizes :
+    _feature_sizes :
         Feature size for each prediction.
 
     callbacks : :obj:`dict`
@@ -135,10 +135,10 @@ class NNModel(object):
         self.net = None
 
         # Keras/theano sub functions to predict each feature
-        self.fns_predict_feature = []
+        self._fns_predict_feature = []
 
         # Feature sizes for each prediction
-        self.feature_sizes = []
+        self._feature_sizes = []
 
         # Set defaults for general callbacks
         self.callbacks = {} if (callbacks is None) else callbacks
@@ -222,8 +222,55 @@ class NNModel(object):
         print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< PREDICT >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         self.__common_train_test_predict_routine(self._predict, cfg, patch_idx)
 
+    def _debug_print(self, list_iterstore):
+        """Print information for each iterator store in `list_iterstore`.
+
+            The iterator params and pre-processor params of iterator store
+            for each dataset. 
+            i.e (Dataset.TR | VAL | ...).
+
+        Parameters
+        ----------
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+        """
+        def __print_params(iterstore, edataset):
+            if (edataset not in iterstore): return
+            gen = iterstore[edataset]
+            if (gen is not None):
+                if (gen._params is not None):
+                    print('{} : {}'.format(edataset, gen))
+                    print("\tIterator Parameters: (iter_param, iter_pp_param)")
+                    print("\t-------------------------------------------------")
+                    for key, val in gen._params.items():
+                        if (key.startswith('_')): continue
+                        print('\t{} : {}'.format(key, val))
+                
+                if (gen._pp_params is not None):
+                    print("\t-------------------------------------------------")
+                    for key, val in gen._pp_params.items():
+                        if (key.startswith('_')): continue
+                        print('\t{} : {}'.format(key, val))
+                print("")
+
+        if (list_iterstore is None):
+            return
+
+        for i, iterstore in enumerate(list_iterstore):
+            print("\nIterator Store:{}".format(i))
+            print("=================")
+            __print_params(iterstore, Dataset.TR)
+            __print_params(iterstore, Dataset.VAL)
+            __print_params(iterstore, Dataset.TE)
+            __print_params(iterstore, Dataset.TR_OUT)
+            __print_params(iterstore, Dataset.VAL_OUT)
+            __print_params(iterstore, Dataset.TE_OUT)
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
     @abstractmethod
-    def generate_nnpatches(self):
+    def _generate_nnpatches(self):
         """Generate list of :obj:`NNPatch` for Neural Network Model Based Framework.
 
         Returns
@@ -245,9 +292,6 @@ class NNModel(object):
         nnpatches.append(nnf.db.NNPatch.NNPatch(33, 33, (10, 10)))
         return nnpatches
 
-    ##########################################################################
-    # Protected Interface
-    ##########################################################################
     @abstractmethod
     def _model_prefix(self):
         """Fetch the prefix for the file to be saved/loaded.
@@ -378,50 +422,6 @@ class NNModel(object):
         """
         return iter.clone() if (iter is not None) else None
 
-    def _debug_print(self, list_iterstore):
-        """Print information for each iterator store in `list_iterstore`.
-
-            The iterator params and pre-processor params of iterator store
-            for each dataset. 
-            i.e (Dataset.TR | VAL | ...).
-
-        Parameters
-        ----------
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-        """
-        def __print_params(iterstore, edataset):
-            if (edataset not in iterstore): return
-            gen = iterstore[edataset]
-            if (gen is not None):
-                if (gen._params is not None):
-                    print('{} : {}'.format(edataset, gen))
-                    print("\tIterator Parameters: (iter_param, iter_pp_param)")
-                    print("\t-------------------------------------------------")
-                    for key, val in gen._params.items():
-                        if (key.startswith('_')): continue
-                        print('\t{} : {}'.format(key, val))
-                
-                if (gen._pp_params is not None):
-                    print("\t-------------------------------------------------")
-                    for key, val in gen._pp_params.items():
-                        if (key.startswith('_')): continue
-                        print('\t{} : {}'.format(key, val))
-                print("")
-
-        if (list_iterstore is None):
-            return
-
-        for i, iterstore in enumerate(list_iterstore):
-            print("\nIterator Store:{}".format(i))
-            print("=================")
-            __print_params(iterstore, Dataset.TR)
-            __print_params(iterstore, Dataset.VAL)
-            __print_params(iterstore, Dataset.TE)
-            __print_params(iterstore, Dataset.TR_OUT)
-            __print_params(iterstore, Dataset.VAL_OUT)
-            __print_params(iterstore, Dataset.TE_OUT)
-
     def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
         """Initialize data generators for [pre-training,] training, testing, prediction.
 
@@ -543,23 +543,22 @@ class NNModel(object):
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=cfg.shuffle, validation_data=(X_val, lbl_val))  #, callbacks=[self.cb_early_stop])
 
                 # Train with targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
+                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=cfg.shuffle, validation_data=(X_val, Xt_val))  #, callbacks=[self.cb_early_stop])
 
             else:
                 X, lbl = X_L
-                X_val, lbl_val = X_L_val
 
                 # Train with labels
                 if (lbl is not None):
-                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True) 
+                    self.net.fit(X, lbl, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=cfg.shuffle) 
 
-                # Train without targets
+                # Train with targets
                 elif (lbl is None):
-                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=True) 
+                    self.net.fit(X, Xt, epochs=cfg.numepochs, batch_size=cfg.batch_size, callbacks=cfg.callbacks, shuffle=cfg.shuffle) 
                   
         # Train from data generators
         else:
@@ -567,7 +566,7 @@ class NNModel(object):
                 self.net.fit_generator(
                         X_gen, steps_per_epoch=cfg.steps_per_epoch,
                         epochs=cfg.numepochs, callbacks=cfg.callbacks,
-                        validation_data=X_val_gen, validation_steps=cfg.nb_val_samples) # callbacks=[self.cb_early_stop]
+                        validation_data=X_val_gen, validation_steps=cfg.validation_steps) # callbacks=[self.cb_early_stop]
             else:
                 self.net.fit_generator(
                         X_gen, steps_per_epoch=cfg.steps_per_epoch,
@@ -649,7 +648,7 @@ class NNModel(object):
             for i, batch in enumerate(X_te_gen):
                 X_te_batch, Y_te_batch = batch[0], batch[1]
 
-                # Y_te_batch=X_te_batch when X_te_gen is sycned with Xt_te_gen
+                # Y_te_batch=Xt_te_batch when X_te_gen is sycned with Xt_te_gen
                 eval_res = self.net.evaluate(X_te_batch, Y_te_batch, verbose=1)
                 
                 # Accumilate metrics into a list 
@@ -741,11 +740,11 @@ class NNModel(object):
     
             for i, batch in enumerate(X_te_gen):
                 X_te_batch, Y_te_batch = batch[0], batch[1]
-                # Y_te_batch=X_te_batch when X_te_gen is sycned with Xt_te_gen
+                # Y_te_batch=Xt_te_batch when X_te_gen is sycned with Xt_te_gen
 
                 # Set the range
-                np_sample_batch = X_te_batch.shape[0]
-                rng = range(i*np_sample_batch, (i+1)*np_sample_batch)
+                np_sample_per_batch = X_te_batch.shape[0]
+                rng = range(i*np_sample_per_batch, (i+1)*np_sample_per_batch)
 
                 # Predictions for this batch
                 batch_predictions = self._predict_features(X_te_batch)
@@ -775,7 +774,7 @@ class NNModel(object):
         :obj:`list` :
             Feature size for each prediction.
         """
-        return self.feature_sizes
+        return self._feature_sizes
 
     def _predict_features(self, Xte):
         """Get the list of predicted features.
@@ -795,7 +794,7 @@ class NNModel(object):
             Predicted features.
         """
         predictions = []
-        for _, fn_predict_feature in enumerate(self.fns_predict_feature):
+        for _, fn_predict_feature in enumerate(self._fns_predict_feature):
             predictions.append(fn_predict_feature([Xte, 0])[0])
 
         # return [self.net.predict(Xte, verbose=1)]
@@ -812,8 +811,8 @@ class NNModel(object):
         cfg : :obj:`NNCfg`
             NN Configuration.
         """
-        self.fns_predict_feature = []
-        self.feature_sizes = []
+        self._fns_predict_feature = []
+        self._feature_sizes = []
         if (cfg.feature_layers is None): 
             return
 
@@ -821,10 +820,10 @@ class NNModel(object):
             f_layer = self.net.layers[f_idx]
 
             if (hasattr(f_layer, 'output_dim')):
-                self.feature_sizes.append(f_layer.output_dim)
+                self._feature_sizes.append(f_layer.output_dim)
 
             elif (hasattr(f_layer, 'output_shape')):
-                self.feature_sizes.append(f_layer.output_shape[1])
+                self._feature_sizes.append(f_layer.output_shape[1])
 
             else:
                 raise Exception("Feature layers chosen are invalid. " +
@@ -838,7 +837,7 @@ class NNModel(object):
             # the layer has exactly one inbound node, i.e. if it is connected
             # to one incoming layer).
             # f_layer.output
-            self.fns_predict_feature.append(
+            self._fns_predict_feature.append(
                         K.function([self.net.layers[0].input, K.learning_phase()],
                                     [f_layer.output]))
 
@@ -868,6 +867,7 @@ class NNModel(object):
         assert(self.net is not None)
 
         ext = None
+        dir = None
         if (cfg.model_dir is not None):
             ext = NNModel._M_FILE_EXT
             dir  = cfg.model_dir
@@ -904,21 +904,16 @@ class NNModel(object):
 
     def _need_prebuild(self, cfg, patch_idx, prefix="PREFIX"):
         """Whether to build the keras net to load the weights from
-            `cfg.weights_dir` or the net itself from `cfg.model_dir`.
+            `cfg.weights_dir`.
 
         Returns
         -------
         bool
-            True if `cfg.weights_dir` or `cfg.model_dir` defines a 
-            valid path, False otherwise.
+            True if `cfg.weights_dir` defines a valid path, False otherwise.
         """
         ext = None
-        dir = None
-        if (cfg.model_dir is not None):
-            ext = NNModel._M_FILE_EXT
-            dir  = cfg.model_dir
-
-        elif (cfg.weights_dir is not None):
+        dir = None        
+        if (cfg.weights_dir is not None):
             ext = NNModel._W_FILE_EXT
             dir  = cfg.weights_dir
 
@@ -1034,7 +1029,7 @@ class NNModel(object):
         ----
         Used only in Model Based Framework.
         """
-        nnpatches = self.generate_nnpatches()
+        nnpatches = self._generate_nnpatches()
         self._add_nnpatches(nnpatches)
 
         # Assign this model to patch

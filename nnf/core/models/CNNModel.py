@@ -261,8 +261,11 @@ class CNNModel(NNModel):
 
         # Try to load the saved model or weights
         self._try_load(cfg, patch_idx, prefix)
-
         assert(self.net is not None)
+
+        # After self.net configure, for predict functionality, 
+        # initialize theano sub functions
+        self._init_fns_predict_feature(cfg)
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
@@ -342,8 +345,5 @@ class CNNModel(NNModel):
         self.net.compile(loss=cfg.loss_fn,
                             optimizer=cfg.optimizer,
                             metrics=cfg.metrics)
-
-        # For predict functionality, initialize theano sub functions
-        self._init_fns_predict_feature(cfg)  
 
 

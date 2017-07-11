@@ -44,16 +44,25 @@ class ImageDataPreProcessor(ImageDataGenerator):
 
         # VGG16Model specific pre-processing param
         if (pp_params is None): 
-            self.nrm_vgg16 = False
+            self._nrm_vgg16 = False
         else:        
-            self.nrm_vgg16 = pp_params['normalize_vgg16']\
+            self._nrm_vgg16 = pp_params['normalize_vgg16']\
                                 if ('normalize_vgg16' in pp_params) else False
 
         super().__init__(pp_params)
 
+    def apply(self, setting):
+        """Apply settings on `self`."""
+        if (settings is None): return
+
+        self.mean = settings.mean
+        self.std = settings.std
+        #self.map_min_max = settings.map_min_max
+        #self.whiten = settings.whiten
+
     def standardize(self, x):
         """Standardize data sample."""
-        if (self.nrm_vgg16):
+        if (self._nrm_vgg16):
             x[0, :, :] -= 103.939
             x[1, :, :] -= 116.779
             x[2, :, :] -= 123.68
@@ -66,7 +75,7 @@ class ImageDataPreProcessor(ImageDataGenerator):
         Parameters
         ----------
         X : `array_like`
-            Data in 2D matrix. Format: Samples x Features.
+            Data in tensor. Format: Samples x dim1 x dim2 ...
 
         y : `array_like`
             Vector indicating the class labels.
@@ -121,3 +130,16 @@ class ImageDataPreProcessor(ImageDataGenerator):
 
             except:
                 raise Exception("`fn_gen_coreiter` is not a child of `DirectoryIterator` class")
+
+    ##########################################################################
+    # Dependant Properties
+    ##########################################################################
+    @property
+    def settings(self):
+        """Calculated settings to use on val/te/etc datasets."""
+        value = {}
+        value['mean'] = self.mean
+        value['std'] = self.std
+        value['principal_components'] = self.principal_components
+        value['map_min_max'] = self.map_min_max
+        value['whiten'] = self.whiten

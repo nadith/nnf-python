@@ -35,7 +35,7 @@ class NNModelMan(NNFramework):
         dbparams : list of :obj:`dict`
             List of user dbparams, each describing a database. 
         """
-        super().__init__(dbparams)
+        super().__init__()
 
         if (isinstance(dbparams, dict)):
             dbparams = [dbparams]

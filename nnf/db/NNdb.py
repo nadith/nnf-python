@@ -508,7 +508,7 @@ class NNdb(object):
             return self.db_scipy.transpose(0, 3, 1, 2)
 
         # N x 1 x H x 1
-        if (self.format == Format.N_H or self.format == Format.H_N):
+        elif (self.format == Format.N_H or self.format == Format.H_N):
             return self.db_scipy[:, np.newaxis, :, np.newaxis]
 
         else:

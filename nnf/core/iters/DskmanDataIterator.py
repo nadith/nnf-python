@@ -49,9 +49,6 @@ class DskmanDataIterator(DataIterator):
     _read_data : bool
         Whether to read the actual data.
 
-    _gen_next : `types.GeneratorType`
-        Core generator
-
     Notes
     -----
     Union operations may result in ommitting duplicate entries in class ranges or 
@@ -226,6 +223,22 @@ class DskmanDataIterator(DataIterator):
         -------
         bool
             True if valid. False otherwise.
+        """
+        pass
+
+    @abstractmethod
+    def _get_n_per_class(self, cls_idx):
+        """Get no of images per class.
+
+        Parameters
+        ----------
+        cls_idx : int
+            Class index. Belongs to `union_cls_range`.
+
+        Returns
+        -------
+        int
+            no of samples per class.
         """
         pass
 

@@ -24,17 +24,17 @@ imdb_obj = matStruct['imdb_obj']
 
 ## Visualizing the database ##################################################
 ##############################################################################
-#1: Visualizing 5 identities, each having 8 images using imap.
+##1: Visualizing 5 identities, each having 8 images using imap.
 #from nnf.utl.immap import *
 #db = np.rollaxis(imdb_obj.db, 3)
 #immap(db, rows=5, cols=8)
 
-#2: Visualizing 5 identities, each having 8 images using NNdb.
+##2: Visualizing 5 identities, each having 8 images using NNdb.
 #from nnf.db.NNdb import NNdb
 #nndb = NNdb('Original', imdb_obj.db, 8, True)
 #nndb.show(5, 8)
 
-#2.1:
+##2.1:
 #from nnf.db.Format import Format
 #nndb = NNdb('Original', db, 8, True, format=Format.N_H_W_CH)
 #nndb.show(5, 8)
@@ -46,7 +46,7 @@ imdb_obj = matStruct['imdb_obj']
 #from nnf.db.Selection import Selection
 #from nnf.db.Selection import Select
 
-#1:
+##1:
 #nndb = NNdb('original', imdb_obj.db, 8, True)
 #sel = Selection()
 #sel.tr_col_indices      = np.array([0, 2, 3, 5], dtype='uint8')
@@ -69,9 +69,7 @@ imdb_obj = matStruct['imdb_obj']
 #nndb_val_out.show(10, 3)
 #nndb_te_out.show(10, 2)
 
-#
-#1.1: Using special enumeration values
-#
+##1.1: Using special enumeration values
 #nndb = NNdb('original', imdb_obj.db, 8, True)
 #sel = Selection()
 #sel.tr_col_indices      = Select.PERCENT_60

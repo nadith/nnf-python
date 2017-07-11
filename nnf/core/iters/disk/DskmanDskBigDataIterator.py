@@ -176,14 +176,6 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         for _, fhandle in self.opened_files.items():
             fhandle.close()        
 
-    ##########################################################################
-    # Protected: DskmanDskDataIterator Overrides
-    ##########################################################################
-    def _release(self):
-        """Release internal resources used by the iterator."""
-        super()._release()
-        self.close_all_opened_files()
-
     def get_im_ch_axis(self):
         """Image channel axis.
 
@@ -192,6 +184,13 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
                 Check hist_eq functionality. What if `None` is used instead of 0 ?
         """
         return 0
+    ##########################################################################
+    # Protected: DskmanDskDataIterator Overrides
+    ##########################################################################
+    def _release(self):
+        """Release internal resources used by the iterator."""
+        super()._release()
+        self.close_all_opened_files()
 
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
         """Get image and file record (frecord) at cls_idx, col_idx.

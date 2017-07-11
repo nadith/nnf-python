@@ -62,8 +62,8 @@ class NNPatch(object):
         is_holistic : bool
             Whether the patch covers the whole image or not.
         """
-        self.w = width
         self.h = height
+        self.w = width        
         self.offset = offset
         self._user_data = {}
         self.nnmodels = []
@@ -81,25 +81,6 @@ class NNPatch(object):
             self.nnmodels = self.nnmodels + nnmodels
         else:
             self.nnmodels.append(nnmodels)
-
-    def generate_nnmodels(self):
-        """Generate list of :obj:`NNModel` for Neural Network Patch Based Framework.
-
-        Returns
-        -------
-        list of :obj:`NNModel`
-            `nnmodels` for Neural Network Patch Based Framework.
-
-        Notes
-        -----
-        Invoked by :obj:`NNPatchMan`.
-
-        Note
-        ----
-        Used only in Patch Based Framework. Extend this method to implement
-        custom generation of `nnmodels`.
-        """
-        assert(False)
 
     def init_nnpatch_fields(self, pimg, format):
         """Initialize the fields of `nnpatch` with the information provided.
@@ -130,8 +111,51 @@ class NNPatch(object):
             self.h = pimg.shape[0]
 
     ##########################################################################
+    # Special Interface
+    ##########################################################################
+    def __eq__(self,nnpatch):
+        """Equality of two :obj:`NNPatch` instances.
+
+        Parameters
+        ----------
+        nnpatch : :obj:`NNPatch`
+            The instance to be compared against this instance.
+
+        Returns
+        -------
+        bool
+            True if both instances are the same. False otherwise.
+        """
+        iseq = False
+        if ((self.h == nnpatch.h) and
+            (self.w == nnpatch.w) and
+            (self.offset == nnpatch.offset)):
+            iseq = True
+
+        return iseq
+
+    ##########################################################################
     # Protected Interface
     ##########################################################################
+    def _generate_nnmodels(self):
+        """Generate list of :obj:`NNModel` for Neural Network Patch Based Framework.
+
+        Returns
+        -------
+        list of :obj:`NNModel`
+            `nnmodels` for Neural Network Patch Based Framework.
+
+        Notes
+        -----
+        Invoked by :obj:`NNPatchMan`.
+
+        Note
+        ----
+        Used only in Patch Based Framework. Extend this method to implement
+        custom generation of `nnmodels`.
+        """
+        assert(False)
+
     def _init_models(self, dict_iterstore, list_iterstore, dbparam_save_dirs):
         """Generate, initialize and register `nnmodels` for this patch.
 
@@ -155,7 +179,7 @@ class NNPatch(object):
         ----
         Used only in Patch Based Framework.
         """
-        self.add_model(self.generate_nnmodels())
+        self.add_model(self._generate_nnmodels())
 
         # Assign this patch and iterstores to each model
         for model in self.nnmodels:
@@ -203,30 +227,6 @@ class NNPatch(object):
             List of database for each user dbparam.       
         """
         return self._user_data[ekey]
-
-    ##########################################################################
-    # Special Interface
-    ##########################################################################
-    def __eq__(self,nnpatch):
-        """Equality of two :obj:`NNPatch` instances.
-
-        Parameters
-        ----------
-        nnpatch : :obj:`NNPatch`
-            The instance to be compared against this instance.
-
-        Returns
-        -------
-        bool
-            True if both instances are the same. False otherwise.
-        """
-        iseq = False
-        if ((self.h == nnpatch.h) and
-            (self.w == nnpatch.w) and
-            (self.offset == nnpatch.offset)):
-            iseq = True
-
-        return iseq
 
     ##########################################################################
     # Dependant Properties

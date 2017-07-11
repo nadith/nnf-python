@@ -130,6 +130,11 @@ class DskmanDskDataIterator(DskmanDataIterator):
             # Update class count       
             self.cls_n += 1
 
+    def get_im_ch_axis(self):
+        """Image channel axis."""
+        # Ref: _get_cimg_frecord_in_next(...) method
+        return 2
+
     ##########################################################################
     # Protected: DskmanDataIterator Overrides
     ##########################################################################
@@ -140,11 +145,6 @@ class DskmanDskDataIterator(DskmanDataIterator):
         del self.paths
         del self.n_per_class
         del self.cls_idx_to_dir
-
-    def get_im_ch_axis(self):
-        """Image channel axis."""
-        # Ref: _get_cimg_frecord_in_next(...) method
-        return 2
 
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
         """Get image and file record (frecord) at cls_idx, col_idx.

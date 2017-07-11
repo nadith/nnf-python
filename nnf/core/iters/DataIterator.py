@@ -160,8 +160,51 @@ class DataIterator(object):
 
         self._gen_next.sync(gen_next)
         self._sync_gen_next = gen_next
+        return True    
+
+    def reset(self, gen_next):
+        """Resets the iterator to the begining."""
+        # This method is only supported by the core iterator      
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return False
+
+        self._gen_next.reset()
         return True
 
+    @abstractmethod
+    def clone(self):
+        """Create a copy of this object."""
+        pass
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    def _release(self):
+        """Release internal resources used by the iterator."""
+        self._imdata_pp = None
+        self._gen_next = None
+        self._sync_gen_next = None
+        self._params = None
+        del self._pp_params
+        self._fn_gen_coreiter = None
+        self.edataset = None
+        self._nb_class = None
+
+    ##########################################################################
+    # Special Interface
+    ##########################################################################
+    def __iter__(self):
+        """Python iterator interface required method."""
+        return self
+
+    def __next__(self):
+        """Python iterator interface required method."""
+        return next(self._gen_next)
+
+    ##########################################################################
+    # Dependant Properties
+    ##########################################################################
     @property
     def is_synced(self):
         """bool : whether this generator is synced with another generator."""
@@ -230,33 +273,6 @@ class DataIterator(object):
             return None  
         return self._gen_next.data_format
 
-    ##########################################################################
-    # Protected Interface
-    ##########################################################################
-    @abstractmethod
-    def clone(self):
-        """Create a copy of this object."""
-        pass
-
-    def _release(self):
-        """Release internal resources used by the iterator."""
-        self._imdata_pp = None
-        self._gen_next = None
-
-    ##########################################################################
-    # Special Interface
-    ##########################################################################
-    def __iter__(self):
-        """Python iterator interface required method."""
-        return self
-
-    def __next__(self):
-        """Python iterator interface required method."""
-        return next(self._gen_next)
-
-    ##########################################################################
-    # Dependant Properties
-    ##########################################################################
     @property
     def params(self):
         """:obj:`dict`: Core iterator parameters."""

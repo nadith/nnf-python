@@ -29,7 +29,7 @@ from nnf.core.models.NNModelPhase import NNModelPhase
 from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
 
 class CNNPatch(NNPatch):
-    def generate_nnmodels(self):
+    def _generate_nnmodels(self):
         return CNNModel(callbacks={'predict':TestCNNModel._fn_predict})
 
 class CNNPatchGen(NNPatchGenerator):
@@ -66,7 +66,7 @@ class TestCNNModel(object):
         # cnncfg.weights_dir = model_folder
 
         cnncfg.numepochs = 5
-        cnncfg.nb_val_samples = 8 #800
+        cnncfg.validation_steps = 3 #800
         cnncfg.steps_per_epoch = 5 #600
 
         nnpatchman.train(cnncfg)
@@ -122,7 +122,7 @@ class TestCNNModel(object):
         # cnncfg.weights_dir = model_folder
 
         cnncfg.numepochs = 2
-        cnncfg.nb_val_samples = 8 #800
+        cnncfg.validation_steps = 3 #800
         cnncfg.steps_per_epoch = 5 #600
         nnpatchman.train(cnncfg)
         #nnpatchman.test(cnncfg)

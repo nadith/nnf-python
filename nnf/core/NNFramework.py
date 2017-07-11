@@ -33,11 +33,11 @@ class NNFramework(object):
 
     Attributes
     ----------
-    _dict_diskman : dict of :obj:`NNDiskMan`
-        :obj:`NNDiskMan` for each of the user `dbparam`.
-
 	_SAVE_TO_DIR : str
 		[CONSTANT][INTERNAL_USE] Directory to save the processed data.
+
+    __dict_diskman : dict of :obj:`NNDiskMan`
+        :obj:`NNDiskMan` for each of the user `dbparam`.
     """
     __metaclass__ = ABCMeta
 
@@ -47,16 +47,10 @@ class NNFramework(object):
     #################################################################
     # Public Interface
     #################################################################
-    def __init__(self, dbparams):
-        """Constructor of the abstract class :obj:`NNFramework`.
-
-        Parameters
-        ----------
-        dbparams : list of :obj:`dict`
-            List of user dbparams, each describing a database.
-        """
+    def __init__(self):
+        """Constructor of the abstract class :obj:`NNFramework`."""
         # Keep track of :obj:`NNDiskMan` objects for each `dbparam`
-        self._dict_diskman = {}
+        self.__dict_diskman = {}
 
         # Reset the uid at the entry of the test case
         NNModel.reset_uid()
@@ -131,11 +125,6 @@ class NNFramework(object):
         """ 
         pass
 
-    @abstractmethod
-    def test(self):
-        """Initiate training in the framework."""
-        pass
-
     ##########################################################################
     # Protected Interface
     ##########################################################################
@@ -206,8 +195,8 @@ class NNFramework(object):
                         # nnpatch -> i.e [dbparam][Dataset.TR] = [nndb_patch_dbparam_TR]
                         if (nndbs is not None):                            
                             dict_nndb = nnpatch._setdefault_udata(idbp, {})
-                            edataset = edatasets[ti]
-                            dict_nndb[edataset] = nndbs[pi]
+                            edataset = edatasets[ti]                            
+                            dict_nndb[edataset] = nndbs[pi] if (not np.isscalar(nndbs)) else nndbs
 
             # Initialzie NNDiskman
             if (db_dir is None and not iter_in_mem):
@@ -229,7 +218,7 @@ class NNFramework(object):
                 dskman.init()   
 
             # Add diskman to _diskmams
-            self._dict_diskman.setdefault(idbp, dskman)
+            self.__dict_diskman.setdefault(idbp, dskman)
 
     def _init_model_params(self, nnpatches, dbparams, nnmodel=None):
         """Initialize `nnmodels` at `nnpatches` along with iteratorstores.
@@ -303,14 +292,19 @@ class NNFramework(object):
                             nndb_dataset = dict_nndb[edataset]
                             iter_pp_param = iter_pp_param_map[edataset]
                             memiter =  MemDataIterator(edataset, nndb_dataset, nndb_dataset.cls_n, iter_pp_param, fn_coreiter)
-                            memiter.init(iter_param)                   
+                            
+                            # Fetch TR pre-process settings and apply it on other
+                            if (edataset == Dataset.TR):
+                                tr_setting = memiter.init(iter_param);
+                            else:
+                                memiter.init(iter_param, tr_setting);
 
                         # Add None or the iterator created above
                         iterstore.setdefault(edataset, memiter)
 
                 else:
                     # Diskman for `idbp` paramter
-                    diskman = self._dict_diskman[idbp]
+                    diskman = self.__dict_diskman[idbp]
 
                     # Update save_to_dirs
                     if (diskman is not None):
@@ -353,7 +347,7 @@ class NNFramework(object):
 
     def _release(self):
         """Release internal resources used by NNFramework."""
-        del  self._dict_diskman
+        del  self.__dict_diskman
 
     ##########################################################################
     # Private Interface
@@ -381,25 +375,26 @@ class NNFramework(object):
         """
         map = {}
         default_pp_params = None
-        if (isinstance(iter_pp_param, list)):  # [{}, (..., ...), (..., ...), ((..., ...), ...)] 
-            for iter_pp in iter_pp_param:       # (..., ...) 
-                if (isinstance(iter_pp, tuple)):
-                    edataset, pp_params = iter_pp
 
-                    if (isinstance(edataset, tuple)):                                
-                        for edataset in iter_pp[0]:
+        if (isinstance(iter_pp_param, dict)):
+            default_pp_params = iter_pp_param.copy()
+        
+        elif (isinstance(iter_pp_param, list)):  # [{}, (..., ...), (..., ...), ((..., ...), ...)] 
+            for iter_pp in iter_pp_param:       # (..., ...) or ((..., ...), ...)
+                if (isinstance(iter_pp, tuple)):
+                    edatasets, pp_params = iter_pp
+
+                    if (isinstance(edatasets, tuple)):                                
+                        for edataset in edatasets:
                             map[edataset] = pp_params.copy()
-                    else:
-                        map[edataset] = pp_params.copy()
+                    else: # edatasets is a scalar
+                        map[edatasets] = pp_params.copy()
 
                 elif (isinstance(iter_pp, dict)):
                     default_pp_params = iter_pp.copy()
 
                 else:
                     raise Exception("Unsupported Format")
-
-        elif (isinstance(iter_pp_param, dict)):
-            default_pp_params = iter_pp_param.copy()
 
         edatasets = Dataset.get_enum_list()
         for edataset in edatasets:
@@ -415,13 +410,14 @@ class NNFramework(object):
            Note: Selection structure has high priority than iterator params
         """
         # Detecting conflics with sel.nnpatches
-        if (sel.nnpatches is not None): warning('ARG_CONFLICT: '
-                                                'selection.nnpatches is already set. '
-                                                'Discarding the current value...')
-        sel.nnpatches = nnpatches
+        #if (sel.nnpatches is not None): warning('ARG_CONFLICT: '
+        #                                        'selection.nnpatches is already set. '
+        #                                        'Discarding the current value...')
+        #sel.nnpatches = nnpatches
+        if (sel.nnpatches is not None): sel.nnpatches = nnpatches
 
         if (iter_param is None):
-            return;
+            return
 
         # Detecting conflics with sel.use_rgb and iter_param['color_mode']
         if (sel.use_rgb is not None):

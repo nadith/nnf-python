@@ -23,10 +23,11 @@ class BaseCfg(object):
         # Only for pre-loaded dbs, when no data generators are used.
         # When data generators are used, batch_size is expressed in 
         # `iter_param`.
-        self.batch_size = 1    
+        self.batch_size = 1  
+        self.shuffle = True
         
         # Only when data generators are used in training.
-        self.nb_val_samples = 100
+        self.validation_steps = 3
         self.steps_per_epoch = 5
 
         # For both pre-loaded dbs + data generators

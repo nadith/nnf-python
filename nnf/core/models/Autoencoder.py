@@ -41,7 +41,7 @@ class Autoencoder(NNModel):
         If the `nnmodel` is not expecting a validation target data tensor,
         set it to None.
 
-    encoder : :obj:`Sequential`
+    __encoder : :obj:`Sequential`
         keras model that maps an input to its encoded representation.
 
     Note
@@ -57,7 +57,7 @@ class Autoencoder(NNModel):
         super().__init__(uid, callbacks)
 
         # Initialize variables
-        self.encoder = None
+        self.__encoder = None
         #self.decoder = None
         
         # Used when data is fetched from no iterators
@@ -84,6 +84,21 @@ class Autoencoder(NNModel):
             Patch's index in this model.
         """
         warning('Pre-training is not supported in Autoencoder')
+
+    def _encode(self, X):
+            """Encode the data.
+
+            Parameters
+            ----------
+            X : `array_like`
+                Input data tensor.
+
+            Returns
+            -------
+            `array_like`
+                Encoded representation.
+            """
+            return self.__encoder.predict(X)
 
     ##########################################################################
     # Protected: NNModel Overrides
@@ -142,7 +157,7 @@ class Autoencoder(NNModel):
             ret = (self.X_L, self.Xt, self.X_L_val, self.Xt_val)
 
         # Training with generators
-        else:        
+        else: 
             super()._start_train(cfg, X_gen=X_gen, X_val_gen=X_val_gen)
             ret = (None, None, None, None)
 
@@ -197,8 +212,7 @@ class Autoencoder(NNModel):
             self.__build(cfg)
 
         # Try to load the saved model or weights
-        self._try_load(daecfg, patch_idx, prefix)
-
+        self._try_load(cfg, patch_idx, prefix)
         assert(self.net is not None)
 
         # Preloaded databases for quick deployment
@@ -255,14 +269,17 @@ class Autoencoder(NNModel):
         prefix = self._model_prefix()
 
         # Checks whether keras net should be pre-built to
-        # load weights or the net itself
+        # load weights
         if (self._need_prebuild(cfg, patch_idx, prefix)):
             self.__build(cfg)
 
         # Try to load the saved model or weights
         self._try_load(cfg, patch_idx, prefix)
-
         assert(self.net is not None)
+
+        # After self.net configure, for predict functionality, 
+        # initialize theano sub functions
+        self._init_fns_predict_feature(cfg)
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
@@ -278,24 +295,6 @@ class Autoencoder(NNModel):
         super()._start_predict(patch_idx,
                                 X_te_gen=X_te_gen, 
                                 Xt_te_gen=Xt_te_gen)
-
-    ##########################################################################
-    # Protected Interface
-    ##########################################################################
-    def _encode(self, X):
-        """Encode the data.
-
-        Parameters
-        ----------
-        X : `array_like`
-            Input data tensor.
-
-        Returns
-        -------
-        `array_like`
-            Encoded representation.
-        """
-        return self.encoder.predict(X)
 
     ##########################################################################
     # Private Interface
@@ -316,7 +315,7 @@ class Autoencoder(NNModel):
 
         #
         # this model maps an input to its encoded representation
-        self.encoder = Model(inputs=input_img, outputs=encoded)
+        self.__encoder = Model(inputs=input_img, outputs=encoded)
     
         ##
         ## create a placeholder for an encoded (32-dimensional) input
@@ -333,9 +332,6 @@ class Autoencoder(NNModel):
         self.net.compile(optimizer=cfg.optimizer,
                             loss=cfg.loss_fn,
                             metrics=cfg.metrics)
-
-        # For predict functionality, initialize theano sub functions
-        self._init_fns_predict_feature(cfg)
 
     ##########################################################################
     # Dependant Properties

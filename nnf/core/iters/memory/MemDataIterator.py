@@ -53,7 +53,7 @@ class MemDataIterator(DataIterator):
         # NNdb database to create the iteartor
         self.nndb = nndb
 
-    def init(self, params=None, y=None):
+    def init(self, params=None, y=None, setting=None):
         """Initialize the instance.
 
         Parameters
@@ -94,10 +94,14 @@ class MemDataIterator(DataIterator):
                                 self._imdata_pp.augment, 
                                 self._imdata_pp.rounds,
                                 self._imdata_pp.seed)
+        else:
+            self.imdata_pp_.apply(setting)
 
         gen_next = self._imdata_pp.flow(db, self.nndb.cls_lbl, 
                                             self._nb_class, params=params)
+        settings = self.imdata_pp_.settings
         super().init(gen_next, params)
+        return settings
 
     def clone(self):
         """Create a copy of this object."""
@@ -133,8 +137,3 @@ class MemDataIterator(DataIterator):
         """Release internal resources used by the iterator."""
         super()._release()
         del self.nndb
-        del self._nb_class
-        del self._pp_params
-        del self._params
-        del self._fn_gen_coreiter
-        del self._sync_iter

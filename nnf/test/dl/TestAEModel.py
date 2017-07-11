@@ -29,7 +29,7 @@ from nnf.core.models.NNModelPhase import NNModelPhase
 from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
 
 class AEPatch(NNPatch):
-    def generate_nnmodels(self):
+    def _generate_nnmodels(self):
         return Autoencoder(callbacks={'predict':TestAEModel._fn_predict})
 
 class AEPatchGen(NNPatchGenerator):
@@ -45,6 +45,9 @@ class TestAEModel(object):
     def Test_preloaded_db(self):
         nnpatchman = NNPatchMan(AEPatchGen())
 
+        cwd = os.getcwd()
+        model_folder = os.path.join(cwd, "ModelFolder")
+
         # Get the file path for mnist database
         cwd = os.getcwd()
         db_file_path = os.path.join(cwd, "DataFolder", "keras", "mnist.npz")
@@ -55,10 +58,17 @@ class TestAEModel(object):
         aecfg = AECfg([784, 500, 784], preloaded_db=MnistDb(db_file_path, debug=True))
         #aecfg = AECfg([3072, 1000, 3072], preloaded_db=Cifar10Db(db_file_path, debug=True))
         aecfg.numepochs = 10
-        aecfg.nb_val_samples = 800
+        aecfg.validation_steps = 3
         aecfg.steps_per_epoch = 5
+
+        # To save the model & weights
+        # aecfg.model_dir = model_folder
+
+        # To save the weights only      
+        # aecfg.weights_dir = model_folder
+
         nnpatchman.train(aecfg)
-        #nnpatchman.test(aecfg)
+        nnpatchman.test(aecfg)
         nnpatchman.predict(aecfg)
 
     def Test(self):
@@ -101,7 +111,7 @@ class TestAEModel(object):
 
         aecfg = AECfg()
         aecfg.numepochs = 10
-        aecfg.nb_val_samples = 800
+        aecfg.validation_steps = 3
         aecfg.steps_per_epoch = 5
         nnpatchman.train(aecfg)
         nnpatchman.predict(aecfg)

@@ -59,6 +59,14 @@ class DskmanMemDataIterator(DskmanDataIterator):
         self.nndb = nndb
         self._save_to_dir = save_dir
 
+    def clone(self):
+        """Create a copy of this object."""
+        assert(False) # Currently not implemented
+
+    def get_im_ch_axis(self):
+        """Image channel axis."""
+        return self.nndb.im_ch_axis
+
     #################################################################
     # Protected Interface
     #################################################################
@@ -67,10 +75,6 @@ class DskmanMemDataIterator(DskmanDataIterator):
         super()._release()
         del self.nndb
         del self._save_to_dir
-
-    def get_im_ch_axis(self):
-        """Image channel axis."""
-        return self.nndb.im_ch_axis
 
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
         """Get image and file record (frecord) at cls_idx, col_idx.
@@ -152,6 +156,17 @@ class DskmanMemDataIterator(DskmanDataIterator):
         return col_idx < self.nndb.n_per_class[cls_idx]
 
     def _get_n_per_class(self, cls_idx):
-        """Get no of images per class"""
+        """Get no of images per class.
+
+        Parameters
+        ----------
+        cls_idx : int
+            Class index. Belongs to `union_cls_range`.
+
+        Returns
+        -------
+        int
+            no of samples per class.
+        """
         assert(cls_idx < self.nndb.cls_n)
         return self.nndb.n_per_class[cls_idx]

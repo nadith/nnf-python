@@ -146,9 +146,6 @@ class DAEModel(NNModel):
                 ae_iterstore[Dataset.TR] = X_gen
                 ae_iterstore[Dataset.VAL] = X_val_gen
 
-                if (ae_iterstore == [(None, None)]):
-                    raise Exception("No data iterators. Check daecfg.use_db option !")   
-
                 ae = Autoencoder(ae_uid)
                 ae._add_iterstores(list_iterstore=[ae_iterstore])
 
@@ -162,7 +159,7 @@ class DAEModel(NNModel):
             ae_prebuild = ae._need_prebuild(daeprecfg,
                                                     patch_idx,
                                                     ae._model_prefix())
-            # This will build self.encoder
+            # This will build self.__encoder
             if (ae_prebuild):
                 ae._build(daeprecfg)
 
@@ -192,7 +189,7 @@ class DAEModel(NNModel):
                                                     layer_idx, ae,
                                                     X_gen, X_val_gen)
 
-            layers = self._stack_layers(ae, layer_idx, layers, daeprecfgs, daecfg)
+            layers = self._stack_layers(ae, layer_idx, layers, daecfg)
 
             # Increment layer index
             layer_idx = layer_idx + 1
@@ -303,7 +300,6 @@ class DAEModel(NNModel):
 
         # Try to load the saved model or weights
         self._try_load(daecfg, patch_idx, prefix)
-
         assert(self.net is not None)
 
         # Preloaded databases for quick deployment
@@ -366,8 +362,11 @@ class DAEModel(NNModel):
 
         # Try to load the saved model or weights
         self._try_load(daecfg, patch_idx, prefix)
-
         assert(self.net is not None)
+
+        # After self.net configure, for predict functionality, 
+        # initialize theano sub functions
+        self._init_fns_predict_feature(daecfg)
 
         # Preloaded databases for quick deployment
         if (daecfg.preloaded_db is not None):
@@ -532,7 +531,7 @@ class DAEModel(NNModel):
 
         return  X_L, Xt, X_L_val, Xt_val
 
-    def _stack_layers(self, ae, layer_idx, layers, daeprecfgs, daecfg):
+    def _stack_layers(self, ae, layer_idx, layers, daecfg):
         """Stack the layers.
         
             Encoding and correponding decoder layer is stacked accordingly.
@@ -548,10 +547,6 @@ class DAEModel(NNModel):
 
         layers : :obj:`list`
             List of keras layers.
-
-        daeprecfgs : list of :obj:`NNCfg`
-            List of Neural Network configurations. Useful for layer-wise 
-            pre-training.
 
         daecfg : :obj:`NNCfg`
             Neural Network configuration that will be used in training. 
@@ -618,9 +613,6 @@ class DAEModel(NNModel):
                             loss=daecfg.loss_fn,
                             metrics=daecfg.metrics)
 
-        # For predict functionality, initialize theano sub functions
-        self._init_fns_predict_feature(daecfg)  
-
     def __get_genrators_at(self, patch_idx, save_to_dir, layer_idx, ae,
                                                             X_gen, X_val_gen):
         """Fetch the generators for next layer pre-training in the 
@@ -652,6 +644,7 @@ class DAEModel(NNModel):
                                 BigDataNumpyArrayIterator(X, y, nb_class, image_data_generator, params)
 
             # Create a generator for training
+            # **TODO: Exhaust the generators and get the data
             enc_data = ae._encode(X_gen.nndb.features_scipy)     
             params = X_gen.params
             X_gen = MemDataIterator(X_gen.edataset, NNdb('Temp_Layer:'+str(layer_idx), enc_data, format=Format.N_H), X_gen.nndb.cls_n, None, fn_gen_coreiter)
@@ -659,6 +652,7 @@ class DAEModel(NNModel):
 
             # Create a generator for validation
             if (X_val_gen is not None):
+                # **TODO: Exhaust the generators and get the data
                 enc_data_val = ae._encode(X_val_gen.nndb.features_scipy)
                 params = X_val_gen.params
                 X_val_gen = MemDataIterator(X_val_gen.edataset, NNdb('TempVal_Layer:'+str(layer_idx), enc_data_val, format=Format.N_H), X_val_gen.nndb.cls_n, None, fn_gen_coreiter)
