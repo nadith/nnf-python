@@ -8,6 +8,7 @@
 """
 
 # Global Imports
+import math
 import scipy.misc
 import numpy as np
 from numpy.random import rand
@@ -306,13 +307,17 @@ class DbSlice(object):
               
                         # Check whether col_idx is a occlusion required index 
                         occl_rate = None
+                        occl_type = None
                         if ((sel.tr_occlusion_rate is not None) and
                             (tci_offsets[dsi] <sel.tr_occlusion_rate.size) and
                             (0 != sel.tr_occlusion_rate[tci_offsets[dsi]])):
                             occl_rate = sel.tr_occlusion_rate[tci_offsets[dsi]]
 
+                            if (sel.tr_occlusion_type is not None):
+                                occl_type = sel.tr_occlusion_type[tci_offsets[dsi]]
+
                         [nndbs, samples] =\
-                            DbSlice._build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, noise_rate, occl_rate)  # noqa E501
+                            DbSlice._build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, noise_rate, occl_rate, occl_type)  # noqa E501
 
                     # Build Training Output DB
                     elif(edataset == Dataset.TR_OUT):
@@ -549,14 +554,28 @@ class DbSlice(object):
         # Select 1st 2nd 4th images of each identity for training +
         #               add various noise types @ random locations of varying degree. # noqa E501
         #               default noise type: random black and white dots.
-        # Select 3rd 5th images of each identity for testing.
         nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
         sel.tr_col_indices = np.array([0, 1, 3])
-        sel.tr_noise_rate = np.array([0, 0.5, 0, 0.5, 0, 0.5]) # percentage of corruption # noqa E501
-        # sel.tr_noise_rate  = [0 0.5 0 0.5 0 Noise.G]         # last index with Gauss noise # noqa E501
+        sel.tr_noise_rate = np.array([0, 0.5, 0.2]) # percentage of corruption # noqa E501
+        # sel.tr_noise_rate  = [0 0.5 Noise.G]         # last index with Gauss noise # noqa E501
         [nndb_tr, _, _, _, _, _, _] = DbSlice.slice(nndb, sel)
         nndb_tr.show(10,3)
+
+        #
+        # Select 1st 2nd 4th images of each identity for training +
+        #               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right) of varying degree. # noqa E501
+        #               default occlusion type: 'b'.
+        nndb = NNdb('original', imdb, im_per_class, True)
+        sel = Selection()
+        sel.tr_col_indices = np.array([0, 1, 3])
+        sel.tr_occlusion_rate = np.array([0, 0.5, 0.2]) # percentage of occlusion # noqa E501
+        sel.tr_occlusion_type = 'ttt' # occlusion type: 't' for selected tr. indices [0, 1, 3]
+        #sel.tr_occlusion_type = 'tbr' 
+        #sel.tr_occlusion_type = 'lrb' 
+        [nndb_tr, _, _, _, _, _, _] = DbSlice.slice(nndb, sel)
+        nndb_tr.show(10,3)
+
 
         #
         # To prepare regression datasets, training dataset and training target dataset # noqa E501
@@ -621,6 +640,29 @@ class DbSlice(object):
         [nndb_tr, _, nndb_te, _, _, _, _] = DbSlice.slice(nndb, sel)
         nndb_tr.show(10,3)
         nndb_te.show(10,2)
+
+    @staticmethod
+    def get_occlusion_patch(h, w, dtype, occlusion_type, occlusion_rate):
+        filter = np.ones((h, w))
+        filter = filter.astype(dtype)
+
+        if ((occlusion_type is None) or (occlusion_type == 'b')):
+            sh = math.floor((1-occlusion_rate) * h)
+            filter[sh:h, 0:w] = 0
+
+        elif (occlusion_type == 'r'):
+            sh = math.floor((1-occlusion_rate) * w);
+            filter[0:h, sh:w] = 0
+
+        elif (occlusion_type == 't'):
+            sh = math.floor((occlusion_rate) * h);
+            filter[0:sh, 0:w] = 0
+
+        elif (occlusion_type == 'l'):
+            sh = math.floor((occlusion_rate) * w);
+            filter[0:h, 0:sh] = 0
+
+        return filter        
 
     ##########################################################################
     # Protected Interface
@@ -747,7 +789,7 @@ class DbSlice(object):
         nndb.cls_lbl = np.concatenate((nndb.cls_lbl, np.array([cls_lbl], dtype='uint16')))
 
     @staticmethod
-    def _build_nndb_tr(nndbs, pi, samples, is_new_class, img, noise_rate, occlusion_rate):
+    def _build_nndb_tr(nndbs, pi, samples, is_new_class, img, noise_rate, occlusion_rate, occlusion_type):
         """Build the nndb training database.
 
         Parameters
@@ -786,17 +828,16 @@ class DbSlice(object):
             h, w, ch = img.shape
 
             #Adding different occlusions depending on the precentage
-            if (occlusion_rate is not None):
-                sh = np.uint16(np.floor((1-occlusion_rate) * h))
-                img =  np.copy(img)
-                occl_patch = np.zeros((h-sh+1, w), dtype=img.dtype)
-                #For grey scale
-                
-                if (ch == 1):
-                    img[sh-1:, :] = occl_patch
+            if (occlusion_rate is not None):                
+                filter = DbSlice.get_occlusion_patch(h, w, img.dtype, occlusion_type, occlusion_rate);                    
+                filter = np.expand_dims(filter, 2)
+
+                # For grey scale
+                if (ch == 1):                    
+                    img = filter * img
                 else:
-                    for ich in range(ch):
-                        img[sh-1:, :, ich] = occl_patch
+                    # For colored
+                    img = np.tile(filter, (1, 1, ch)) * img
 
             # Add different noise depending on the type
             # (ref. Enums/Noise)
