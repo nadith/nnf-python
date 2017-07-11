@@ -17,10 +17,9 @@ cwd = os.getcwd()
 data_folder = os.path.join(cwd, "DataFolder")
 
 # Load image database `AR`
-matStruct = scipy.io.loadmat(os.path.join(data_folder, 'IMDB_66_66_AR_8.mat'),
-                            struct_as_record=False, squeeze_me=True)
+filepath = os.path.join(data_folder, 'IMDB_66_66_AR_8.mat')
+matStruct = scipy.io.loadmat(filepath, struct_as_record=False, squeeze_me=True)
 imdb_obj = matStruct['imdb_obj']
-
 
 ## Visualizing the database ##################################################
 ##############################################################################
@@ -38,6 +37,30 @@ imdb_obj = matStruct['imdb_obj']
 #from nnf.db.Format import Format
 #nndb = NNdb('Original', db, 8, True, format=Format.N_H_W_CH)
 #nndb.show(5, 8)
+
+## Augment database with random transformation ###############################
+##############################################################################
+#from nnf.utl.imaugment import *
+
+##1: Initialize pre-processing params for random transfomations
+#pp_params = {}
+#pp_params['rotation_range'] = 50
+#nndb_aug = imaugment(filepath, pp_params, 3)
+#nndb_aug.show(10, 8)
+
+##2: To enforce each image to have the same transformation in both rounds
+#pp_params = {}
+#pp_params['rotation_range'] = 50
+#pp_params['random_transform_seed'] = 10
+#nndb_aug = imaugment(filepath, pp_params, 2)
+#nndb_aug.show(10, 8)
+
+##3: To enforce each image to have the same transformation within a round
+#pp_params = {}
+#pp_params['rotation_range'] = 50
+#pp_params['random_transform_seed'] = [10, 20] # two rounds, two seeds
+#nndb_aug = imaugment(filepath, pp_params, 2)
+#nndb_aug.show(10, 8)
 
 # Database Slicing ###########################################################
 ##############################################################################
