@@ -68,6 +68,7 @@ class ImageDataGenerator(object):
             rescale = None
             preprocessing_function = None
             data_format = None
+            random_transform_seed = None
 
             # To invoke fit() function to calculate 
             # featurewise_center, featurewise_std_normalization and zca_whitening
@@ -94,7 +95,8 @@ class ImageDataGenerator(object):
             rescale = params['rescale'] if ('rescale' in params) else None
             preprocessing_function = params['preprocessing_function'] if ('preprocessing_function' in params) else None
             data_format = params['data_format'] if ('data_format' in params) else None
-    
+            random_transform_seed = params['random_transform_seed'] if ('random_transform_seed' in params) else None
+
             # To invoke fit() function to calculate 
             # featurewise_center, featurewise_std_normalization and zca_whitening
             self.augment = params['augment'] if ('augment' in params) else False
@@ -109,6 +111,7 @@ class ImageDataGenerator(object):
         self.principal_components = None
         self.rescale = rescale
         self.preprocessing_function = preprocessing_function
+        self.random_transform_seed = random_transform_seed # NNF: Extended functionality
 
         if data_format not in {'channels_last', 'channels_first'}:
             raise ValueError('data_format should be "channels_last" (channel after row and '
@@ -198,6 +201,10 @@ class ImageDataGenerator(object):
         return x
 
     def random_transform(self, x, xt=None):
+        
+        if (self.random_transform_seed is not None):
+            np.random.seed(self.random_transform_seed)
+
         # x is a single image, so it doesn't have image number at index 0
         img_row_index = self.row_index - 1
         img_col_index = self.col_index - 1
