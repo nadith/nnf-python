@@ -132,8 +132,17 @@ class NNdb(object):
         assert(self.h == nndb.h and self.w == nndb.w and self.ch == nndb.ch)
         assert(self.cls_n == nndb.cls_n)
         assert(self.db.dtype == nndb.db.dtype)
+        assert(self.format == nndb.format)
 
-        db = np.zeros((self.h, self.w, self.ch, (self.n + nndb.n)), dtype=self.db.dtype)
+        if (self.format == Format.H_W_CH_N):
+            db = np.zeros((self.h, self.w, self.ch, (self.n + nndb.n)), dtype=self.db.dtype)
+        elif (self.format == Format.H_N):
+            db = np.zeros((self.h * self.w * self.ch, (self.n + nndb.n)), dtype=self.db.dtype) 
+        elif (self.format == Format.N_H_W_CH):
+            db = np.zeros(((self.n + nndb.n), self.h, self.w, self.ch), dtype=self.db.dtype)
+        elif (self.format == Format.N_H):
+            db = np.zeros(((self.n + nndb.n), self.h * self.w * self.ch), dtype=self.db.dtype) 
+        
         cls_lbl =  np.zeros((self.n + nndb.n), dtype='uint16')
         en = 0
         for i in range(0, self.cls_n):
@@ -143,20 +152,36 @@ class NNdb(object):
             cls_end = cls_st + np.uint32(self.n_per_class[i]) 
             
             st = en 
-            en = st + self.n_per_class[i] 
-            db[:, :, :, st:en] = self.db[:, :, :, cls_st:cls_end]
+            en = st + self.n_per_class[i]
             cls_lbl[st:en] = np.uint16(i) * np.ones(self.n_per_class[i], dtype='uint16')
+
+            if (self.format == Format.H_W_CH_N):
+                db[:, :, :, st:en] = self.db[:, :, :, cls_st:cls_end]
+            elif (self.format == Format.H_N):
+                db[:, st:en] = self.db[:, cls_st:cls_end]
+            elif (self.format == Format.N_H_W_CH):
+                db[st:en, :, :, :] = self.db[cls_st:cls_end, :, :, :]
+            elif (self.format == Format.N_H):
+                db[st:en, :] = self.db[cls_st:cls_end, :]  
          
             # Fetch data from db2
             cls_st = nndb.cls_st[i]
             cls_end = cls_st + np.uint32(nndb.n_per_class[i]) 
             
             st = en 
-            en = st + nndb.n_per_class[i] 
-            db[:, :, :, st:en] = nndb.db[:, :, :, cls_st:cls_end]
-            cls_lbl[st:en] = np.uint16(i) * np.ones(self.n_per_class[i], dtype='uint16')
+            en = st + nndb.n_per_class[i]
+            cls_lbl[st:en] = np.uint16(i) * np.ones(nndb.n_per_class[i], dtype='uint16')
 
-        nndb = NNdb('merged', db, [], False, cls_lbl)
+            if (self.format == Format.H_W_CH_N):
+                db[:, :, :, st:en] = nndb.db[:, :, :, cls_st:cls_end]
+            elif (self.format == Format.H_N):
+                db[:, st:en] = nndb.db[:, cls_st:cls_end]
+            elif (self.format == Format.N_H_W_CH):
+                db[st:en, :, :, :] = nndb.db[cls_st:cls_end, :, :, :]
+            elif (self.format == Format.N_H):
+                db[st:en, :] = nndb.db[cls_st:cls_end, :]               
+
+        nndb = NNdb('merged', db, None, False, cls_lbl, format=self.format)
         return nndb
 
     def init_db_fields(self):
@@ -332,7 +357,7 @@ class NNdb(object):
 
                 if (self.cls_n > 1):
                     st = n_per_class[0]
-                    for i in range(self.cls_n):
+                    for i in range(1, self.cls_n):
                         self.cls_st[i] = st 
                         st += n_per_class[i]
 
