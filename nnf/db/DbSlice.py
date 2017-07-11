@@ -480,6 +480,14 @@ class DbSlice(object):
         nndb_tr.show(10,3)
         nndd_te.show(10,2)
 
+        #
+        # Select 1st and 2nd image from 1st class and 2nd, 3rd and 5th image from 2nd class for training 
+        nndb = NNdb('original', imdb, im_per_class, True)
+        sel = Selection()
+        sel.tr_col_indices      = [np.array([0, 1], dtype='uint8'), np.array([1, 2, 4], dtype='uint8')]
+        sel.class_range         = np.uint8(np.arange(0, 2))
+        [nndb_tr, _, _, _, _, _, _] = DbSlice.slice(nndb, sel)
+
         # 
         # Select 1st 2nd 4th images of identities denoted by class_range for training.
         # Select 1st 2nd 4th images images of identities denoted by class_range for validation.   

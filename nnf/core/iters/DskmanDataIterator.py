@@ -122,12 +122,22 @@ class DskmanDataIterator(DataIterator):
             ranges_max = np.zeros(len(ranges), dtype='uint8')
 
             for ri, range in enumerate(ranges):
-                # range can be None or enum-Select.ALL|... or numpy.array([])
-                if ((range is not None) and 
-                    (isinstance(range, np.ndarray) and len(range) != 0)):
-                    ranges_max[ri] = np.max(range)
+                if (not isinstance(range, list)):
+                    # range can be None or enum-Select.ALL|... or numpy.array([])
+                    if ((range is not None) and 
+                        (isinstance(range, np.ndarray) and len(range) != 0)):
+                        ranges_max[ri] = np.max(range)
+                    else:
+                        ranges_max[ri] = 0
+
                 else:
-                    ranges_max[ri] = 0
+                    # range = [np.array([1 2 3]), np.array([4 6])]
+                    for range_vec in range:
+                        if ((range_vec is not None) and 
+                            (isinstance(range_vec, np.ndarray) and len(range_vec) != 0)):
+                            ranges_max[ri] = np.max(np.concatenate((np.array([ranges_max[ri]], dtype='uint8'), range_vec)))
+                        else:
+                            ranges_max[ri] = 0
 
             return ranges_max
 
@@ -142,10 +152,20 @@ class DskmanDataIterator(DataIterator):
                 # range can be None or enum-Select.ALL|... or numpy.array([])
                 if (range is None):
                     continue
-                if (isinstance(range, Enum)):
-                    union = range
-                    return union
-                union = np.uint16(np.union1d(union, range))
+
+                if (not isinstance(range, list)):
+                    if (isinstance(range, Enum)):
+                        union = range
+                        return union
+                    union = np.uint16(np.union1d(union, range))
+
+                else:
+                    # range = [np.array([1 2 3]), np.array([4 6])]
+                    for range_vec in range:
+                        if (isinstance(range_vec, Enum)):
+                            union = range_vec
+                            return union
+                        union = np.uint16(np.union1d(union, range_vec))
 
             return union
 
@@ -281,6 +301,7 @@ class DskmanDataIterator(DataIterator):
         """Track dataset counters to process special enum Select.ALL|... values"""
         c = dataset_count[ri]
         if (col_range is not None):
+
             if (isinstance(col_range, Enum)):
                 ratio = 1
                 if (col_range == Select.PERCENT_40):
@@ -310,7 +331,7 @@ class DskmanDataIterator(DataIterator):
 
         return cls_not_visited
 
-    def __filter_datasets_by_cls_col_idx(self, cls_idx, col_idx, clses_visited, dataset_count):
+    def __filter_datasets_by_cls_col_idx(self, cls_idx, col_idx, cls_counter, clses_visited, dataset_count):
         """Filter range indices by class index (cls_idx) and coloumn index (col_index).
 
         Handle repeated columns as well as processing special enum values. i.e Select.ALL|...
@@ -373,6 +394,10 @@ class DskmanDataIterator(DataIterator):
                 col_range = self.col_ranges[ri]
                 if (col_range is None):
                     continue
+
+                if (isinstance(col_range, list)):
+                    # col_range = [np.array([1 2 3]), np.array([4 6])]
+                    col_range = col_range[cls_counter]
 
                 # Skip col_range = numpy.array([])              
                 if (isinstance(col_range, Enum) or (len(col_range) != 0)):
@@ -513,7 +538,7 @@ class DskmanDataIterator(DataIterator):
                 # filtered_entries => [(TR, is_new_class), (VAL, ...), (TE, ...), ...]
                 filtered_entries =\
                     self.__filter_datasets_by_cls_col_idx(
-                                                        cls_idx, col_idx, 
+                                                        cls_idx, col_idx, (i-1),
                                                         clses_visited, 
                                                         dataset_count)
 
