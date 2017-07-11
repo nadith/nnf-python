@@ -34,9 +34,9 @@ class DbSlice(object):
     Selection Structure (with defaults)
     -----------------------------------
     sel.tr_col_indices      = None    # Training column indices
-    sel.tr_noise_rate       = None    # Rate or noise types for the above field
-    sel.tr_occlusion_rate   = None    # Rate or noise types for the above field
-    sel.tr_out_col_indices  = None    # Training target column indices
+    sel.tr_noise_rate       = None    # Noise rate or Noise types for `tr_col_indices`
+    sel.tr_occlusion_rate   = None    # Occlusion rate for `tr_col_indices`
+    sel.tr_out_col_indices  = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
     sel.val_col_indices     = None    # Validation column indices
     sel.val_out_col_indices = None    # Validation target column indices
     sel.te_col_indices      = None    # Testing column indices
@@ -48,7 +48,7 @@ class DbSlice(object):
     sel.scale               = None    # Scaling factor (resize factor)
     sel.normalize           = False   # Normalize (0 mean, std = 1)
     sel.histeq              = False   # Histogram equalization
-    sel.histmatch_col_index = None   # Histogram match reference column index
+    sel.histmatch_col_index = None    # Histogram match reference column index
     sel.class_range         = None    # Class range for training database or all (tr, val, te)
     sel.val_class_range     = None    # Class range for validation database
     sel.te_class_range      = None    # Class range for testing database
@@ -91,7 +91,7 @@ class DbSlice(object):
             NNdb object that represents the dataset.
 
         sel : selection structure
-            Information to split the dataset.
+            Information to split the dataset. (Ref: class documentation)
 
         Returns
         -------

@@ -23,9 +23,9 @@ class Selection:
     Selection Structure (with defaults)
     -----------------------------------
     sel.tr_col_indices      = None    # Training column indices
-    sel.tr_noise_rate       = None    # Rate or noise types for column index
-    sel.tr_occlusion_rate   = None    # Occlusion rate for column index
-    sel.tr_occlusion_type   = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
+    sel.tr_noise_rate       = None    # Noise rate or Noise types for `tr_col_indices`
+    sel.tr_occlusion_rate   = None    # Occlusion rate for `tr_col_indices`
+    sel.tr_occlusion_type   = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
     sel.tr_out_col_indices  = None    # Training target column indices
     sel.val_col_indices     = None    # Validation column indices
     sel.val_out_col_indices = None    # Validation target column indices
