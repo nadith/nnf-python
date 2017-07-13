@@ -8,6 +8,8 @@
 
 # -*- coding: utf-8 -*-
 # Global Imports
+import os
+import scipy.io
 import numpy as np
 from warnings import warn as warning
 import matplotlib.pyplot as plt
@@ -184,22 +186,34 @@ class NNdb(object):
         nndb = NNdb('merged', db, None, False, cls_lbl, format=self.format)
         return nndb
 
-    def init_db_fields(self):
-        if (self.format == Format.H_W_CH_N):
-            self.h, self.w, self.ch, self.n = self.db.shape
-            
-        elif (self.format == Format.H_N):
-            self.w = 1
-            self.ch = 1
-            self.h, self.n = self.db.shape
+    def update_attr(self, is_new_class):
+        """update self attributes. Used when building the nndb dynamically."""
 
-        elif (self.format == Format.N_H_W_CH):
-            self.n, self.h, self.w, self.ch = self.db.shape
+        # Initialize db related fields
+        self.init_db_fields__();
 
-        elif (self.format == Format.N_H):
-            self.w = 1
-            self.ch = 1
-            self.n, self.h = self.db.shape
+        # Set class start, and class counts of nndb
+        if (is_new_class):
+             # Set class start(s) of self, dynamic expansion
+            cls_st = self.n
+            self.cls_st = np.array([], dtype='uint32') if (self.cls_st is None) else self.cls_st
+            self.cls_st = np.concatenate((self.cls_st, np.array([cls_st], dtype='uint32')))
+
+            # Set class count
+            self.cls_n += 1
+
+            # Set n_per_class(s) of self, dynamic expansion
+            n_per_class = 0
+            self.n_per_class = np.array([], dtype='uint16') if (self.n_per_class is None) else self.n_per_class
+            self.n_per_class = np.concatenate((self.n_per_class, np.array([n_per_class], dtype='uint16')))
+
+        # Increment the n_per_class current class
+        self.n_per_class[-1] = self.n_per_class[-1] + 1
+
+        # Set class label of self, dynamic expansion
+        cls_lbl = self.cls_n - 1 
+        self.cls_lbl = np.array([], dtype='uint16') if (self.cls_lbl is None) else self.cls_lbl
+        self.cls_lbl = np.concatenate((self.cls_lbl, np.array([cls_lbl], dtype='uint16')))
 
     def get_data_at(self, si):
         """Get data from database at i.
@@ -435,6 +449,53 @@ class NNdb(object):
         else:
             immap(self.db_scipy, cls_n, n_per_class, resize, offset)
 
+        
+    def save(self, filepath):
+        """Save images to a matfile. 
+
+        Parameters
+        ----------
+        filepath : string
+            Path to the file.
+        """
+        imdb_obj = {'db': self.db_matlab, 'class' : self.cls_lbl, 'im_per_class' : self.n_per_class}
+        scipy.io.savemat(filepath, {'imdb_obj': imdb_obj})
+ 
+    def save_to_dir(self, path, create_cls_dir=True):
+        """Save images to a directory. 
+
+        Parameters
+        ----------
+        path : string
+            Path to directory.
+
+        create_cls_dir : bool, optional
+            Create directories for individual classes. (Default value = True).
+        """                        
+        # Make a new directory to save images
+        if (~isempty(path) and not os.path.exists(path)):
+            mkdir(path);
+                    
+        img_i = 1;
+        for cls_i in range(self.cls_n):
+
+            cls_name = str(cls_i)
+            if (create_cls_dir and not os.path.exists(os.path.join(path, cls_name))):
+                 os.makedirs(os.path.join(path, cls_name))          
+
+            for cls_img_i in range(self.n_per_class[cls_i]):
+                if (create_cls_dir):
+                    img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True);
+                    fname = '{img_name}.jpg'.format(img_name=str(cls_img_i))
+                    img.save(os.path.join(path, cls_name, fname))
+
+                else:
+                    img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True);
+                    fname = '{cls_name}_{cls_img_index}.jpg'.format(cls_name=cls_name, cls_img_index=str(cls_img_i))
+                    img.save(os.path.join(path, fname))
+                    
+                img_i = img_i + 1;
+
     def plot(self, n=None, offset=None):
         """Plot the features.
 
@@ -504,26 +565,30 @@ class NNdb(object):
             # hold off
             plt.show()
 
+
+    ##########################################################################
+    # Private Interface
+    ##########################################################################
+    def init_db_fields__(self):
+        if (self.format == Format.H_W_CH_N):
+            self.h, self.w, self.ch, self.n = self.db.shape
+            
+        elif (self.format == Format.H_N):
+            self.w = 1
+            self.ch = 1
+            self.h, self.n = self.db.shape
+
+        elif (self.format == Format.N_H_W_CH):
+            self.n, self.h, self.w, self.ch = self.db.shape
+
+        elif (self.format == Format.N_H):
+            self.w = 1
+            self.ch = 1
+            self.n, self.h = self.db.shape
+
     ##########################################################################
     # Dependant Properties
     ##########################################################################
-    @property
-    def features(self):
-        """2D Feature Matrix (double)."""
-                
-        # N x H x W x CH or N x H
-        if (self.format == Format.N_H_W_CH or self.format == Format.N_H):
-            return self.db.reshape((self.n, self.h * self.w * self.ch))\
-                 .astype('double')
-
-        # H x W x CH x N or H x N
-        if (self.format == Format.H_W_CH_N or self.format == Format.H_N):
-            return self.db.reshape((self.h * self.w * self.ch, self.n))\
-                 .astype('double')
-
-        else:
-            raise Exception("Unsupported db format")
-
     @property
     def db_convo_th(self):
         """db compatible for convolutional networks."""
@@ -548,7 +613,7 @@ class NNdb(object):
             return self.db_scipy
 
         # N x H
-        if (self.format == Format.N_H or self.format == Format.H_N):
+        elif (self.format == Format.N_H or self.format == Format.H_N):
             return self.db_scipy[:, :, np.newaxis, np.newaxis]
 
         else:
@@ -563,21 +628,46 @@ class NNdb(object):
             return self.db
 
         # H x W x CH x N
-        if (self.format == Format.H_W_CH_N):
+        elif (self.format == Format.H_W_CH_N):
             return np.rollaxis(self.db, 3)
 
         # H x N
         elif (self.format == Format.H_N):
             return np.rollaxis(self.db, 1)
+
         else:
             raise Exception("Unsupported db format")
 
     @property
     def features_scipy(self):
-        """db compatible for scipy library."""     
+        """2D feature matrix (double) compatible scipy library."""
         return self.db_scipy.reshape((self.n, self.h * self.w * self.ch))\
                  .astype('double')
 
+    @property
+    def db_matlab(self):
+        """db compatible for matlab.""" 
+
+        # H x W x CH x N or H x N  
+        if (self.format == Format.H_W_CH_N or self.format == Format.H_N):
+            return self.db
+
+        # N x H x W x CH
+        elif (self.format == Format.N_H_W_CH):
+            return np.transpose(self.db, (1, 2, 3, 0))
+
+        # N x H
+        elif (self.format == Format.N_H):
+            return np.rollaxis(self.db, 1)
+
+        else:
+            raise Exception("Unsupported db format")
+
+    @property
+    def features(self):
+        """2D feature matrix (double) compatible for matlab."""                
+        return self.db_matlab.reshape((self.h * self.w * self.ch, self.n))\
+                 .astype('double')
     @property
     def im_ch_axis(self):
         """Get image channel index for an image.

@@ -207,15 +207,6 @@ class DbSlice(object):
                 nnpatch_list = sel.nnpatches
                 patch_loop_max_n = len(sel.nnpatches)
 
-        # Initialize the sample counts
-        # Ordered by REF_ORDER defined above
-        sample_counts = [np.zeros(patch_loop_max_n, 'uint16'), 
-                        np.zeros(patch_loop_max_n, 'uint16'),
-                        np.zeros(patch_loop_max_n, 'uint16'),
-                        np.zeros(patch_loop_max_n, 'uint16'),
-                        np.zeros(patch_loop_max_n, 'uint16'),
-                        np.zeros(patch_loop_max_n, 'uint16')]
-
         # Initialize the generator
         data_generator.init(cls_ranges, col_ranges, True)
 
@@ -286,9 +277,6 @@ class DbSlice(object):
                         for pi_tmp in range(patch_loop_max_n):
                             nndbs.append(NNdb(str(edataset) + "_p" + str(pi_tmp), None, format=nndb.format))
 
-                    # i.e sample_counts[Dataset.TR][pi] <= sample count for this nnpath, edataset entry
-                    samples = sample_counts[edataset.int()]
-
                     # Build Traiing DB
                     if (edataset == Dataset.TR):
 
@@ -316,40 +304,27 @@ class DbSlice(object):
                             if (sel.tr_occlusion_type is not None):
                                 occl_type = sel.tr_occlusion_type[tci_offsets[dsi]]
 
-                        [nndbs, samples] =\
-                            DbSlice._build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, noise_rate, occl_rate, occl_type)  # noqa E501
+                        DbSlice._build_nndb_tr(nndbs, pi, is_new_class, pimg, noise_rate, occl_rate, occl_type)  # noqa E501
 
                     # Build Training Output DB
                     elif(edataset == Dataset.TR_OUT):
-                        [nndbs, samples] =\
-                            DbSlice._build_nndb_tr_out(nndbs, pi, samples, is_new_class, pimg)  # noqa E501
+                        DbSlice._build_nndb_tr_out(nndbs, pi, is_new_class, pimg)  # noqa E501
 
                     # Build Valdiation DB
                     elif(edataset == Dataset.VAL):
-                        [nndbs, samples] =\
-                            DbSlice._build_nndb_val(nndbs, pi, samples, is_new_class, pimg)  # noqa E501
+                        DbSlice._build_nndb_val(nndbs, pi, is_new_class, pimg)  # noqa E501
 
                     # Build Valdiation Target DB
                     elif(edataset == Dataset.VAL_OUT):
-                        [nndbs, samples] =\
-                            DbSlice._build_nndb_val_out(nndbs, pi, samples, is_new_class, pimg)  # noqa E501
+                        DbSlice._build_nndb_val_out(nndbs, pi, is_new_class, pimg)  # noqa E501
 
                     # Build Testing DB
                     elif(edataset == Dataset.TE):
-                        [nndbs, samples] =\
-                            DbSlice._build_nndb_te(nndbs, pi, samples, is_new_class, pimg)  # noqa E501
+                        DbSlice._build_nndb_te(nndbs, pi, is_new_class, pimg)  # noqa E501
 
                     # Build Testing Target DB
                     elif(edataset == Dataset.TE_OUT):
-                        [nndbs, samples] =\
-                            DbSlice._build_nndb_te_out(nndbs, pi, samples, is_new_class, pimg)  # noqa E501
-
-
-        # Update the fields that depend on core db tensor
-        for _, nndbs in dict_nndbs.items():
-            if (nndbs is None): continue
-            for nndb_patch in nndbs:
-                nndb_patch.init_db_fields()
+                        DbSlice._build_nndb_te_out(nndbs, pi, is_new_class, pimg)  # noqa E501
 
         # Returns NNdb instance instead of a list 
         # (when no nnpatches are mentioned in selection structure)
@@ -771,64 +746,15 @@ class DbSlice(object):
         return img
 
     @staticmethod
-    def _update_nndb_prop(nndb, is_new_class, sample_n):
-        """Update some properties of nndb"""
-        # Set class start, and class counts of nndb
-        if (is_new_class):
-             # Set class start(s) of nndb, dynamic expansion
-            cls_st = sample_n
-            nndb.cls_st = np.array([], dtype='uint32') if (nndb.cls_st is None) else nndb.cls_st
-            nndb.cls_st = np.concatenate((nndb.cls_st, np.array([cls_st], dtype='uint32')))
-
-            # Set class count
-            nndb.cls_n += 1
-
-            # Set n_per_class(s) of nndb, dynamic expansion
-            n_per_class = 0
-            nndb.n_per_class = np.array([], dtype='uint16') if (nndb.n_per_class is None) else nndb.n_per_class
-            nndb.n_per_class = np.concatenate((nndb.n_per_class, np.array([n_per_class], dtype='uint16')))
-
-        # Increment the n_per_class current class
-        nndb.n_per_class[-1] = nndb.n_per_class[-1] + 1
-
-        # Set class label of nndb, dynamic expansion
-        cls_lbl = nndb.cls_n - 1 
-        nndb.cls_lbl = np.array([], dtype='uint16') if (nndb.cls_lbl is None) else nndb.cls_lbl
-        nndb.cls_lbl = np.concatenate((nndb.cls_lbl, np.array([cls_lbl], dtype='uint16')))
-
-    @staticmethod
-    def _build_nndb_tr(nndbs, pi, samples, is_new_class, img, noise_rate, occlusion_rate, occlusion_type):
+    def _build_nndb_tr(nndbs, pi, is_new_class, img, noise_rate, occlusion_rate, occlusion_type):
         """Build the nndb training database.
-
-        Parameters
-        ----------
-        nndbs : describe
-            decribe.
-
-        pi : describe
-            describe.
-
-        samples : describe
-            describe.
-
-        img : describe
-            describe.
-
-        process_noise : describe
-            describe.
-
-        noise_rate : describe
-            describe.
 
         Returns
         -------
         nndbs : :obj:`list` of :obj:`NNdb`
             NNdb objects for each patch.
-
-        samples : array_like -uint16
-            1D vector of image counts for each patch.
         """
-        if (nndbs is None): return nndbs, samples  # noqa E701
+        if (nndbs is None): return nndbs  # noqa E701
         nndb = nndbs[pi]    
 
         if ((occlusion_rate is not None) or (noise_rate is not None)):
@@ -881,10 +807,8 @@ class DbSlice(object):
         nndb.add_data(img)
     
         # Update the properties of nndb
-        DbSlice._update_nndb_prop(nndb, is_new_class, samples[pi])
-            
-        samples[pi] = samples[pi] + 1
-        return nndbs, samples
+        nndb.update_attr(is_new_class)
+        return nndbs
 
     @staticmethod
     def _rand_corrupt(height, width):
@@ -921,181 +845,86 @@ class DbSlice(object):
         return img
 
     @staticmethod
-    def _build_nndb_tr_out(nndbs, pi, samples, is_new_class, img):
+    def _build_nndb_tr_out(nndbs, pi, is_new_class, img):
         """Build the nndb training target database.
 
-        Parameters
-        ----------
-        nndbs : describe
-            decribe.
-
-        pi : describe
-            describe.
-
-        samples : describe
-            describe.
-
-        img : describe
-            describe.
-
         Returns
         -------
         nndbs : :obj:`list` of :obj:`NNdb`
             NNdb objects for each patch.
-
-        samples : array_like -uint16
-            1D vector of image counts for each patch.
         """
-        if (nndbs is None): return nndbs, samples
+        if (nndbs is None): return nndbs
         nndb = nndbs[pi]
         nndb.add_data(img)
 
         # Update the properties of nndb
-        DbSlice._update_nndb_prop(nndb, is_new_class, samples[pi])
-
-        samples[pi] = samples[pi] + 1
-        return nndbs, samples
+        nndb.update_attr(is_new_class)
+        return nndbs
 
     @staticmethod
-    def _build_nndb_val(nndbs, pi, samples, is_new_class, img):
+    def _build_nndb_val(nndbs, pi, is_new_class, img):
         """"Build the nndb validation database.
 
-        Parameters
-        ----------
-        nndbs : describe
-            decribe.
-
-        pi : describe
-            describe.
-
-        samples : describe
-            describe.
-
-        img : describe
-            describe.
-
         Returns
         -------
         nndbs : :obj:`list` of :obj:`NNdb`
             NNdb objects for each patch.
-
-        samples : array_like -uint16
-            1D vector of image counts for each patch.
         """
-        if (nndbs is None): return nndbs, samples
+        if (nndbs is None): return nndbs
         nndb = nndbs[pi]
         nndb.add_data(img)
 
         # Update the properties of nndb
-        DbSlice._update_nndb_prop(nndb, is_new_class, samples[pi])
-
-        samples[pi] = samples[pi] + 1
-        return nndbs, samples
+        nndb.update_attr(is_new_class)
+        return nndbs
 
     @staticmethod
-    def _build_nndb_val_out(nndbs, pi, samples, is_new_class, img):
+    def _build_nndb_val_out(nndbs, pi, is_new_class, img):
         """"Build the nndb validation target database.
 
-        Parameters
-        ----------
-        nndbs : describe
-            decribe.
-
-        pi : describe
-            describe.
-
-        samples : describe
-            describe.
-
-        img : describe
-            describe.
-
         Returns
         -------
         nndbs : :obj:`list` of :obj:`NNdb`
             NNdb objects for each patch.
-
-        samples : array_like -uint16
-            1D vector of image counts for each patch.
         """
-        if (nndbs is None): return nndbs, samples
+        if (nndbs is None): return nndbs
         nndb = nndbs[pi]
         nndb.add_data(img)
 
         # Update the properties of nndb
-        DbSlice._update_nndb_prop(nndb, is_new_class, samples[pi])
-
-        samples[pi] = samples[pi] + 1
-        return nndbs, samples
+        nndb.update_attr(is_new_class)
+        return nndbs
 
     @staticmethod
-    def _build_nndb_te(nndbs, pi, samples, is_new_class, img):
+    def _build_nndb_te(nndbs, pi, is_new_class, img):
         """Build the testing database.
 
-        Parameters
-        ----------
-        nndbs : describe
-            decribe.
-
-        pi : describe
-            describe.
-
-        samples : describe
-            describe.
-
-        img : describe
-            describe.
-
         Returns
         -------
         nndbs : :obj:`list` of :obj:`NNdb`
             NNdb objects for each patch.
-        
-        samples : array_like -uint16
-            1D vector of image counts for each patch.
         """
-        if (nndbs is None): return nndbs, samples
+        if (nndbs is None): return nndbs
         nndb = nndbs[pi]
         nndb.add_data(img)
 
         # Update the properties of nndb
-        DbSlice._update_nndb_prop(nndb, is_new_class, samples[pi])
-
-        samples[pi] = samples[pi] + 1
-        return nndbs, samples
+        nndb.update_attr(is_new_class)
+        return nndbs
 
     @staticmethod
-    def _build_nndb_te_out(nndbs, pi, samples, is_new_class, img):
+    def _build_nndb_te_out(nndbs, pi, is_new_class, img):
         """"Build the nndb validation target database.
-
-        Parameters
-        ----------
-        nndbs : describe
-            decribe.
-
-        pi : describe
-            describe.
-
-        samples : describe
-            describe.
-
-        img : describe
-            describe.
 
         Returns
         -------
         nndbs : :obj:`list` of :obj:`NNdb`
             NNdb objects for each patch.
-
-        samples : array_like -uint16
-            1D vector of image counts for each patch.
         """
-        if (nndbs is None): return nndbs, samples
+        if (nndbs is None): return nndbs
         nndb = nndbs[pi]
         nndb.add_data(img)
 
         # Update the properties of nndb
-        DbSlice._update_nndb_prop(nndb, is_new_class, samples[pi])
-
-        samples[pi] = samples[pi] + 1
-        return nndbs, samples
+        nndb.update_attr(is_new_class)
+        return nndbs
