@@ -488,7 +488,7 @@ class DskmanDataIterator(DataIterator):
                 # When the first col_idx is out of true range, break
                 if (not self._is_valid_col_idx(cls_idx, False)):                        
                     self.__check_and_issue_warning(cls_idx, self.cls_ranges_max, 
-                        'Class: >='+ str(cls_idx) + ' missing in the database')
+                        'Class: >='+ str(cls_idx) + ' are missing in the database')
                     break
 
             else:

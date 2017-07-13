@@ -32,8 +32,9 @@ imdb_obj = matStruct['imdb_obj']
 #from nnf.db.NNdb import NNdb
 #nndb = NNdb('Original', imdb_obj.db, 8, True)
 #nndb.show(5, 8)
+#nndb.save('IMDB_AR.mat')
 
-##2.1:
+##2.1: NNdb with different format
 #from nnf.db.Format import Format
 #nndb = NNdb('Original', db, 8, True, format=Format.N_H_W_CH)
 #nndb.show(5, 8)
@@ -62,8 +63,8 @@ imdb_obj = matStruct['imdb_obj']
 #nndb_aug = imaugment(filepath, pp_params, 2)
 #nndb_aug.show(10, 8)
 
-# Database Slicing ###########################################################
-##############################################################################
+## Database Slicing ###########################################################
+###############################################################################
 #from nnf.db.NNdb import NNdb
 #from nnf.db.DbSlice import DbSlice
 #from nnf.db.Selection import Selection
