@@ -21,9 +21,6 @@ class ImageDataPreProcessor(ImageDataGenerator):
     ----------
     _fn_gen_coreiter : `function`, optional
         Factory method to create the core iterator. (Default value = None).
-
-    _nrm_vgg16 : bool, optional
-        Whether to perform unique normalization for VGG16Model. (Default value = False).
     """
 
     ##########################################################################
@@ -40,16 +37,11 @@ class ImageDataPreProcessor(ImageDataGenerator):
         fn_gen_coreiter : `function`, optional
             Factory method to create the core iterator. (Default value = None). 
         """
-        self._fn_gen_coreiter = fn_gen_coreiter
-
-        # VGG16Model specific pre-processing param
-        if (pp_params is None): 
-            self._nrm_vgg16 = False
-        else:        
-            self._nrm_vgg16 = pp_params['normalize_vgg16']\
-                                if ('normalize_vgg16' in pp_params) else False
-
         super().__init__(pp_params)
+        self._fn_gen_coreiter = fn_gen_coreiter
+        self._pp_params = pp_params
+        self.whiten_components = None
+        self.mapminmax_setting = None
 
     def apply(self, setting):
         """Apply settings on `self`."""
@@ -57,17 +49,50 @@ class ImageDataPreProcessor(ImageDataGenerator):
 
         self.mean = settings.mean
         self.std = settings.std
-        #self.map_min_max = settings.map_min_max
-        #self.whiten = settings.whiten
+        self.principal_components = settings.principal_components
+        self.whiten_components = settings.whiten_components
+        self.mapminmax_setting = settings.mapminmax_setting
 
     def standardize(self, x):
         """Standardize data sample."""
-        if (self._nrm_vgg16):
+
+        # VGG16Model specific pre-processing param
+        if (self._pp_params is not None
+            and ('normalize_vgg16' in self._pp_params) and
+            self._pp_params['normalize_vgg16']):
             x[0, :, :] -= 103.939
             x[1, :, :] -= 116.779
             x[2, :, :] -= 123.68
 
-        return super().standardize(x)
+        x = super().standardize(x)
+
+        #if (self.mapminmax_setting is not None):
+        #    x = mapminmax('apply', x, self.mapminmax_setting)
+
+    def fit(self, X,
+            augment=False,
+            rounds=1,
+            seed=None):
+        '''Required for featurewise_center, featurewise_std_normalization
+        and zca_whitening.
+
+        # Arguments
+            X: Numpy array, the data to fit on. Should have rank 4.
+                In case of grayscale data,
+                the channels axis should have value 1, and in case
+                of RGB data, it should have value 3.
+            augment: Whether to fit on randomly augmented samples
+            rounds: If `augment`,
+                how many augmentation passes to do over the data
+            seed: random seed.
+        '''            
+        super().fit(self, X, augment, rounds, seed)
+            
+        # Perform whitening/mapminmax/etc
+        if (self._pp_params is not None
+            and ('mapminmax' in self._pp_params)):
+            minmax_range = self._pp_params['mapminmax']
+            #[~, self.mapminmax_setting] = mapminmax(X, minmax_range(1), minmax_range(2))
 
     def flow(self, X, y=None, nb_class=None, params=None):
         """Construct a core iterator instancef for in memory database traversal.
@@ -141,5 +166,5 @@ class ImageDataPreProcessor(ImageDataGenerator):
         value['mean'] = self.mean
         value['std'] = self.std
         value['principal_components'] = self.principal_components
-        value['map_min_max'] = self.map_min_max
-        value['whiten'] = self.whiten
+        value['whiten_components'] = self.whiten_components
+        value['mapminmax_setting'] = self.mapminmax_setting

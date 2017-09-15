@@ -89,7 +89,8 @@ class MemDataIterator(DataIterator):
         # zca_whitening. Currently supported only for in memory datasets.
         if (self._imdata_pp.featurewise_center or
             self._imdata_pp.featurewise_std_normalization or
-            self._imdata_pp.zca_whitening): 
+            self._imdata_pp.zca_whitening or 
+            (self._pp_params is not None and 'mapminmax' in self._pp_params)):
             self._imdata_pp.fit(db, 
                                 self._imdata_pp.augment, 
                                 self._imdata_pp.rounds,
