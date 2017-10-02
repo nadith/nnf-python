@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 # Local Imports
 
-def immap(X, rows, cols, scale=None, offset=0):
+def immap(X, rows, cols, scale=None, offset=0, ws=None):
     """Visualize image data tensor in a grid.
 
     Parameters
@@ -38,6 +38,15 @@ def immap(X, rows, cols, scale=None, offset=0):
 
     offset : int, optional
         Offset to the first image (Default value = 0).
+
+    ws : dict, optional
+        whitespace between images in the grid.
+            
+        Whitespace Fields (with defaults)
+        -----------------------------------
+        height = 0;                    # whitespace in height, y direction (0 = no whitespace)  
+        width  = 0;                    # whitespace in width, x direction (0 = no whitespace)  
+        color  = 0 or 255 or [R G B];  # (0 = black)
 
     Returns
     -------
@@ -78,8 +87,14 @@ def immap(X, rows, cols, scale=None, offset=0):
     # Error handling for arguments
     if (len(X.shape) != 4): raise Exception('ARG_ERR: X: 4D tensor in the format H x W x CH x N')  # noqa: E701, E501
 
+    # Set defaults
+    if (ws is None): ws = {}
+    if not ('height' in ws): ws['height'] = 0
+    if not ('width' in ws): ws['width'] = 0    
+
     # Fetch no of color channels
     n, h, w, ch = X.shape
+    if not ('color' in ws): ws['color'] = (0, 0, 0) if (ch > 1)  else (0)
 
     # Requested image count
     im_count = rows * cols
@@ -115,16 +130,34 @@ def immap(X, rows, cols, scale=None, offset=0):
 
     # Building the grid
     _, dim_y, dim_x, _ = newX.shape
-    image_map = np.zeros((dim_y * rows, dim_x * cols, ch), X.dtype)
+
+
+    # Whitespace information for building the grid
+    ws_color = np.array(ws['color'], dtype=X.dtype)
+    
+    # For RGB color build a color matrix (3D)
+    #TODO: (Refer matlab implementation)
+    #if (~isinstance(ws['color'], tuple)):
+    #    ws_color = [];
+    #    ws_color(:, :, 1) = ws.color(1);
+    #    ws_color(:, :, 2) = ws.color(2);
+    #    ws_color(:, :, 3) = ws.color(3);
+    #end
+            
+    GRID_H = (dim_y + ws['height']) * rows - ws['height']
+    GRID_W = (dim_x + ws['width']) * cols - ws['width']
+    image_map = np.ones((GRID_H, GRID_W, ch), X.dtype) * ws_color
 
     # Fill the grid
     for i in range(0, rows):
         for j in range(0, cols):
             im_index = i * cols + j
             if (im_index >= im_count): break  # noqa: E701
-            image_map[(i * dim_y):((i + 1) * dim_y),  # noqa: E701
-                      (j * dim_x):((j + 1) * dim_x), :] \
+
+            image_map[(i * (dim_y + ws['height'])) : ((i * (dim_y + ws['height'])) + dim_y),  # noqa: E701
+                      (j * (dim_x + + ws['width'])) : ((j * (dim_x + ws['width'])) + dim_x), :] \
                         = newX[im_index, :, :, :]
+
         if (im_index > im_count): break  # noqa: E701
 
     # grayscale compatibility

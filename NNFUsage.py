@@ -32,6 +32,7 @@ imdb_obj = matStruct['imdb_obj']
 #from nnf.db.NNdb import NNdb
 #nndb = NNdb('Original', imdb_obj.db, 8, True)
 #nndb.show(5, 8)
+#nndb.show_ws(5, 8) # with whitespaces
 #nndb.save('IMDB_AR.mat')
 
 ##2.1: NNdb with different format

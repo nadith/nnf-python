@@ -402,6 +402,69 @@ class NNdb(object):
         
         return NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format)  # noqa: E501
 
+    def show_ws(self, cls_n=None, n_per_class=None, resize=None, offset=None, ws=None):
+        """Visualize the db in a image grid.
+
+        Parameters
+        ----------
+        cls_n : int, optional
+            No. of classes. (Default value = None).
+
+        n_per_class : int, optional
+            Images per class. (Default value = None).
+
+        resize : int, optional
+            resize factor. (Default value = None).
+
+        offset : int, optional
+            Image index offset to the dataset. (Default value = None).
+
+        ws : dict, optional
+            whitespace between images in the grid.
+            
+            Whitespace Fields (with defaults)
+            -----------------------------------
+            height = 5;                    # whitespace in height, y direction (0 = no whitespace)  
+            width  = 5;                    # whitespace in width, x direction (0 = no whitespace)  
+            color  = 0 or 255 or [R G B];  # (255 = white)
+
+        Examples
+        --------
+        Show first 5 subjects with 8 images per subject. (offset = 1)
+        >>>.Show(5, 8)
+
+        Show next 5 subjects with 8 images per subject,
+        starting at (5*8 + 1)th image.
+        >>>.Show(5, 8, [], 5*8 + 1)
+        """
+    
+        # Set the defaults
+        if (ws is None): ws = {}
+        if not ('height' in ws): ws['height'] = 5
+        if not ('width' in ws): ws['width'] = 5
+        if not ('color' in ws): ws['color'] = (255, 255, 255) if (self.ch > 1)  else (255)
+
+        if (cls_n is None and
+                n_per_class is None and
+                resize is None and
+                offset is None):
+            immap(self.db_scipy, 1, 1, None, 0, ws)
+
+        elif (n_per_class is None and
+                resize is None and
+                offset is None):
+            immap(self.db_scipy, cls_n, 1, None, 0, ws)
+
+        elif (resize is None and
+                offset is None):
+            immap(self.db_scipy, cls_n, n_per_class, None, 0, ws)
+
+        elif (offset is None):
+            immap(self.db_scipy, cls_n, n_per_class, resize, 0, ws)
+        
+        else:
+            immap(self.db_scipy, cls_n, n_per_class, resize, offset, ws)
+
     def show(self, cls_n=None, n_per_class=None, resize=None, offset=None):
         """Visualize the db in a image grid.
 
@@ -448,8 +511,7 @@ class NNdb(object):
 
         else:
             immap(self.db_scipy, cls_n, n_per_class, resize, offset)
-
-        
+       
     def save(self, filepath):
         """Save images to a matfile. 
 
