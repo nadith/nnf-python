@@ -26,6 +26,7 @@ class Selection:
     sel.tr_noise_rate       = None    # Noise rate or Noise types for `tr_col_indices`
     sel.tr_occlusion_rate   = None    # Occlusion rate for `tr_col_indices`
     sel.tr_occlusion_type   = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
+    sel.tr_occlusion_offset = None    # Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
     sel.tr_out_col_indices  = None    # Training target column indices
     sel.val_col_indices     = None    # Validation column indices
     sel.val_out_col_indices = None    # Validation target column indices
@@ -60,6 +61,7 @@ class Selection:
         self.tr_noise_rate       = None    # Rate or noise types for column index
         self.tr_occlusion_rate   = None    # Occlusion rate for column index
         self.tr_occlusion_type   = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
+        self.tr_occlusion_offset = None    # Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
         self.tr_out_col_indices  = None    # Training target column indices
         self.val_col_indices     = None    # Validation column indices
         self.val_out_col_indices = None    # Validation target column indices
@@ -108,6 +110,7 @@ class Selection:
         sel.tr_noise_rate       = self.tr_noise_rate         # Rate or noise types for the above field
         sel.tr_occlusion_rate   = self.tr_occlusion_rate     # Occlusion rate for column index
         sel.tr_occlusion_type   = self.tr_occlusion_type     # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
+        sel.tr_occlusion_offset = self.tr_occlusion_offset
         sel.tr_out_col_indices  = self.tr_out_col_indices    # Training target column indices
         sel.val_col_indices     = self.val_col_indices       # Validation column indices
         sel.val_out_col_indices = self.val_out_col_indices   # Validation target column indices
@@ -148,6 +151,7 @@ class Selection:
             np.array_equal(self.tr_noise_rate, sel.tr_noise_rate) and
             np.array_equal(self.tr_occlusion_rate, sel.tr_occlusion_rate) and
             np.array_equal(self.tr_occlusion_type, sel.tr_occlusion_type) and
+            np.array_equal(self.tr_occlusion_offset, sel.tr_occlusion_offset) and
             np.array_equal(self.tr_out_col_indices, sel.tr_out_col_indices) and
             np.array_equal(self.val_col_indices, sel.val_col_indices) and
             np.array_equal(self.val_out_col_indices, sel.val_out_col_indices) and

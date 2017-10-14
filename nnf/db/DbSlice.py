@@ -36,6 +36,8 @@ class DbSlice(object):
     sel.tr_col_indices      = None    # Training column indices
     sel.tr_noise_rate       = None    # Noise rate or Noise types for `tr_col_indices`
     sel.tr_occlusion_rate   = None    # Occlusion rate for `tr_col_indices`
+    sel.tr_occlusion_type   = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
+    sel.tr_occlusion_offset = None    # Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
     sel.tr_out_col_indices  = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
     sel.val_col_indices     = None    # Validation column indices
     sel.val_out_col_indices = None    # Validation target column indices
@@ -275,7 +277,7 @@ class DbSlice(object):
 
                         # Add an empty NNdb for all `nnpatch` on first edataset entry
                         for pi_tmp in range(patch_loop_max_n):
-                            nndbs.append(NNdb(str(edataset) + "_p" + str(pi_tmp), None, format=nndb.format))
+                            nndbs.append(NNdb(str(edataset) + "_p" + str(pi_tmp), format=nndb.format))
 
                     # Build Traiing DB
                     if (edataset == Dataset.TR):
@@ -296,6 +298,7 @@ class DbSlice(object):
                         # Check whether col_idx is a occlusion required index 
                         occl_rate = None
                         occl_type = None
+                        occl_offset = None
                         if ((sel.tr_occlusion_rate is not None) and
                             (tci_offsets[dsi] <sel.tr_occlusion_rate.size) and
                             (0 != sel.tr_occlusion_rate[tci_offsets[dsi]])):
@@ -304,7 +307,10 @@ class DbSlice(object):
                             if (sel.tr_occlusion_type is not None):
                                 occl_type = sel.tr_occlusion_type[tci_offsets[dsi]]
 
-                        DbSlice._build_nndb_tr(nndbs, pi, is_new_class, pimg, noise_rate, occl_rate, occl_type)  # noqa E501
+                            if (sel.tr_occlusion_offset is not None):
+                                occl_offset = sel.tr_occlusion_offset[tci_offsets[dsi]]
+
+                        DbSlice._build_nndb_tr(nndbs, pi, is_new_class, pimg, noise_rate, occl_rate, occl_type, occl_offset)  # noqa E501
 
                     # Build Training Output DB
                     elif(edataset == Dataset.TR_OUT):
@@ -561,6 +567,21 @@ class DbSlice(object):
 
 
         #
+        # Select 1st 2nd 4th images of each identity for training +
+        #               add occlusions in the middle (horizontal/vertical).
+        #               default occlusion type: 'b'.
+        nndb = NNdb('original', imdb, im_per_class, True)
+        sel = Selection()
+        sel.tr_col_indices = np.array([0, 1, 3])
+        sel.tr_occlusion_rate = np.array([0, 0.5, 0.2])         # percentage of occlusion # noqa E501
+        sel.tr_occlusion_type = 'ttt'                           # occlusion type: 't' for selected tr. indices [0, 1, 3]
+        sel.tr_occlusion_offset = np.array([0, 0.25, 0.4])      # Offset from top since 'tr_occlusion_type = t'
+        # sel.tr_occlusion_type = 'rrr'                         # occlusion type: 'r' for selected tr. indices [1, 2, 4]
+        # sel.tr_occlusion_offset = np.array([0, 0.25, 0.4])    # Offset from right since 'tr_occlusion_type = r'
+        [nndb_tr, _, _, _, _, _, _] = DbSlice.slice(nndb, sel)
+        nndb_tr.show(10,3)
+
+        #
         # To prepare regression datasets, training dataset and training target dataset # noqa E501
         # Select 1st 2nd 4th images of each identity for training.
         # Select 1st 1st 1st image of each identity for corresponding training target # noqa E501
@@ -625,27 +646,39 @@ class DbSlice(object):
         nndb_te.show(10,2)
 
     @staticmethod
-    def get_occlusion_patch(h, w, dtype, occlusion_type, occlusion_rate):
+    def get_occlusion_patch(h, w, dtype, occl_type, occl_rate, occl_offset=0):
         filter = np.ones((h, w))
         filter = filter.astype(dtype)
 
-        if ((occlusion_type is None) or (occlusion_type == 'b')):
-            sh = math.floor((1-occlusion_rate) * h)
-            filter[sh:h, 0:w] = 0
+        if ((occl_type is None) or (occl_type == 'b')):
+            sh = math.ceil(occl_rate * h)
+            en = math.floor((1-occl_offset) * h)
+            st = en - sh; 
+            if (st < 0): st = 1
+            filter[st:en, 0:w] = 0
 
-        elif (occlusion_type == 'r'):
-            sh = math.floor((1-occlusion_rate) * w);
-            filter[0:h, sh:w] = 0
+        elif (occl_type == 'r'):
+            sh = math.ceil(occl_rate * w)
+            en = math.floor((1-occl_offset) * w)
+            st = en - sh; 
+            if (st < 0): st = 1
+            filter[0:h, st:en] = 0
 
-        elif (occlusion_type == 't'):
-            sh = math.floor((occlusion_rate) * h);
-            filter[0:sh, 0:w] = 0
+        elif (occl_type == 't'):
+            sh = math.floor(occl_rate * h)
+            st = math.floor(occl_offset * h)
+            en = st + sh
+            if (en > h): en = h
+            filter[st:en, 0:w] = 0
 
-        elif (occlusion_type == 'l'):
-            sh = math.floor((occlusion_rate) * w);
-            filter[0:h, 0:sh] = 0
+        elif (occl_type == 'l'):
+            sh = math.floor(occl_rate * w)
+            st = math.floor(occl_offset * w)
+            en = st + sh
+            if (en > w): en = w
+            filter[0:h, st:en] = 0
 
-        return filter        
+        return filter   
 
     ##########################################################################
     # Protected Interface
@@ -746,7 +779,7 @@ class DbSlice(object):
         return img
 
     @staticmethod
-    def _build_nndb_tr(nndbs, pi, is_new_class, img, noise_rate, occlusion_rate, occlusion_type):
+    def _build_nndb_tr(nndbs, pi, is_new_class, img, noise_rate, occl_rate, occl_type, occl_offset):
         """Build the nndb training database.
 
         Returns
@@ -757,13 +790,13 @@ class DbSlice(object):
         if (nndbs is None): return nndbs  # noqa E701
         nndb = nndbs[pi]    
 
-        if ((occlusion_rate is not None) or (noise_rate is not None)):
+        if ((occl_rate is not None) or (noise_rate is not None)):
 
             h, w, ch = img.shape
 
             #Adding different occlusions depending on the precentage
-            if (occlusion_rate is not None):                
-                filter = DbSlice.get_occlusion_patch(h, w, img.dtype, occlusion_type, occlusion_rate);                    
+            if (occl_rate is not None):                
+                filter = DbSlice.get_occlusion_patch(h, w, img.dtype, occl_type, occl_rate, occl_offset);                    
                 filter = np.expand_dims(filter, 2)
 
                 # For grey scale
