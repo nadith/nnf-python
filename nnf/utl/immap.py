@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 # Local Imports
 
-def immap(X, rows, cols, scale=None, offset=0, ws=None):
+def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
     """Visualize image data tensor in a grid.
 
     Parameters
@@ -47,6 +47,9 @@ def immap(X, rows, cols, scale=None, offset=0, ws=None):
         height = 0;                    # whitespace in height, y direction (0 = no whitespace)  
         width  = 0;                    # whitespace in width, x direction (0 = no whitespace)  
         color  = 0 or 255 or [R G B];  # (0 = black)
+    
+    title : string, optional 
+        figure title, (Default value = None)
 
     Returns
     -------
@@ -88,6 +91,8 @@ def immap(X, rows, cols, scale=None, offset=0, ws=None):
     if (len(X.shape) != 4): raise Exception('ARG_ERR: X: 4D tensor in the format H x W x CH x N')  # noqa: E701, E501
 
     # Set defaults
+    if (rows is None): rows = 1
+    if (cols is None): cols = 1
     if (ws is None): ws = {}
     if not ('height' in ws): ws['height'] = 0
     if not ('width' in ws): ws['width'] = 0    
@@ -163,12 +168,15 @@ def immap(X, rows, cols, scale=None, offset=0, ws=None):
     # grayscale compatibility
     image_map = np.squeeze(image_map)
 
-    # New Figure
+    # New figure
     f = plt.figure()
     ax = f.add_subplot(111)
 
-    # Figure Title
-    ax.set_title(str(dim_y) + 'x' + str(dim_x))
+    # Figure title
+    if (title is None):
+        ax.set_title(str(dim_y) + 'x' + str(dim_x))
+    else:
+        ax.set_title(title)
 
     # Visualizing the grid
     if (ch == 1):

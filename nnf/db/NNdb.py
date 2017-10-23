@@ -24,6 +24,9 @@ class NNdb(object):
 
     Attributes
     ----------
+    name : string
+        Name of the nndb object.        
+        
     db : `array_like` -uint8
         4D Data tensor that contains images.
 
@@ -82,14 +85,17 @@ class NNdb(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, name, db, n_per_class=None, build_cls_lbl=False,
+    def __init__(self, name, db=None, n_per_class=None, build_cls_lbl=False,
                  cls_lbl=None, format=Format.H_W_CH_N):
         """Construct a nndb object.
 
         Parameters
         ----------
+        name : string
+            Name of the nndb object.   
+
         db : 4D tensor -uint8
-            Data tensor that contains images.
+            Data tensor that contains images. (Default value = None).
 
         n_per_class : vector -uint16 or scalar, optional
             No. images per each class. (Default value = None).
@@ -101,8 +107,10 @@ class NNdb(object):
             Class index array. (Default value = None).
 
         format : nnf.db.Format, optinal
-            Format of the database. (Default value = Format.H_W_CH_N).
+            Format of the database. (Default value = Format.H_W_CH_N, refer `nnf.db.Format`).
         """
+
+        self.name = name
         print('Costructor::NNdb ', name)
 
         # Error handling for arguments
@@ -186,8 +194,29 @@ class NNdb(object):
         nndb = NNdb('merged', db, None, False, cls_lbl, format=self.format)
         return nndb
 
-    def update_attr(self, is_new_class):
-        """update self attributes. Used when building the nndb dynamically."""
+    def update_attr(self, is_new_class, sample_n=1):
+        """Update self attributes. Used when building the nndb dynamically.
+
+        Can invoke this method for every item added (default sample_n=1) or 
+        batch of items added for a given class (sample_n > 1).
+
+        Parameters
+        ----------
+        is_new_class : bool
+            Recently added data item/batch belongs to a new class.
+
+        sample_n : int
+            Recently added data batch size. (Default value = 1).
+
+        Examples
+        --------
+        Using this method to update the attibutes of nndb dynamically.
+
+        >>> nndb = NNdb("EMPTY_NNDB", format=Format.H_W_CH_N)
+        >>> data = numpy.random.rand(30, 30, 1, 100)   # data tensor for each class
+        >>> nndb.add_data(data)
+        >>> nndb.update_attr(true, 100)
+        """
 
         # Initialize db related fields
         self.init_db_fields__();
@@ -195,7 +224,7 @@ class NNdb(object):
         # Set class start, and class counts of nndb
         if (is_new_class):
              # Set class start(s) of self, dynamic expansion
-            cls_st = self.n
+            cls_st = self.n - sample_n # start of the most recent item addition
             self.cls_st = np.array([], dtype='uint32') if (self.cls_st is None) else self.cls_st
             self.cls_st = np.concatenate((self.cls_st, np.array([cls_st], dtype='uint32')))
 
@@ -208,7 +237,7 @@ class NNdb(object):
             self.n_per_class = np.concatenate((self.n_per_class, np.array([n_per_class], dtype='uint16')))
 
         # Increment the n_per_class current class
-        self.n_per_class[-1] = self.n_per_class[-1] + 1
+        self.n_per_class[-1] = self.n_per_class[-1] + sample_n
 
         # Set class label of self, dynamic expansion
         cls_lbl = self.cls_n - 1 
@@ -221,10 +250,11 @@ class NNdb(object):
         Parameters
         ----------
         si : int
-            Sample index.
+            Sample index or range.
         """
+
         # Error handling for arguments
-        assert(si <= self.n)
+        assert(np.all(si <= self.n))
 
         # Get data according to the format
         if (self.format == Format.H_W_CH_N):
@@ -252,41 +282,123 @@ class NNdb(object):
         """
         # Add data according to the format (dynamic allocation)
         if (self.format == Format.H_W_CH_N):
-            data = data[:, :, :, None]
+            data = data[:, :, :, None] if (data.ndim == 3) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=3)
 
         elif (self.format == Format.H_N):
-            data = data[:, None]
+            data = data[:, None] if (data.ndim == 1) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=1)
 
         elif (self.format == Format.N_H_W_CH):
-            data = data[None, :, :, :]
+            data = data[None, :, :, :] if (data.ndim == 3) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=0)
             
         elif (self.format == Format.N_H):
-            data = data[None, :]
+            data = data[None, :] if (data.ndim == 1) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=0)
 
-    def get_features(self, cls_lbl=None):
-        """Get the 2D feature matrix.
+    def features_to_data(self, features, h=None, w=None, ch=None, dtype=None):
+        """Converts the feature matrix to `self` compatible data format and type.
+        
+        Parameters
+        ----------
+        features : `array_like`
+            2D feature matrix (double) compatible for matlab. (F_SIZE x SAMPLES)
+
+        h : int, optional under conditions
+            height to be used when self.db = None.  
+
+        w : int, optional under conditions
+            width to be used when self.db = None.   
+
+        ch : int, optional under conditions
+            no of channels to be used when self.db = None.   
+
+        dtype : int, optional under conditions
+            data type to be used when self.db = None. 
+        """
+                  
+        assert((self.db is None and not (h is None or w is None or ch is None or dtype is None)) or \
+                not (self.db is None))
+      
+        if (not (self.db is None)):
+            h = self.h
+            w = self.w
+            ch = self.ch
+            dtype = self.db.dtype
+
+        # Sample count
+        n = features.shape[1]
+
+        # Add data according to the format (dynamic allocation)
+        if (self.format == Format.H_W_CH_N):
+            data = features.reshape((h, w, ch, n))\
+                             .astype(dtype)
+
+        elif (self.format == Format.H_N):
+            data = data.astype(dtype)
+
+        elif (self.format == Format.N_H_W_CH):
+            data = features.reshape((h, w, ch, n))\
+                             .astype(dtype)
+            data = data.transpose(3, 0, 1, 2)
+
+        elif (self.format == Format.N_H):
+            data = np.transpose(data).astype(dtype)
+                    
+        return data        
+
+    def get_features(self, cls_lbl=None, norm=None):
+        """Get normalized 2D feature matrix for specified class labels.
 
         Parameters
         ----------
         cls_lbl : scalar, optional
             Class index array. (Default value = None).
-
+            
+        norm : string, optional
+            'l1', 'l2', 'max', normlization for each column. (Default value = None).
+            
         Returns
         -------
-        features : array_like -double
-            2D Feature Matrix (double)
+        `array_like`
+            2D feature matrix. (double)
         """
+
         features = np.reshape(self.db, (self.h * self.w * self.ch, self.n)).astype('double')  # noqa: E501
 
         # Select class
         if (cls_lbl is not None):
             features = features[:, self.cls_lbl == cls_lbl]
 
+        if (norm is not None):
+            from sklearn.preprocessing import normalize
+            features = normalize(features, axis=0, norm=norm)
+
         return features
+        
+    def get_features_mean_diff(self, cls_lbl=None, m=None):
+        """Get the 2D feature mean difference matrix for specified class labels and mean.
+
+        Parameters
+        ----------
+        cls_lbl : scalar, optional
+            Class index array. (Default value = None).
+
+        m : `array_like`, optional
+            Mean vector to calculate feature mean difference. (Default value = None).
+
+        Returns
+        -------
+        obj:`tuple`
+            (2D feature difference matrix, Calculated mean)
+        """
+
+        features = self.get_features(cls_lbl)
+        if (m is None): m = np.mean(features, 1)
+        
+        features = features - np.tile(m, (1, self.n))
+        return (features, m)        
 
     def set_db(self, db, n_per_class, build_cls_lbl, cls_lbl, format):
         """Set database and update relevant instance variables.
@@ -402,7 +514,7 @@ class NNdb(object):
         
         return NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format)  # noqa: E501
 
-    def show_ws(self, cls_n=None, n_per_class=None, resize=None, offset=None, ws=None):
+    def show_ws(self, cls_n=None, n_per_class=None, resize=None, offset=0, ws=None, title=None):
         """Visualize the db in a image grid.
 
         Parameters
@@ -428,14 +540,17 @@ class NNdb(object):
             width  = 5;                    # whitespace in width, x direction (0 = no whitespace)  
             color  = 0 or 255 or [R G B];  # (255 = white)
 
+        title : string, optional 
+            figure title, (Default value = None)
+
         Examples
         --------
-        Show first 5 subjects with 8 images per subject. (offset = 1)
-        >>>.Show(5, 8)
+        Show first 5 subjects with 8 images per subject. (offset = 0)
+        >>> nndb.show(5, 8)
 
         Show next 5 subjects with 8 images per subject,
-        starting at (5*8 + 1)th image.
-        >>>.Show(5, 8, [], 5*8 + 1)
+        starting at (5*8)th image.
+        >>> nndb.show_ws(5, 8, offset=5*8)
         """
     
         # Set the defaults
@@ -443,29 +558,9 @@ class NNdb(object):
         if not ('height' in ws): ws['height'] = 5
         if not ('width' in ws): ws['width'] = 5
         if not ('color' in ws): ws['color'] = (255, 255, 255) if (self.ch > 1)  else (255)
+        immap(self.db_scipy, rows=cls_n, cols=n_per_class, scale=resize, offset=offset, ws=ws, title=title)
 
-        if (cls_n is None and
-                n_per_class is None and
-                resize is None and
-                offset is None):
-            immap(self.db_scipy, 1, 1, None, 0, ws)
-
-        elif (n_per_class is None and
-                resize is None and
-                offset is None):
-            immap(self.db_scipy, cls_n, 1, None, 0, ws)
-
-        elif (resize is None and
-                offset is None):
-            immap(self.db_scipy, cls_n, n_per_class, None, 0, ws)
-
-        elif (offset is None):
-            immap(self.db_scipy, cls_n, n_per_class, resize, 0, ws)
-        
-        else:
-            immap(self.db_scipy, cls_n, n_per_class, resize, offset, ws)
-
-    def show(self, cls_n=None, n_per_class=None, resize=None, offset=None):
+    def show(self, cls_n=None, n_per_class=None, resize=None, offset=0, title=None):
         """Visualize the db in a image grid.
 
         Parameters
@@ -482,35 +577,19 @@ class NNdb(object):
         offset : int, optional
             Image index offset to the dataset. (Default value = None).
 
+        title : string, optional 
+            figure title, (Default value = None)
+
         Examples
         --------
-        Show first 5 subjects with 8 images per subject. (offset = 1)
-        >>>.Show(5, 8)
+        Show first 5 subjects with 8 images per subject. (offset = 0)
+        >>> nndb.show(5, 8)
 
         Show next 5 subjects with 8 images per subject,
-        starting at (5*8 + 1)th image.
-        >>>.Show(5, 8, [], 5*8 + 1)
-        """
-        if (cls_n is None and
-                n_per_class is None and
-                resize is None and
-                offset is None):
-            immap(self.db_scipy, 1, 1)
-
-        elif (n_per_class is None and
-                resize is None and
-                offset is None):
-            immap(self.db_scipy, cls_n, 1)
-
-        elif (resize is None and
-                offset is None):
-            immap(self.db_scipy, cls_n, n_per_class)
-
-        elif (offset is None):
-            immap(self.db_scipy, cls_n, n_per_class, resize)
-
-        else:
-            immap(self.db_scipy, cls_n, n_per_class, resize, offset)
+        starting at (5*8)th image.
+        >>> nndb.show_ws(5, 8, offset=5*8)
+        """        
+        immap(self.db_scipy, rows=cls_n, cols=n_per_class, scale=resize, offset=offset, title=title)
        
     def save(self, filepath):
         """Save images to a matfile. 
@@ -627,7 +706,6 @@ class NNdb(object):
             # hold off
             plt.show()
 
-
     ##########################################################################
     # Private Interface
     ##########################################################################
@@ -730,6 +808,14 @@ class NNdb(object):
         """2D feature matrix (double) compatible for matlab."""                
         return self.db_matlab.reshape((self.h * self.w * self.ch, self.n))\
                  .astype('double')
+
+    @property
+    def zero_to_one(self):
+        """db converted to 0-1 range. database data type will be converted to double."""                
+
+        # Construct a new object
+        return NNdb(self.name + ' (0-1)', np.double(self.db)/255, self.n_per_class, false, self.cls_lbl, self.format)
+
     @property
     def im_ch_axis(self):
         """Get image channel index for an image.
