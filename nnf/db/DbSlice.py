@@ -391,9 +391,15 @@ class DbSlice(object):
         nndb = NNdb('original', imdb_8, 8, true)
         sel.tr_col_indices        = [1:3 7:8] #[1 2 3 7 8]
         sel.tr_noise_rate         = None
+        sel.tr_occlusion_rate     = None
+        sel.tr_occlusion_type     = None
+        sel.tr_occlusion_offset   = None
         sel.tr_out_col_indices    = None
-        sel.tr_cm_col_indices     = None
+        sel.val_col_indices       = None
+        sel.val_out_col_indices   = None
         sel.te_col_indices        = [4:6] #[4 5 6]
+        sel.te_out_col_indices    = None
+        sel.nnpatches             = None
         sel.use_rgb               = False
         sel.color_indices         = None
         sel.use_real              = False
@@ -402,9 +408,11 @@ class DbSlice(object):
         sel.histeq                = True
         sel.histmatch_col_index   = None
         sel.class_range           = [1:36 61:76 78:100]
-        #sel.pre_process_script   = @custom_pprocess
+        sel.val_class_range       = None
+        sel.te_class_range        = None
+        #sel.pre_process_script   = fn_custom_pprocess
         sel.pre_process_script    = None
-        [nndb_tr, _, nndb_te, _]  = DbSlice.slice(nndb, sel)
+        [nndb_tr, _, nndb_te, _, _, _, _]  = DbSlice.slice(nndb, sel)
 
         Parameters
         ----------
@@ -553,7 +561,7 @@ class DbSlice(object):
 
         #
         # Select 1st 2nd 4th images of each identity for training +
-        #               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right) of varying degree. # noqa E501
+        #               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right, 'h':horizontal, 'v':vertical) of varying degree. # noqa E501
         #               default occlusion type: 'b'.
         nndb = NNdb('original', imdb, im_per_class, True)
         sel = Selection()
@@ -646,7 +654,11 @@ class DbSlice(object):
         nndb_te.show(10,2)
 
     @staticmethod
-    def get_occlusion_patch(h, w, dtype, occl_type, occl_rate, occl_offset=0):
+    def get_occlusion_patch(h, w, dtype, occl_type, occl_rate, occl_offset=None):
+
+        # Set defaults for arguments
+        if (occl_offset is None): occl_offset = 0
+
         filter = np.ones((h, w))
         filter = filter.astype(dtype)
 
@@ -664,14 +676,14 @@ class DbSlice(object):
             if (st < 0): st = 1
             filter[0:h, st:en] = 0
 
-        elif (occl_type == 't'):
+        elif (occl_type == 't' or occl_type == 'v'):
             sh = math.floor(occl_rate * h)
             st = math.floor(occl_offset * h)
             en = st + sh
             if (en > h): en = h
             filter[st:en, 0:w] = 0
 
-        elif (occl_type == 'l'):
+        elif (occl_type == 'l' or occl_type == 'h'):
             sh = math.floor(occl_rate * w)
             st = math.floor(occl_offset * w)
             en = st + sh
@@ -772,8 +784,7 @@ class DbSlice(object):
             if (ch >= 3):
                 if (sel.color_indices is not None):
                     img = img[:, :, sel.color_indices]
-                else:
-                    
+                else:                    
                     img = rgb2gray(img, img.dtype, keepDims=True)
 
         return img
