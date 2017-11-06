@@ -193,6 +193,97 @@ class NNdb(object):
 
         nndb = NNdb('merged', db, None, False, cls_lbl, format=self.format)
         return nndb
+        
+    def concat_features(self, nndb):
+        # AUGMENT_FEATURES: augment `nndb` instance with `self` instance.
+        #   Both `nndb` and self instances must be in the format Format.H_N or Format.N_H (2D databases)
+        # 
+        # Parameters
+        # ----------
+        # nndb : :obj:`NNdb`
+        #     NNdb object that represents the dataset.
+        #
+                    
+        assert(self.n == nndb.n)
+        assert(isequal(self.n_per_class, nndb.n_per_class))
+        assert(self.cls_n == nndb.cls_n)
+        assert(self.db.dtype == nndb.db.dtype)
+        assert(self.format == nndb.format)
+        assert(self.format == Format.H_N or self.format == Format.N_H)
+                        
+        if (self.format == Format.H_N):
+            db = np.concatenate((self.db, nndb.db), axis=0)
+            
+        elif (self.format == Format.N_H):
+            db = np.concatenate((self.db, nndb.db), axis=1)
+                        
+        return NNdb('features_augmented', db, self.n_per_class, true, [], self.format)
+        
+    def convert_format(self, format, h, w, ch):
+        """Convert the format of this `nndb` object to target format.
+            h, w, ch are conditionally optional, used only when converting 2D nndb to 4D nndb
+            formats.
+
+        Parameters
+        ----------
+        format : nnf.db.Format
+            Target format of the database.
+            
+        h : int, optional under conditions
+            height to be used when converting from Format.H_N to Format.H_W_CH_N.
+             
+        w : int, optional under conditions
+            width to be used when converting from Format.H_N to Format.H_W_CH_N.
+            
+        ch : int, optional under conditions
+            channels to be used when converting from Format.H_N to Format.H_W_CH_N.
+        """
+                                    
+        # Fetch datatype
+        dtype = self.db.dtype
+            
+        if (self.format == Format.H_W_CH_N or self.format == Format.N_H_W_CH):
+            if (format == Format.H_N):
+                self.db = cast(self.features, dtype)
+                self.h = size(self.db, 1)
+                self.w = 1
+                self.ch = 1
+                    
+            elif (format == Format.N_H):
+                self.db = np.transpose(self.features).astype(dtype)
+                self.h = size(self.db, 2)
+                self.w = 1
+                self.ch = 1
+                    
+            elif (format == Format.H_W_CH_N):
+                self.db = self.db_matlab
+                
+            elif (format == Format.N_H_W_CH):
+                self.db = self.db_scipy
+                            
+            self.format = format
+                
+        elif (self.format == Format.H_N or self.format == Format.N_H):
+                
+            if (format == Format.H_W_CH_N):
+                self.db = reshape(self.db_matlab, h, w, ch, self.n)
+                self.h = h
+                self.w = w
+                self.ch = ch
+                
+            elif (format == Format.N_H_W_CH):
+                self.db = reshape(self.db_matlab, self.n, h, w, ch)
+                self.h = h
+                self.w = w
+                self.ch = ch
+                    
+            elif (format == Format.H_N):
+                self.db = self.db_matlab
+                    
+            elif (format == Format.N_H):
+                self.db = self.db_scipy
+                            
+            self.format = format
 
     def update_attr(self, is_new_class, sample_n=1):
         """Update self attributes. Used when building the nndb dynamically.
@@ -219,7 +310,7 @@ class NNdb(object):
         """
 
         # Initialize db related fields
-        self.init_db_fields__();
+        self.init_db_fields__()
 
         # Set class start, and class counts of nndb
         if (is_new_class):
@@ -299,7 +390,8 @@ class NNdb(object):
 
     def features_to_data(self, features, h=None, w=None, ch=None, dtype=None):
         """Converts the feature matrix to `self` compatible data format and type.
-        
+            h, w, ch, dtype are conditionally optional, used only when self.db = None.
+
         Parameters
         ----------
         features : `array_like`
@@ -615,9 +707,9 @@ class NNdb(object):
         """                        
         # Make a new directory to save images
         if (~isempty(path) and not os.path.exists(path)):
-            mkdir(path);
+            mkdir(path)
                     
-        img_i = 1;
+        img_i = 1
         for cls_i in range(self.cls_n):
 
             cls_name = str(cls_i)
