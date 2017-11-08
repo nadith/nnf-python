@@ -42,27 +42,44 @@ imdb_obj = matStruct['imdb_obj']
 
 ## Augment database with random transformation ###############################
 ##############################################################################
-#from nnf.utl.imaugment import *
 
-##1: Initialize pre-processing params for random transfomations
+##1: Augment with linear transformations.
+## Initialize transformation related params for random transfomations
+#from nnf.db.NNdb import NNdb
+#from nnf.utl.ImageAugment import ImageAugment
 #pp_params = {}
-#pp_params['rotation_range'] = 50
-#nndb_aug = imaugment(filepath, pp_params, 3)
-#nndb_aug.show(10, 8)
+##pp_params['rotation_range'] = 2
+#pp_params['width_shift_range'] = 0.04
+##pp_params['force_horizontal_flip'] = True
+#nndb = NNdb('Original', imdb_obj.db, 8, True)
+#nndb_aug = ImageAugment.linear_transform(nndb, pp_params, 1)
+#nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
+#nndb_aug.save('IMDB_66_66_AR_8_LTRFM_WSHIFT.mat')
 
-##2: To enforce each image to have the same transformation in both rounds
+##1.1: To enforce each image to have the same transformation in both rounds
 #pp_params = {}
 #pp_params['rotation_range'] = 50
 #pp_params['random_transform_seed'] = 10
-#nndb_aug = imaugment(filepath, pp_params, 2)
-#nndb_aug.show(10, 8)
+#nndb_aug = ImageAugment.linear_transform(nndb, pp_params, 2)
+#nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
 
-##3: To enforce each image to have the same transformation within a round
+##1.2: To enforce each image to have the same transformation within a round
 #pp_params = {}
 #pp_params['rotation_range'] = 50
 #pp_params['random_transform_seed'] = [10, 20] # two rounds, two seeds
-#nndb_aug = imaugment(filepath, pp_params, 2)
-#nndb_aug.show(10, 8)
+#nndb_aug = ImageAugment.linear_transform(nndb, pp_params, 2)
+#nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
+
+##2: Augment with gaussian data generation.
+#from nnf.db.NNdb import NNdb
+#from nnf.utl.ImageAugment import ImageAugment
+#nndb = NNdb('Original', imdb_obj.db, 8, True)
+#info = {}
+#info['noise_ratio'] = 0.05
+#info['samples_per_class'] = 8
+#nndb_aug = ImageAugment.gauss_data_gen(nndb, info)
+#nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
+#nndb_aug.save('IMDB_66_66_AR_8_GTRFM_0.05.mat')
 
 ## Database Slicing ###########################################################
 ###############################################################################

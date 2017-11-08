@@ -76,9 +76,10 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
                     struct_as_record=False, squeeze_me=True)
     >>> imdb_obj = matStruct['imdb_obj']
     >>>
-    >>> from Database.NNDb import NNDb
-    >>> nndb = NNDb('Original', db, 8)
-    >>> nntr, _, _ = DbSlice.slice(nndb)
+    >>> from nnf.db.NNdb import NNdb
+    >>> from nnf.db.DbSlice import DbSlice
+    >>> nndb = NNdb('Original', db, 8)
+    >>> nntr, _, _, _, _, _, _ = DbSlice.slice(nndb, sel)
     >>> from nnf.db.immap import *
     >>> immap(nntr.imdb_s, rows=5, cols=8)
 

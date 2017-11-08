@@ -106,7 +106,7 @@ class DAERegCfg(DAEPreCfg):
     """Training configuration for deep regr. autoencoder network."""
 
     def __init__(self, arch=[1089, 784, 512, 256, 128, 1089], 
-                        act_fns=['input', 'sigmoid', 'sigmoid', 'sigmoid', 'sigmoid', 'sigmoid'],
+                        act_fns=['input', 'sigmoid', 'sigmoid', 'sigmoid', 'sigmoid', 'linear'],
                         lp=['input', 'dr', 'dr', 'dr', 'rg', 'output'],
                         preloaded_db=None):
         super().__init__(arch, act_fns, preloaded_db)
