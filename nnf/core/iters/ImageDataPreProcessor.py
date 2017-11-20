@@ -68,6 +68,7 @@ class ImageDataPreProcessor(ImageDataGenerator):
 
         #if (self.mapminmax_setting is not None):
         #    x = mapminmax('apply', x, self.mapminmax_setting)
+        return x
 
     def fit(self, X,
             augment=False,
