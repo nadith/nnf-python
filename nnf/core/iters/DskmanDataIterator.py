@@ -12,6 +12,7 @@ from abc import ABCMeta, abstractmethod
 from warnings import warn as warning
 from enum import Enum
 import numpy as np
+import warnings
 
 # Local Imports
 from nnf.core.iters.DataIterator import DataIterator
@@ -53,6 +54,9 @@ class DskmanDataIterator(DataIterator):
     -----
     Union operations may result in ommitting duplicate entries in class ranges or 
     column ranges. This is addressed in the code.        
+
+    Perf for col_ranges and cls_ranges done since the lookup is performed on
+    sorted cls_range and col_range. Ref: filter_datasets_by_cls_col_idx(...)
     """
     __metaclass__ = ABCMeta
 
@@ -146,7 +150,7 @@ class DskmanDataIterator(DataIterator):
         self.col_ranges_max = _ranges_max(col_ranges)
 
         # Build union of ranges
-        def _union_range(ranges):            
+        def _union_range(ranges, name):            
             union = np.array([])
             for range in ranges:
                 # range can be None or enum-Select.ALL|... or numpy.array([])
@@ -157,6 +161,12 @@ class DskmanDataIterator(DataIterator):
                     if (isinstance(range, Enum)):
                         union = range
                         return union
+
+                    # Issue a warning if user-required order is going to be altered
+                    tmp = sort(range)
+                    if (not np.array_equal(tmp, range)):
+                        warnings.warn('%s %s is is not in sorted order.' % Dataset.str(Dataset.enum(ri)), name)
+
                     union = np.uint16(np.union1d(union, range))
 
                 else:
@@ -165,13 +175,19 @@ class DskmanDataIterator(DataIterator):
                         if (isinstance(range_vec, Enum)):
                             union = range_vec
                             return union
+
+                        # Issue a warning if user-required order is going to be altered
+                        tmp = sort(range_vec)
+                        if (not np.array_equal(tmp, range_vec)):
+                            warnings.warn('%s %s is is not in sorted order.' % Dataset.str(Dataset.enum(ri)), name)
+
                         union = np.uint16(np.union1d(union, range_vec))
 
             return union
 
         # Union of all class ranges and column ranges
-        self.union_cls_range = _union_range(cls_ranges)
-        self.union_col_range = _union_range(col_ranges)
+        self.union_cls_range = _union_range(cls_ranges, 'Class Range')
+        self.union_col_range = _union_range(col_ranges, 'Col Range')
 
         # INHERITED: Used in __next__() to utilize the generator with yield
         self._gen_next = self.__next()
