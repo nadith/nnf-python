@@ -9,6 +9,7 @@
 # -*- coding: utf-8 -*-
 # Global Imports
 import os
+import scipy
 import scipy.io
 import numpy as np
 from warnings import warn as warning
@@ -82,6 +83,7 @@ class NNdb(object):
     Database with given class labels
     >>> nndb = NNdb('any_name', imdb, [4 3], False, [1 1 1 1 2 2 2])
     """
+
     ##########################################################################
     # Public Interface
     ##########################################################################
@@ -131,78 +133,70 @@ class NNdb(object):
         # Set values for instance variables
         self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, format)
 
-    def merge(self,nndb):
+    def merge(self, nndb):
         """Merge `nndb` instance with `self` instance.
+            Note: Merge can be done with a empty nndb as well.
 
+        Parameters
+        ----------
+        nndb : :obj:`NNdb`
+            NNdb object that represents the data set.
+        """
+
+        if (self.db is not None and nndb.db is not None):
+            assert(self.h == nndb.h and self.w == nndb.w and self.ch == nndb.ch)
+            assert(self.cls_n == nndb.cls_n)
+            assert(self.db.dtype == nndb.db.dtype)
+            assert(self.format == nndb.format)
+
+        nndb_merged = None
+        format = self.format
+        cls_n = self.cls_n
+
+        if (self.db is not None):
+            if (nndb.db is None):
+                nndb_merged = self.clone('merged')
+            else:
+                cls_n =10
+
+
+        if (nndb.db is not None):
+            if (self.db is None):
+                nndb_merged = nndb.clone('merged')
+
+        if (self.db is None and nndb.db is None):
+            nndb_merged = self.clone('merged')
+
+        if (nndb_merged is None):
+            nndb_merged = NNdb('merged', format=format)
+
+            for i in range(0, cls_n):
+                
+                # Fetch data from db1
+                cls_st = self.cls_st[i]
+                cls_end = cls_st + np.uint32(self.n_per_class[i]) 
+                nndb_merged.add_data(self.get_data_at(np.arange(cls_st, cls_end)))
+
+                # Fetch data from db2
+                cls_st = nndb.cls_st[i]
+                cls_end = cls_st + np.uint32(nndb.n_per_class[i]) 
+                nndb_merged.add_data(nndb.get_data_at(np.arange(cls_st, cls_end)))
+
+                # Update related paramters after adding data in the above step
+                nndb_merged.update_attr(True, self.n_per_class[i] + nndb.n_per_class[i])
+
+        return nndb_merged
+        
+    def concat_features(self, nndb):
+        """Concat `nndb` instance features with `self` instance features.
+            Both `nndb` and self instances must be in the format Format.H_N 
+            or Format.N_H (2D databases)
+         
         Parameters
         ----------
         nndb : :obj:`NNdb`
             NNdb object that represents the dataset.
         """
-        assert(self.h == nndb.h and self.w == nndb.w and self.ch == nndb.ch)
-        assert(self.cls_n == nndb.cls_n)
-        assert(self.db.dtype == nndb.db.dtype)
-        assert(self.format == nndb.format)
-
-        if (self.format == Format.H_W_CH_N):
-            db = np.zeros((self.h, self.w, self.ch, (self.n + nndb.n)), dtype=self.db.dtype)
-        elif (self.format == Format.H_N):
-            db = np.zeros((self.h * self.w * self.ch, (self.n + nndb.n)), dtype=self.db.dtype) 
-        elif (self.format == Format.N_H_W_CH):
-            db = np.zeros(((self.n + nndb.n), self.h, self.w, self.ch), dtype=self.db.dtype)
-        elif (self.format == Format.N_H):
-            db = np.zeros(((self.n + nndb.n), self.h * self.w * self.ch), dtype=self.db.dtype) 
-        
-        cls_lbl =  np.zeros((self.n + nndb.n), dtype='uint16')
-        en = 0
-        for i in range(0, self.cls_n):
-            
-            # Fetch data from db1
-            cls_st = self.cls_st[i]
-            cls_end = cls_st + np.uint32(self.n_per_class[i]) 
-            
-            st = en 
-            en = st + self.n_per_class[i]
-            cls_lbl[st:en] = np.uint16(i) * np.ones(self.n_per_class[i], dtype='uint16')
-
-            if (self.format == Format.H_W_CH_N):
-                db[:, :, :, st:en] = self.db[:, :, :, cls_st:cls_end]
-            elif (self.format == Format.H_N):
-                db[:, st:en] = self.db[:, cls_st:cls_end]
-            elif (self.format == Format.N_H_W_CH):
-                db[st:en, :, :, :] = self.db[cls_st:cls_end, :, :, :]
-            elif (self.format == Format.N_H):
-                db[st:en, :] = self.db[cls_st:cls_end, :]  
-         
-            # Fetch data from db2
-            cls_st = nndb.cls_st[i]
-            cls_end = cls_st + np.uint32(nndb.n_per_class[i]) 
-            
-            st = en 
-            en = st + nndb.n_per_class[i]
-            cls_lbl[st:en] = np.uint16(i) * np.ones(nndb.n_per_class[i], dtype='uint16')
-
-            if (self.format == Format.H_W_CH_N):
-                db[:, :, :, st:en] = nndb.db[:, :, :, cls_st:cls_end]
-            elif (self.format == Format.H_N):
-                db[:, st:en] = nndb.db[:, cls_st:cls_end]
-            elif (self.format == Format.N_H_W_CH):
-                db[st:en, :, :, :] = nndb.db[cls_st:cls_end, :, :, :]
-            elif (self.format == Format.N_H):
-                db[st:en, :] = nndb.db[cls_st:cls_end, :]               
-
-        nndb = NNdb('merged', db, None, False, cls_lbl, format=self.format)
-        return nndb
-        
-    def concat_features(self, nndb):
-        # AUGMENT_FEATURES: augment `nndb` instance with `self` instance.
-        #   Both `nndb` and self instances must be in the format Format.H_N or Format.N_H (2D databases)
-        # 
-        # Parameters
-        # ----------
-        # nndb : :obj:`NNdb`
-        #     NNdb object that represents the dataset.
-        #
                     
         assert(self.n == nndb.n)
         assert(isequal(self.n_per_class, nndb.n_per_class))
@@ -239,7 +233,7 @@ class NNdb(object):
         return self
            
     def convert_format(self, format, h, w, ch):
-        """Convert the format of this `nndb` object to target format.
+        """Convert the format of this `nndb` object to target format.            
             h, w, ch are conditionally optional, used only when converting 2D nndb to 4D nndb
             formats.
 
@@ -303,6 +297,8 @@ class NNdb(object):
                 self.db = self.db_scipy
                             
             self.format = format
+
+        return self
 
     def update_attr(self, is_new_class, sample_n=1):
         """Update self attributes. Used when building the nndb dynamically.
@@ -501,15 +497,20 @@ class NNdb(object):
 
         Returns
         -------
-        obj:`tuple`
-            (2D feature difference matrix, Calculated mean)
+        nndb : :obj:`NNdb`
+            NNdb object (Format.H_N) that represents the mean-diff dataset.
+            
+        m : `array_like` -double
+                Calculated mean.
         """
 
         features = self.get_features(cls_lbl)
         if (m is None): m = np.mean(features, 1)
         
-        features = features - np.tile(m, (1, self.n))
-        return (features, m)        
+        features = features - np.tile(m, (1, self.n))        
+        nndb = NNdb(self.name + ' (mean-diff)', features, self.n_per_class, false, self.cls_lbl, Format.H_N)
+
+        return (nndb, m)
 
     def set_db(self, db, n_per_class, build_cls_lbl, cls_lbl, format):
         """Set database and update relevant instance variables.
@@ -556,7 +557,7 @@ class NNdb(object):
             _, n_per_class =  np.unique(cls_lbl, return_counts=True)
 
         # Set defaults for instance variables
-        self.db = db; self.format = format  # noqa: E701, 702
+        self.db = db; self.format = format; self.build_cls_lbl = build_cls_lbl  # noqa: E701, 702
         self.h = 0; self.w = 1; self.ch = 1; self.n = 0  # noqa: E701, 702
         self.n_per_class = n_per_class
         self.cls_st = None
@@ -622,8 +623,10 @@ class NNdb(object):
 
     def clone(self, name):
         """Create a copy of this NNdb object."""
-        
-        return NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format)  # noqa: E501
+        if (self.cls_lbl is not None):
+            return NNdb(name, self.db, self.n_per_class, False, self.cls_lbl, self.format)  # noqa: E501
+        else:
+            return NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format)  # noqa: E501
 
     def show_ws(self, cls_n=None, n_per_class=None, resize=None, offset=0, ws=None, title=None):
         """Visualize the db in a image grid.
@@ -713,38 +716,38 @@ class NNdb(object):
         imdb_obj = {'db': self.db_matlab, 'class' : self.cls_lbl, 'im_per_class' : self.n_per_class}
         scipy.io.savemat(filepath, {'imdb_obj': imdb_obj})
  
-    def save_to_dir(self, path, create_cls_dir=True):
+    def save_to_dir(self, dirpath, create_cls_dir=True):
         """Save images to a directory. 
 
         Parameters
         ----------
-        path : string
+        dirpath : string
             Path to directory.
 
         create_cls_dir : bool, optional
             Create directories for individual classes. (Default value = True).
         """                        
         # Make a new directory to save images
-        if (~isempty(path) and not os.path.exists(path)):
-            mkdir(path)
+        if (~isempty(dirpath) and not os.path.exists(dirpath)):
+            mkdir(dirpath)
                     
         img_i = 1
         for cls_i in range(self.cls_n):
 
             cls_name = str(cls_i)
-            if (create_cls_dir and not os.path.exists(os.path.join(path, cls_name))):
-                 os.makedirs(os.path.join(path, cls_name))          
+            if (create_cls_dir and not os.path.exists(os.path.join(dirpath, cls_name))):
+                 os.makedirs(os.path.join(dirpath, cls_name))          
 
             for cls_img_i in range(self.n_per_class[cls_i]):
                 if (create_cls_dir):
                     img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True);
                     fname = '{img_name}.jpg'.format(img_name=str(cls_img_i))
-                    img.save(os.path.join(path, cls_name, fname))
+                    img.save(os.path.join(dirpath, cls_name, fname))
 
                 else:
                     img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True);
                     fname = '{cls_name}_{cls_img_index}.jpg'.format(cls_name=cls_name, cls_img_index=str(cls_img_i))
-                    img.save(os.path.join(path, fname))
+                    img.save(os.path.join(dirpath, fname))
                     
                 img_i = img_i + 1;
 
@@ -884,7 +887,7 @@ class NNdb(object):
         
         # N x CH x H x W
         if (self.format == Format.N_H_W_CH or self.format == Format.H_W_CH_N):
-            return self.db_scipy.transpose(0, 3, 1, 2)
+            return self.db_scipy.transpose((0, 3, 1, 2))
 
         # N x 1 x H x 1
         elif (self.format == Format.N_H or self.format == Format.H_N):
