@@ -34,6 +34,8 @@ class ImageDataGenerator(object):
             'constant'. Default is 0.
         horizontal_flip: whether to randomly flip images horizontally.
         vertical_flip: whether to randomly flip images vertically.
+        force_horizontal_flip: whether to flip images horizontally.
+        force_vertical_flip: whether to flip images vertically.
         rescale: rescaling factor. If None or 0, no rescaling is applied,
             otherwise we multiply the data by the value provided
             (before applying any other transformation).
@@ -65,6 +67,8 @@ class ImageDataGenerator(object):
             self.cval = 0.
             self.horizontal_flip = False
             self.vertical_flip = False
+            self.force_horizontal_flip = False
+            self.force_vertical_flip = False
             rescale = None
             preprocessing_function = None
             data_format = None
@@ -92,6 +96,8 @@ class ImageDataGenerator(object):
             self.cval = params['cval'] if ('cval' in params) else 0.
             self.horizontal_flip = params['horizontal_flip'] if ('horizontal_flip' in params) else False
             self.vertical_flip = params['vertical_flip'] if ('vertical_flip' in params) else False
+            self.force_horizontal_flip = params['force_horizontal_flip'] if ('force_horizontal_flip' in params) else False
+            self.force_vertical_flip = params['force_vertical_flip'] if ('force_vertical_flip' in params) else False
             rescale = params['rescale'] if ('rescale' in params) else None
             preprocessing_function = params['preprocessing_function'] if ('preprocessing_function' in params) else None
             data_format = params['data_format'] if ('data_format' in params) else None
@@ -270,10 +276,18 @@ class ImageDataGenerator(object):
                 x = flip_axis(x, img_col_index)
                 xt = None if (xt is None) else flip_axis(xt, img_col_index)
 
+        if self.force_horizontal_flip:            
+            x = flip_axis(x, img_col_index)
+            xt = None if (xt is None) else flip_axis(xt, img_col_index)
+
         if self.vertical_flip:
             if np.random.random() < 0.5:
                 x = flip_axis(x, img_row_index)
                 xt = None if (xt is None) else flip_axis(xt, img_row_index)
+
+        if self.force_vertical_flip:
+            x = flip_axis(x, img_row_index)
+            xt = None if (xt is None) else flip_axis(xt, img_row_index)
 
         # TODO:
         # channel-wise normalization
