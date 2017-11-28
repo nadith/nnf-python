@@ -218,7 +218,26 @@ class NNdb(object):
             db = np.concatenate((self.db, nndb.db), axis=1)
                         
         return NNdb('features_augmented', db, self.n_per_class, true, [], self.format)
-        
+    
+    def fliplr(self):
+        """Flip the image order in each class of this `nndb` object."""
+            
+        dtype = self.db.dtype
+        features = self.features
+        self.db = None
+
+        for i in range(self.cls_n):
+            cls_st = self.cls_st[i]
+            cls_end = cls_st + np.uint32(self.n_per_class[i])
+                             
+            tmp = features[:, cls_st:cls_end]
+            tmp = np.fliplr(tmp) # np.all(np.fliplr(A) == A[:,::-1,...])
+
+            # Add data according to the format (dynamic allocation)
+            self.add_data(self.features_to_data(tmp, self.h, self.w, self.ch, dtype))
+
+        return self
+           
     def convert_format(self, format, h, w, ch):
         """Convert the format of this `nndb` object to target format.
             h, w, ch are conditionally optional, used only when converting 2D nndb to 4D nndb
