@@ -797,6 +797,44 @@ class NNdb(object):
 
             # hold off
             plt.show()
+   
+    @staticmethod
+    def load_from_dir(dirpath, db_name='DB'):
+        """Load images from a directory. 
+
+        Parameters
+        ----------
+        dirpath : string
+            Path to directory of images sorted in folder per each class.
+            
+        db_name : string, optional
+            Name for the nndb object returned. (Default value = 'DB').
+        """
+
+        # Init empty NNdb to collect images
+        nndb = NNdb(db_name, format=Format.H_W_CH_N)
+        cls_names = [f for f in os.listdir(dirpath)]
+
+        # Iterator
+        for cls_name in cls_names:
+            cls_dir = os.path.join(dirpath, cls_name)
+            img_names = [f for f in os.listdir(cls_dir) if os.path.isfile(os.path.join(cls_dir, f))]
+            
+            is_new_class = True
+            for img_name in img_names:
+                # Only jpg files
+                # if img_name.endswith('.jpg'):
+                img = scipy.misc.imread(os.path.join(cls_dir, img_name))
+
+                if (img.ndim == 2):
+                    img = np.expand_dims(img, 2)
+
+                # Update NNdb
+                nndb.add_data(img)
+                nndb.update_attr(is_new_class)
+                is_new_class = False        
+
+        return nndb
 
     ##########################################################################
     # Private Interface
