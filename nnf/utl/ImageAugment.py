@@ -23,7 +23,6 @@ class ImageAugment(object):
     ##########################################################################
     @staticmethod
     def gauss_data_gen(nndb, info={}, merge=False):
-    # imaugment_gauss: Augment the dataset with centered gaussian at faces given in indices
         """Augment the dataset with centered gaussian at class mean or each image in the class.
 
         Parameters
@@ -41,6 +40,9 @@ class ImageAugment(object):
             - info['center_cls_mean'] = False   # Use class mean image centered gaussian
             - info['noise_ratio'] = 0.2         # Ratio from class std (ratio * class_std)
             - info['std'] = None                # Explicit defitnition of std ('noise_ratio' is ignored)
+
+        merge : bool
+            Merge the augmented database to `nndb` object.
         """
 
         if (not ('samples_per_class' in info)): info['samples_per_class'] = 2
@@ -108,10 +110,9 @@ class ImageAugment(object):
     @staticmethod
     def linear_transform(nndb, pp_params, im_per_class_multiples, merge=False):
         
-        # Load image database
-        #matStruct = scipy.io.loadmat(dbfilepath, struct_as_record=False, squeeze_me=True)
-        #imdb_obj = matStruct['imdb_obj']
-        #nndb = NNdb('Original', imdb_obj.db, imdb_obj.im_per_class, True)
+
+
+
 
         # Fetch X_train, scipy compatible (N x H x W x CH)
         X_train = nndb.db_scipy
