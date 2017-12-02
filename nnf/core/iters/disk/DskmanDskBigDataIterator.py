@@ -46,12 +46,12 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, db_pp_params, binary_data, target_size):
+    def __init__(self, pp_params, binary_data, target_size):
         """Construct a :obj:`DskmanDskBigDataIterator` instance.
 
         Parameters
         ----------
-        db_pp_params : :obj:`dict`
+        pp_params : :obj:`dict`
             Pre-processing parameters for :obj:`ImageDataPreProcessor`.
 
         binary_data : bool
@@ -60,7 +60,7 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         target_size : :obj:`tuple`, optional
             Data sample size. Used to load data from binary files.
         """
-        super().__init__(db_pp_params)
+        super().__init__(pp_params)
         
         # INHERITED: [Parent's Attirbutes] ------------------------
         # Class count, will be updated below
@@ -89,7 +89,7 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
     def init_params(self, db_dir, save_dir):
         """Initialize parameters for :obj:`DskmanDskDataIterator` instance.
 
-        .. warning:: DO NOT override init() method, since it is used to initialize the
+        .. warning:: DO NOT override init_ex() method, since it is used to initialize the
         :obj:`DskmanDataIterator` with essential information.
     
             Many data items are assumed to be stored in each file. No subdirectories
@@ -187,9 +187,9 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
     ##########################################################################
     # Protected: DskmanDskDataIterator Overrides
     ##########################################################################
-    def _release(self):
+    def release(self):
         """Release internal resources used by the iterator."""
-        super()._release()
+        super().release()
         self.close_all_opened_files()
 
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
@@ -205,7 +205,7 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
 
         Returns
         -------
-        `array_like`
+        ndarray
             Raw data item.
 
         :obj:`list`
@@ -217,53 +217,15 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         # Read the actual data only if necessary
         data = None
         if (self._read_data):
+
+            # Open the file and seek to fpos
             f = self.open_file(fpath)
             f.seek(fpos, 0)
 
+            # Read the content
             if (not self.binary_data):
                 data = f.readline().strip()
             else:
                 data = np.fromfile(f, dtype='float32', count=self.target_size[0])
 
         return data, [fpath, np.float32(fpos), np.uint16(cls_idx)]  # [fpath, fpos, cls_lbl]
-
-    def _is_valid_cls_idx(self, cls_idx):
-        """Check the validity of class index.
-
-        Parameters
-        ----------
-        cls_idx : int
-            Class index. Belongs to `union_cls_range`.
-
-        Returns
-        -------
-        bool
-            True if valid. False otherwise.
-        """
-        if (cls_idx >= self.cls_n):
-            warning('Class:'+ str(cls_idx) + ' is missing in the database')
-
-        return cls_idx < self.cls_n        
-
-    def _is_valid_col_idx(self, cls_idx, col_idx):
-        """Check the validity of column index of the class denoted by cls_idx.
-
-        Parameters
-        ----------
-        cls_idx : int
-            Class index. Belongs to `union_cls_range`.
-
-        col_idx : int
-            Column index. Belongs to `union_col_range`.
-
-        Returns
-        -------
-        bool
-            True if valid. False otherwise.
-        """
-        assert(cls_idx < self.cls_n)
-
-        if (col_idx >= self.n_per_class):
-            warning('Class:'+ str(cls_idx) + ' ImageIdx:' + str(col_idx) + ' is missing in the database')
-
-        return col_idx < self.n_per_class  # Assumption: each sample belongs to unique class

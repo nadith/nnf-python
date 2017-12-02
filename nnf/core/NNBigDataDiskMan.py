@@ -45,42 +45,36 @@ class NNBigDataDiskMan(NNDiskMan):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, sel, db_pp_params, nndb=None, db_dir=None, 
-                                                save_dir=None, iter_param=None):
+    def __init__(self, sel, dskman_param, nndb=None, save_dir=None):
         """Constructs :obj:`NNDiskMan` instance. 
 
-        Must call init() to intialize the instance.
+        Must call init_ex() to initialize the instance.
 
         Parameters
         ----------
         sel : :obj:`Selection`
             Information to split the dataset.
 
-        db_pp_param : :obj:`dict`
-            Pre-processing parameters for :obj:`ImageDataPreProcessor`.
+        dskman_param : :obj:`dict`, optional
+            Iterator parameters and Pre-processing parameters (keras) for iterators.
+            Iterator parameters are used in :obj:`NNBigDataDiskMan`
+            to handle binary files. (Default value = None).
+            See also :obj:`ImageDataPreProcessor`.
 
         nndb : :obj:`NNdb`, optional
-            Database to be processed against `sel` and `db_pp_params`.
-            Either `nndb` or `db_dr` must be provided. (Default value = None).
-
-        db_dir : str, optional
-            Path to the disk database. (Default value = None).
-            Either `nndb` or `db_dr` must be provided.
+            Database to be processed against `sel` and `_dskman_param['pp']`.
+            Either `nndb` or `dskman_param['db_dir']` must be provided. (Default value = None).
 
         save_dir : str, optional
             Path to save the processed data. (Default value = None).
-
-        iter_param : :obj:`dict`, optional
-            Iterator parameters. Currently used to handle binary files. 
-            (Default value = None).
         """
-        super().__init__(sel, db_pp_params, nndb, db_dir, save_dir, iter_param)
+        super().__init__(sel, dskman_param, nndb, save_dir)
         self._save_file = None   
         self.save_file_path = None
 
         # INHERITED: Iterator parameters
-        self.binary_data = self._iter_param['binary_data'] if ('binary_data' in self._iter_param) else False
-        self.target_size = self._iter_param['target_size'] if ('target_size' in self._iter_param) else None        
+        self.binary_data = self._dskman_param['binary_data'] if ('binary_data' in self._dskman_param) else False
+        self.target_size = self._dskman_param['target_size'] if ('target_size' in self._dskman_param) else None
 
     ##########################################################################
     # Public: NNDiskMan Overrides
@@ -96,12 +90,12 @@ class NNBigDataDiskMan(NNDiskMan):
     ##########################################################################
     # Protected: NNDiskMan Overrides
     ##########################################################################
-    def _create_dskman_dskdataiter(self, db_pp_params):
+    def _create_dskman_dskdataiter(self, pp_params):
         """Create the :obj:`DskmanDskBigDataIterator` instance to iterate the disk.
 
         Parameters
         ----------
-        db_pp_params : :obj:`dict`
+        pp_params : :obj:`dict`
             Pre-processing parameters for :obj:`ImageDataPreProcessor`.
 
         Returns
@@ -109,14 +103,14 @@ class NNBigDataDiskMan(NNDiskMan):
         :obj:`DskmanDskBigDataIterator`
             Diskman data iterator for disk database. 
         """
-        return DskmanDskBigDataIterator(db_pp_params, self.binary_data, self.target_size)
+        return DskmanDskBigDataIterator(pp_params, self.binary_data, self.target_size)
 
     def _extract_patch(self, raw_data, nnpatch):
         """Extract the image patch from the nnpatch.
 
         Parameters
         ----------
-        raw_data : `array_like`
+        raw_data : ndarray
             raw data.
  
         nnpatch : :obj:`NNPatch`
@@ -135,7 +129,7 @@ class NNBigDataDiskMan(NNDiskMan):
 
         Parameters
         ----------
-        pdata : `array_like` or str
+        pdata : ndarray or str
             Numpy array if the pdata is from in memory database or 
             binary file. string line otherwise.
 
@@ -166,7 +160,7 @@ class NNBigDataDiskMan(NNDiskMan):
             File position where the data is written.
         """
         if (self._save_file is None):
-            self.save_file_path = os.path.join(self._save_to_dir, 'processed_data.dat')
+            self.save_file_path = os.path.join(self.save_dir_abspath, 'processed_data.dat')
             self._save_file = open(self.save_file_path, 'wb')
 
         # Fetch the file position
@@ -175,7 +169,8 @@ class NNBigDataDiskMan(NNDiskMan):
         if (not self.binary_data):
             # Write to the file in ASCII format 
             pdata.tofile(self._save_file, sep=" ", format="%s")
-            self._save_file.write(str.encode('\n'))            
+            self._save_file.write(str.encode('\n'))
+
         else:
             # Write to the file in binary format
             pdata.tofile(self._save_file)

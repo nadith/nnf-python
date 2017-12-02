@@ -52,7 +52,7 @@ class DskDataIterator(DataIterator):
         super().__init__(pp_params, fn_gen_coreiter, edataset, nb_class)        
         self.frecords = frecords
 
-    def init(self, params=None): 
+    def init_ex(self, params=None):
         """Initialize the instance.
 
         Parameters
@@ -67,16 +67,16 @@ class DskDataIterator(DataIterator):
         i.e params.binary_data is unique and only used in
             BigDataDirectoryIterator(DskDataIterator)
         """
-        gen_next = self._imdata_pp.flow_from_directory(self.frecords,
-                                                        self._nb_class, 
-                                                        params)          
+        gen_next = self._imdata_pp.flow_from_directory_ex(self.frecords,
+                                                          self._nb_class,
+                                                          params)
         super().init(gen_next, params)
 
     def clone(self):
         """Create a copy of this NNdb object."""
         new_obj = DskDataIterator(self.edataset, self.frecords,
                     self._nb_class, self._pp_params, self._fn_gen_coreiter)
-        new_obj.init(self._params)
+        new_obj.init_ex(params=self._params)
         new_obj.sync(self._sync_gen_next)
         return new_obj
 
@@ -102,9 +102,9 @@ class DskDataIterator(DataIterator):
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def _release(self):
+    def release(self):
         """Release internal resources used by the iterator."""
-        super()._release()
+        super().release()
         del self.frecords
         del self._nb_class
         del self._pp_params

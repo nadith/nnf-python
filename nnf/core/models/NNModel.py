@@ -48,10 +48,10 @@ class NNModel(object):
     nnpatches : list of :obj:`NNPatch`
         Associated `nnpatches` with this model.
 
-    _iteratorstores : list of :obj:`tuple`
+    _iterstores : list of :obj:`tuple`
         Each tuple consists of `dict_iterstore` and `list_iterstore' for each `nnpatch`.
 
-    _list_save_to_dirs : list of :obj:`list`
+    _list_save_dirs : list of :obj:`list`
         List of paths to temporary directories for each user db-param of each `nnpatch`.
 
     _fns_predict_feature :
@@ -111,24 +111,24 @@ class NNModel(object):
             self.uid = uid
 
         # Initialize instance variables
-        # Iteartorstores format = [ (dict_iterstore, list_iterstore) for nnpatch_1, 
+        # iterstores format = [ (dict_iterstore, list_iterstore) for nnpatch_1,
         #                           (dict_iterstore, list_iterstore) for nnpatch_2
         #                           (dict_iterstore, list_iterstore) for nnpatch_3
         #                           (dict_iterstore, list_iterstore) for nnpatch_4
         #                           ...
         #                           ]
-        self._iteratorstores = []
+        self._iterstores = []
 
         # To save temporary encoded data
         # [ [folder_for_param_1_db, folder_for_param_2_db] for nnpatch_1]
         #   [folder_for_param_1_db, folder_for_param_2_db] for nnpatch_2]
         #   ...
         #   ]
-        self._list_save_to_dirs = []
+        self._list_save_dirs = []
 
         # Associated nnpatches with this model
-        # len(self._iteratorstores) == len(self.nnpatches)
-        # len(self._list_save_to_dirs) == len(self.nnpatches)
+        # len(self._iterstores) == len(self.nnpatches)
+        # len(self._list_save_dirs) == len(self.nnpatches)
         self.nnpatches = [] 
 
         # Core network model (keras).
@@ -189,7 +189,7 @@ class NNModel(object):
         
         # For models created inside another model and using preloaded dbs.
         # Ref:`DAEModel` creating `Autoencoder`
-        if (len(self._iteratorstores) == 0):            
+        if (len(self._iterstores) == 0):
             return self._train(cfg, patch_idx)
 
         self.__common_train_test_predict_routine(self._train, cfg, patch_idx, True)
@@ -265,6 +265,63 @@ class NNModel(object):
             __print_params(iterstore, Dataset.TR_OUT)
             __print_params(iterstore, Dataset.VAL_OUT)
             __print_params(iterstore, Dataset.TE_OUT)
+
+    ##########################################################################
+    # Public: For Neural Network Framework Building
+    ##########################################################################
+    def init_nnpatches(self):
+        """Generate and register `nnpatches` for this model.
+
+        Notes
+        -----
+        Invoked by :obj:`NNModelMan`.
+
+        Note
+        ----
+        Used only in Model Based Framework.
+        """
+        nnpatches = self._generate_nnpatches()
+        self.add_nnpatches(nnpatches)
+
+        # Assign this model to patch
+        for nnpatch in nnpatches:
+            nnpatch.add_model(self)
+
+    def add_nnpatches(self, nnpatches):
+        """Add `nnpatches` for this nnmodel.
+
+        Parameters
+        ----------
+        nnpatches : :obj:`NNPatch` or list of :obj:`NNPatch`
+            List of :obj:`NNPatch` instances.
+        """
+        if (isinstance(nnpatches, list)):
+            self.nnpatches = self.nnpatches + nnpatches
+        else:
+            self.nnpatches.append(nnpatches)
+
+    def add_iterstores(self, list_iterstore, dict_iterstore=None):
+        """Add dictionary and list of iterstores into a list indexed by `nnpatch` index.
+
+        Parameters
+        ----------
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictonary of iterstores for :obj:`DataIterator`.
+        """
+        self._iterstores.append((list_iterstore, dict_iterstore))
+
+    def add_save_dirs(self, dbparam_save_dirs):
+        """Add directory paths for each user dbparam into a list indexed by `nnpatch` index.
+
+        Parameters
+        ----------
+        dbparam_save_dirs : :obj:`list`
+            Paths to temporary directories for each user dbparam of each `nnpatch`.
+        """
+        self._list_save_dirs.append(dbparam_save_dirs)
 
     ##########################################################################
     # Protected Interface
@@ -403,7 +460,7 @@ class NNModel(object):
         pass
 
     ##########################################################################
-    # Protected Interface
+    # Protected:
     ##########################################################################
     def _clone_iter(self, iter):
         """Clone the iterator.
@@ -507,29 +564,29 @@ class NNModel(object):
             Patch's index in this model. (Default value = None).
 
         X_L : :obj:`tuple`
-            (`array_like` data tensor, labels).
+            (ndarray data tensor, labels).
             If the `nnmodel` is not expecting labels, set it to None.
 
-        Xt : `array_like`
+        Xt : ndarray
             Target data tensor. If the `nnmodel` is not expecting a 
             target data tensor, set it to None.
 
         X_L_val : :obj:`tuple`
-            (`array_like` validation data tensor, labels).
+            (ndarray validation data tensor, labels).
             If the `nnmodel` is not expecting labels, set it to None.
 
-        Xt_val : `array_like`
+        Xt_val : ndarray
             Target validation data tensor. If the `nnmodel` is not expecting a
             target validation data tensor, set it to None.
 
         X_gen : :obj:`DataIterator`
             Data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
 
         X_val_gen : :obj:`DataIterator`
             Validation data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
         """
         assert((X_L is not None) or (X_gen is not None))
@@ -566,13 +623,13 @@ class NNModel(object):
                 self.net.fit_generator(
                         X_gen, steps_per_epoch=cfg.steps_per_epoch,
                         epochs=cfg.numepochs, callbacks=cfg.callbacks,
-                        validation_data=X_val_gen, validation_steps=cfg.validation_steps) # callbacks=[self.cb_early_stop]
+                        validation_data=X_val_gen, validation_steps=cfg.validation_steps, verbose=2) # callbacks=[self.cb_early_stop]
             else:
                 self.net.fit_generator(
                         X_gen, steps_per_epoch=cfg.steps_per_epoch,
-                        epochs=cfg.numepochs, callbacks=cfg.callbacks)
+                        epochs=cfg.numepochs, callbacks=cfg.callbacks, verbose=2)
 
-    def _start_test(self, patch_idx=None, X_L_te=None, Xt_te=None, 
+    def _start_test(self, patch_idx=None, X_L_te=None, Xt_te=None,
                                             X_te_gen=None, Xt_te_gen=None):
         """Common routine to start the testing phase of `NNModel`.
 
@@ -582,21 +639,21 @@ class NNModel(object):
             Patch's index in this model. (Default value = None).
 
         X_L_te : :obj:`tuple`
-            (`array_like` test data tensor, labels).
+            (ndarray test data tensor, labels).
             If the `nnmodel` is not expecting labels, set it to None.
 
-        Xt_te : `array_like`
+        Xt_te : ndarray
             Target test data tensor. If the `nnmodel` is not expecting a
             target test data tensor, set it to None.
 
         X_te_gen : :obj:`DataIterator`
             Test data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
 
         Xt_te_gen : :obj:`DataIterator`
             Target test data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
         """
         assert((X_L_te is not None) or (X_te_gen is not None))
@@ -666,7 +723,7 @@ class NNModel(object):
         if (self.callbacks['test'] is not None):
             self.callbacks['test'](self, self.nnpatches[patch_idx], metrics)
 
-    def _start_predict(self, patch_idx=None, X_L_te=None, Xt_te=None, 
+    def _start_predict(self, patch_idx=None, X_L_te=None, Xt_te=None,
                                             X_te_gen=None, Xt_te_gen=None):
         """Common routine to start the prediction phase of `NNModel`.
 
@@ -676,27 +733,27 @@ class NNModel(object):
             Patch's index in this model. (Default value = None).
 
         X_L_te : :obj:`tuple`
-            (`array_like` test data tensor, labels).
+            (ndarray test data tensor, labels).
             If the `nnmodel` is not expecting labels, set it to None.
 
-        Xt_te : `array_like`
+        Xt_te : ndarray
             Target test data tensor. If the `nnmodel` is not expecting a 
             target test data tensor, set it to None.
 
         X_te_gen : :obj:`DataIterator`
             Test data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
 
         Xt_te_gen : :obj:`DataIterator`
             Target test data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
         """
         assert((X_L_te is not None) or (X_te_gen is not None))
         assert(self.net is not None)
 
-        # Predict from preloaded database
+        # Predict from pre-loaded database
         if (X_L_te is not None):
 
             # true_output=labels or other
@@ -727,7 +784,7 @@ class NNModel(object):
             else:
                 # Array to collect true labels for batches
                 if (X_te_gen.class_mode is not None):                    
-                    true_output = np.zeros(X_te_gen.nb_sample, 'float32')
+                    true_output = np.zeros((X_te_gen.nb_sample, X_te_gen.nb_sample), 'float32')
 
             # Calculate when to stop
             nloops = math.ceil(X_te_gen.nb_sample / X_te_gen.batch_size)
@@ -785,12 +842,12 @@ class NNModel(object):
 
         Parameters
         ----------
-        Xte : `array_like`
+        Xte : ndarray
             Test data tensor to be fed into the keras model.
 
         Returns
         -------
-        :obj:`list` :
+        :obj:`list`
             Predicted features.
         """
         predictions = []
@@ -1016,63 +1073,6 @@ class NNModel(object):
         return fpath
 
     ##########################################################################
-    # Protected: For Neural Network Framework Building
-    ##########################################################################
-    def _init_nnpatches(self):
-        """Generate and register `nnpatches` for this model.
-
-        Notes
-        -----
-        Invoked by :obj:`NNModelMan`.
-
-        Note
-        ----
-        Used only in Model Based Framework.
-        """
-        nnpatches = self._generate_nnpatches()
-        self._add_nnpatches(nnpatches)
-
-        # Assign this model to patch
-        for nnpatch in nnpatches:
-            nnpatch.add_model(self)
-
-    def _add_nnpatches(self, nnpatches):
-        """Add `nnpatches` for this nnmodel.
-
-        Parameters
-        ----------
-        nnpatches : :obj:`NNPatch` or list of :obj:`NNPatch`
-            List of :obj:`NNPatch` instances.
-        """
-        if (isinstance(nnpatches, list)):
-            self.nnpatches = self.nnpatches + nnpatches
-        else:
-            self.nnpatches.append(nnpatches)
-
-    def _add_iterstores(self, list_iterstore, dict_iterstore=None):
-        """Add dictionary and list of iterstores into a list indexed by `nnpatch` index.
-
-        Parameters
-        ----------
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-        """
-        self._iteratorstores.append((list_iterstore, dict_iterstore))
-
-    def _add_save_to_dirs(self, dbparam_save_dirs):
-        """Add directory paths for each user dbparam into a list indexed by `nnpatch` index.
-
-        Parameters
-        ----------
-        dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user dbparam of each `nnpatch`.
-        """
-        self._list_save_to_dirs.append(dbparam_save_dirs)
-
-    ##########################################################################
     # Private Interface
     ##########################################################################
     def __common_train_test_predict_routine(self, exec_fn, cfg, 
@@ -1081,51 +1081,49 @@ class NNModel(object):
         # If patch unique id is not given (Serial Processing)
         if (patch_idx is None):
 
-            # Train with itearators that belong to each patch
-            for patch_idx, stores_tup in enumerate(self._iteratorstores):
+            # Train with iterators that belong to each patch
+            for patch_idx, stores_tup in enumerate(self._iterstores):
                 list_iterstore, dict_iterstore = stores_tup
                 
                 # For in memory databases, dbparam_save_dirs = None.
-                # For disk databases, dbparam_save_dirs can be used as a 
+                # For disk databases, dbparam_save_dirs can be used as a
                 # temporary directory for each patch to store temporary data.
                 # FUTURE_USE: Currently used in DAEModel pre_train(...) only.
                 # For i.e Training a DAEModel will need to save temporary
                 # data in layerwise pre-training.
                 dbparam_save_dirs = None
-                if (len(self._list_save_to_dirs) > 0):                    
-                    dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
+                if (len(self._list_save_dirs) > 0):
+                    dbparam_save_dirs = self._list_save_dirs[patch_idx]
 
                 # Debug print
                 if (verbose):
                     self._debug_print(list_iterstore)
 
                 if (precfgs is not None):
-                    exec_fn(precfgs, cfg, patch_idx, dbparam_save_dirs, 
+                    exec_fn(precfgs, cfg, patch_idx, dbparam_save_dirs,
                                             list_iterstore, dict_iterstore)
                 else:
-                    exec_fn(cfg, patch_idx, dbparam_save_dirs, 
-                                            list_iterstore, dict_iterstore)
+                    exec_fn(cfg, patch_idx, dbparam_save_dirs, list_iterstore, dict_iterstore)
             
         else:
             # If patch unique id is not None (Parallel Processing Level 2 Support) 
-            assert(patch_idx < len(self._iteratorstores))
-            list_iterstore, dict_iterstore = self._iteratorstores[patch_idx]
+            assert(patch_idx < len(self._iterstores))
+            list_iterstore, dict_iterstore = self._iterstores[patch_idx]
 
             # For in memory databases, dbparam_save_dirs = None
-            # For disk databases, dbparam_save_dirs can be used as a 
+            # For disk databases, dbparam_save_dirs can be used as a
             # temporary directory for each patch to store temporary data.
             # FUTURE_USE: Currently used in DAEModel pre_train(...) only.
             dbparam_save_dirs = None
-            if (len(self._list_save_to_dirs) > 0):                    
-                dbparam_save_dirs = self._list_save_to_dirs[patch_idx]
+            if (len(self._list_save_dirs) > 0):
+                dbparam_save_dirs = self._list_save_dirs[patch_idx]
 
             # Debug print
             if (verbose):
                 self._debug_print(list_iterstore)
 
             if (precfgs is not None):
-                exec_fn(precfgs, cfg, patch_idx, dbparam_save_dirs, 
-                                        list_iterstore, dict_iterstore)
+                exec_fn(precfgs, cfg, patch_idx, dbparam_save_dirs, list_iterstore, dict_iterstore)
             else:
-                exec_fn(cfg, patch_idx, dbparam_save_dirs, 
+                exec_fn(cfg, patch_idx, dbparam_save_dirs,
                                         list_iterstore, dict_iterstore)      

@@ -42,15 +42,15 @@ class DskmanDskDataIterator(DskmanDataIterator):
     #################################################################
     # Public Interface
     #################################################################
-    def __init__(self, db_pp_params):
+    def __init__(self, pp_params):
         """Construct a DskmanDskDataIterator instance.
 
         Parameters
         ----------
-        db_pp_params : :obj:`dict`
+        pp_params : :obj:`dict`
             Pre-processing parameters for :obj:`ImageDataPreProcessor`.
         """
-        super().__init__(db_pp_params)
+        super().__init__(pp_params)
         
         # Class count
         self.cls_n = 0 
@@ -73,7 +73,7 @@ class DskmanDskDataIterator(DskmanDataIterator):
     def init_params(self, db_dir, save_dir):
         """Initialize parameters for :obj:`DskmanDskDataIterator` instance.
 
-        .. warning:: DO NOT override init() method, since it is used to initialize the
+        .. warning:: DO NOT override init_ex() method, since it is used to initialize the
         :obj:`DskmanDataIterator` with essential information.
     
             Each data item is assumed to be stored in each file. Subdirectories denote
@@ -138,9 +138,9 @@ class DskmanDskDataIterator(DskmanDataIterator):
     ##########################################################################
     # Protected: DskmanDataIterator Overrides
     ##########################################################################
-    def _release(self):
+    def release(self):
         """Release internal resources used by the iterator."""
-        super()._release()
+        super().release()
         del self.cls_n
         del self.paths
         del self.n_per_class
@@ -159,7 +159,7 @@ class DskmanDskDataIterator(DskmanDataIterator):
 
         Returns
         -------
-        `array_like`
+        ndarray
             Color image.
 
         :obj:`list`

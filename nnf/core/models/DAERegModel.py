@@ -62,7 +62,7 @@ class DAERegModel(DAEModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
 
         Returns
         -------
@@ -77,8 +77,10 @@ class DAERegModel(DAEModel):
             When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
             then this method will not be invoked.
         """
+        X1_gen = None
+        X2_gen = None
         if (ephase == NNModelPhase.PRE_TRAIN or ephase == NNModelPhase.TRAIN):
-            # Iteratorstore for dbparam1, TR_OUT and VAL_OUT
+            # Iterstore for dbparam1, TR_OUT and VAL_OUT
             X1_gen = list_iterstore[0].setdefault(Dataset.TR_OUT, None)
             X2_gen = list_iterstore[0].setdefault(Dataset.VAL_OUT, None)
 
@@ -114,7 +116,7 @@ class DAERegModel(DAEModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
 
         Returns
         -------
@@ -197,15 +199,15 @@ class DAERegModel(DAEModel):
 
         # Layer purpose
         lp = daecfg.lp[layer_idx]
+        layer_name = ''
 
         # Dimension reduction layer
         if (lp == 'dr'):  
-            layer_name = "enc: "
+            layer_name = "enc_"
 
         # Regression layer
         elif (lp == 'rg'):  
-            layer_name = "reg: "
-
+            layer_name = "reg_"
         # Layer name
         layer_name += str(layer_idx)
 

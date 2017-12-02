@@ -64,7 +64,7 @@ class DAEModel(NNModel):
         daecfg : :obj:`NNCfg`
             Neural Network configuration that will be used in training. 
             Useful to build the deep stacked network after layer-wise 
-            pre-trianing.
+            pre-training.
 
         patch_idx : int
             Patch's index in this model.
@@ -76,7 +76,7 @@ class DAEModel(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """
         # Validate nncfgs
         for _, daeprecfg in enumerate(daeprecfgs):
@@ -147,7 +147,7 @@ class DAEModel(NNModel):
                 ae_iterstore[Dataset.VAL] = X_val_gen
 
                 ae = Autoencoder(ae_uid)
-                ae._add_iterstores(list_iterstore=[ae_iterstore])
+                ae.add_iterstores(list_iterstore=[ae_iterstore])
 
             ##################################################################
             print("\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" +
@@ -216,7 +216,7 @@ class DAEModel(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """
         # Validate nncfg
         self._validate_cfg(NNModelPhase.TRAIN, daecfg)
@@ -437,7 +437,7 @@ class DAEModel(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
 
         Returns
         -------
@@ -452,12 +452,12 @@ class DAEModel(NNModel):
                 Generators for testing and testing target.
         """
         if (ephase == NNModelPhase.PRE_TRAIN or ephase == NNModelPhase.TRAIN):
-            # Iteratorstore for dbparam1
+            # Iterstore for dbparam1
             X1_gen = list_iterstore[0].setdefault(Dataset.TR, None)
             X2_gen = list_iterstore[0].setdefault(Dataset.VAL, None)
 
         elif (ephase == NNModelPhase.TEST or ephase == NNModelPhase.PREDICT):
-            # Iteratorstore for dbparam1
+            # Iterstore for dbparam1
             X1_gen = list_iterstore[0].setdefault(Dataset.TE, None)
             X2_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
 
@@ -486,12 +486,12 @@ class DAEModel(NNModel):
         -------
         :obj:`DataIterator`
             X_gen = Data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
 
         :obj:`DataIterator`
             X_val_gen = Validation data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
         """
         return X_gen, X_val_gen
@@ -506,19 +506,19 @@ class DAEModel(NNModel):
         Returns
         -------
         :obj:`tuple`
-            X_L = (`array_like` data tensor, labels)
+            X_L = (ndarray data tensor, labels)
             If the `nnmodel` is not expecting labels, set it to None.
         
-        `array_like`
+        ndarray
             Xt = target data tensor
             If the `nnmodel` is not expecting a target data tensor, 
             set it to None.
 
         :obj:`tuple`
-            X_L_val = (`array_like` validation data tensor, labels)
+            X_L_val = (ndarray validation data tensor, labels)
             If the `nnmodel` is not expecting labels, set it to None.
 
-        `array_like`
+        ndarray
             Xt_val = validation target data tensor
             If the `nnmodel` is not expecting a validation target data tensor, 
             set it to None.
@@ -562,7 +562,7 @@ class DAEModel(NNModel):
                         Dense(daecfg.arch[layer_idx], 
                                 activation=daecfg.act_fns[layer_idx],
                                 weights=w, 
-                                name="enc: " + str(layer_idx)))
+                                name="enc_" + str(layer_idx)))
 
         # Adding decoding layer for DAE
         dec_i = len(daecfg.arch)-layer_idx
@@ -570,7 +570,7 @@ class DAEModel(NNModel):
                         Dense(daecfg.arch[dec_i], 
                                 activation=daecfg.act_fns[dec_i], 
                                 weights=w_T, 
-                                name="dec: " + str(layer_idx)))
+                                name="dec_" + str(layer_idx)))
         return layers
 
     def _direct_build(self, daecfg):
@@ -585,13 +585,13 @@ class DAEModel(NNModel):
             layers.insert(layer_idx, 
                             Dense(daecfg.arch[layer_idx], 
                                     activation=daecfg.act_fns[layer_idx],
-                                    name="enc: " + str(layer_idx)))
+                                    name="enc_" + str(layer_idx)))
 
             dec_i = len(daecfg.arch)-layer_idx
             layers.insert(layer_idx+1, 
                             Dense(daecfg.arch[dec_i], 
                                     activation=daecfg.act_fns[dec_i],
-                                    name="dec: " + str(layer_idx)))
+                                    name="dec_" + str(layer_idx)))
 
         # Build DAE
         self.__build(daecfg, layers)
@@ -622,12 +622,12 @@ class DAEModel(NNModel):
         -------
         :obj:`DataIterator`
             X_gen = Data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
 
         :obj:`DataIterator`
             X_val_gen = Validation data iterator that generates data in 
-            (`array_like`, labels or `array_like`) format, depending on
+            (ndarray, labels or ndarray) format, depending on
             the `nnmodel` architecture.
         """
         # If the current generators are pointing to a temporary location, mark it for deletion
@@ -635,7 +635,7 @@ class DAEModel(NNModel):
         # for index i (layer i). Construct new generators for the data stored in this temporary location.
         # if the previous data locations are marked for deletion (temporary location), proceed the deletion
         
-        # TODO: release X_gen._release() resources
+        # TODO: release X_gen.release() resources
 
         if (isinstance(X_gen, MemDataIterator)):
 
@@ -647,16 +647,16 @@ class DAEModel(NNModel):
             # **TODO: Exhaust the generators and get the data
             enc_data = ae._encode(X_gen.nndb.features_scipy)     
             params = X_gen.params
-            X_gen = MemDataIterator(X_gen.edataset, NNdb('Temp_Layer:'+str(layer_idx), enc_data, format=Format.N_H), X_gen.nndb.cls_n, None, fn_gen_coreiter)
-            X_gen.init(params)
+            X_gen = MemDataIterator(X_gen.edataset, NNdb('Temp_Layer:' + str(layer_idx), enc_data, db_format=Format.N_H), X_gen.nndb.cls_n, None, fn_gen_coreiter)
+            X_gen.init_ex(params)
 
             # Create a generator for validation
             if (X_val_gen is not None):
                 # **TODO: Exhaust the generators and get the data
                 enc_data_val = ae._encode(X_val_gen.nndb.features_scipy)
                 params = X_val_gen.params
-                X_val_gen = MemDataIterator(X_val_gen.edataset, NNdb('TempVal_Layer:'+str(layer_idx), enc_data_val, format=Format.N_H), X_val_gen.nndb.cls_n, None, fn_gen_coreiter)
-                X_val_gen.init(params)
+                X_val_gen = MemDataIterator(X_val_gen.edataset, NNdb('TempVal_Layer:' + str(layer_idx), enc_data_val, db_format=Format.N_H), X_val_gen.nndb.cls_n, None, fn_gen_coreiter)
+                X_val_gen.init_ex(params)
 
         elif (isinstance(X_gen, DskDataIterator)):
             
@@ -691,7 +691,7 @@ class DAEModel(NNModel):
         params['shuffle'] = False
 
         # Reinit current dsk generator
-        cur_dskgen.init(params)  
+        cur_dskgen.init_ex(params)
 
         # Fetch new target size (the encoder layer size)
         enc_layer_size = (ae.enc_size, )
@@ -744,6 +744,6 @@ class DAEModel(NNModel):
         params['binary_data'] = True
 
         new_dskgen = DskDataIterator(cur_dskgen.edataset, frecords, cur_dskgen.nb_class, fn_gen_coreiter=fn_gen_coreiter)
-        new_dskgen.init(params)
+        new_dskgen.init_ex(params=params)
     
         return new_dskgen

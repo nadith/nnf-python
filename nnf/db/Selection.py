@@ -13,42 +13,82 @@ import numpy as np
 
 # Local Imports
 
+
+# noinspection PyPep8
 class Selection:
-    """Selection denotes the selection paramters for a database.
+    """Selection denotes the selection parameters for a database.
 
     Attributes
     ----------
-    TODO: Put this comment to a python compatible way
+    tr_col_indices : ndarray -int
+        Training column indices. (Default value = None).
 
-    Selection Structure (with defaults)
-    -----------------------------------
-    sel.tr_col_indices      = None    # Training column indices
-    sel.tr_noise_rate       = None    # Noise rate or Noise types for `tr_col_indices`
-    sel.tr_occlusion_rate   = None    # Occlusion rate for `tr_col_indices`
-    sel.tr_occlusion_type   = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
-    sel.tr_occlusion_offset = None    # Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
-    sel.tr_out_col_indices  = None    # Training target column indices
-    sel.val_col_indices     = None    # Validation column indices
-    sel.val_out_col_indices = None    # Validation target column indices
-    sel.te_col_indices      = None    # Testing column indices
-    sel.te_out_col_indices  = None    # Testing target column indices
-    sel.nnpatches           = None    # NNPatch object array
-    sel.use_rgb             = None    # Use rgb or convert to grayscale
-    sel.color_indices       = None    # Specific color indices (set .use_rgb = false)
-    sel.use_real            = False   # Use real valued database TODO: (if .normalize = true, Operations ends in real values)  # noqa E501
-    
-    sel.scale               = None    # Scaling factor (resize factor)
-                                        int - Percentage of current size.
-                                        float - Fraction of current size.
-                                        tuple - Size of the output image.
+    tr_noise_rate : ndarray -float
+        Noise rate (0-1) or Noise types for `tr_col_indices`. (Default value = None).
 
-    sel.normalize           = False   # Normalize (0 mean, std = 1)
-    sel.histeq              = False   # Histogram equalization
-    sel.histmatch_col_index = None    # Histogram match reference column index
-    sel.class_range         = None    # Class range for training database or all (tr, val, te)
-    sel.val_class_range     = None    # Class range for validation database
-    sel.te_class_range      = None    # Class range for testing database
-    sel.pre_process_script  = None    # Custom preprocessing script
+    tr_occlusion_rate : ndarray -float
+        Occlusion rate (0-1) for `tr_col_indices`. (Default value = None).
+
+    tr_occlusion_type : ndarray -char
+        Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`. (Default value = None).
+
+    tr_occlusion_offset : ndarray -int
+        Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`. (Default value = None).
+
+    tr_out_col_indices : ndarray -int
+        Training target column indices. (Default value = None).
+
+    val_col_indices : ndarray -int
+        Validation column indices. (Default value = None).
+
+    val_out_col_indices : ndarray -int
+        Validation target column indices. (Default value = None).
+
+    te_col_indices : ndarray -int
+        Testing column indices. (Default value = None).
+
+    te_out_col_indices : ndarray -int
+        Testing target column indices. (Default value = None).
+
+    nnpatches : ndarray -`nnf.db.NNPatch`
+        NNPatch object array. (Default value = None).
+
+    use_rgb : bool
+        Use rgb or convert to grayscale. (Default value = None).
+
+    color_indices : ndarray -int
+        Specific color indices (set use_rgb = false). (Default value = None).
+
+    use_real : bool
+        Use real valued database. (Default value = False).
+        TODO: (if .normalize = true, Operations ends in real values)  # noqa E501
+
+    scale : float or `tuple`
+        Scaling factor (resize factor). (Default value = None).
+        int - Percentage of current size.
+        float - Fraction of current size.
+        tuple - Size of the output image.
+
+    normalize : bool
+        Normalize (0 mean, std = 1). (Default value = False).
+
+    histeq : bool
+        Histogram equalization. (Default value = False).
+
+    histmatch_col_index : bool
+        Histogram match reference column index. (Default value = None).
+
+    class_range : ndarray -int
+        Class range for training database or default for (tr, val, te). (Default value = None).
+
+    val_class_range : ndarray -int
+        Class range for validation database. (Default value = None).
+
+    te_class_range : ndarray -int
+        Class range for testing database. (Default value = None).
+
+    pre_process_script : ndarray -int
+        Custom pre-processing script. (Default value = None).
     """
 
     ##########################################################################
@@ -78,7 +118,7 @@ class Selection:
         self.class_range         = None    # Class range for training database or all (tr, val, te)
         self.val_class_range     = None    # Class range for validation database
         self.te_class_range      = None    # Class range for testing database
-        self.pre_process_script  = None    # Custom preprocessing script
+        self.pre_process_script  = None    # Custom pre-processing script
 
     def need_processing(self):
         """Return True only if pre-processing parameters of the selection structure is set"""
@@ -127,7 +167,8 @@ class Selection:
         sel.class_range         = self.class_range           # Class range for training database or all (tr, val, te)
         sel.val_class_range     = self.val_class_range       # Class range for validation database
         sel.te_class_range      = self.te_class_range        # Class range for testing database
-        sel.pre_process_script  = self.pre_process_script    # Custom preprocessing script
+        sel.pre_process_script  = self.pre_process_script    # Custom pre-processing script
+
         return sel
         
     ##########################################################################
@@ -167,17 +208,17 @@ class Selection:
             np.array_equal(self.val_class_range, sel.val_class_range) and
             np.array_equal(self.te_class_range, sel.te_class_range) and
             len(self.nnpatches) == len(sel.nnpatches)):
-            # self.pre_process_script # LIMITATION: Cannot compare for eqaulity (in the context of serilaization)
+            # self.pre_process_script # LIMITATION: Cannot compare for equality (in the context of serialization)
             iseq = True
 
-        if (not iseq):
+        if not iseq:
             return iseq
 
         for i, self_patch in enumerate(self.nnpatches):
             self_patch = self.nnpatches[i]
             sel_patch = sel.nnpatches[i]
             iseq = iseq and (self_patch == sel_patch)
-            if (not iseq):
+            if not iseq:
                 break
 
         return iseq
@@ -188,7 +229,7 @@ class Select(Enum):
 
     Attributes
     ----------
-    ALL : int
+    Select.ALL : int
         -999
     """
     ALL = -999
@@ -199,5 +240,5 @@ class Select(Enum):
     # Public Interface
     ##########################################################################
     def int(self):
-        """Evaluate the enumeration value to its representating integer."""
+        """Evaluate the enumeration value to its representative integer."""
         return self.value

@@ -24,19 +24,19 @@ class Autoencoder(NNModel):
     Attributes
     ----------
     X_L : :obj:`tuple`
-        In the format (`array_like` data tensor, labels).
+        In the format (ndarray data tensor, labels).
         If the `nnmodel` is not expecting labels, set it to None.
 
-    Xt : `array_like`
+    Xt : ndarray
         Target data tensor.
         If the `nnmodel` is not expecting a target data tensor,
         set it to None.
 
     X_L_val : :obj:`tuple`
-        In the format (`array_like` validation data tensor, labels).
+        In the format (ndarray validation data tensor, labels).
         If the `nnmodel` is not expecting labels, set it to None.
 
-    Xt_val : `array_like`
+    Xt_val : ndarray
         Validation target data tensor.
         If the `nnmodel` is not expecting a validation target data tensor,
         set it to None.
@@ -90,12 +90,12 @@ class Autoencoder(NNModel):
 
             Parameters
             ----------
-            X : `array_like`
+            X : ndarray
                 Input data tensor.
 
             Returns
             -------
-            `array_like`
+            ndarray
                 Encoded representation.
             """
             return self.__encoder.predict(X)
@@ -127,7 +127,7 @@ class Autoencoder(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
         X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN,
@@ -140,7 +140,7 @@ class Autoencoder(NNModel):
                 (self.X_L is not None))
 
         # Build the Autoencoder
-        self.__build(cfg)
+        self._build(cfg)
 
         # Preloaded databases for quick deployment
         if ((cfg.preloaded_db is not None) and
@@ -188,7 +188,7 @@ class Autoencoder(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """  
         # Initialize data generators
         X_te_gen, Xt_te_gen = self._init_data_generators(
@@ -209,7 +209,7 @@ class Autoencoder(NNModel):
         # Checks whether keras net should be pre-built to
         # load weights or the net itself
         if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self.__build(cfg)
+            self._build(cfg)
 
         # Try to load the saved model or weights
         self._try_load(cfg, patch_idx, prefix)
@@ -220,8 +220,7 @@ class Autoencoder(NNModel):
             cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadTeDb(self)     
 
-        # Test without generators
-        if (cfg.preloaded_db is not None):
+            # Test without generators
             super()._start_test(patch_idx, X_L_te, Xt_te)
             return
 
@@ -250,7 +249,7 @@ class Autoencoder(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
         X_te_gen, Xt_te_gen = self._init_data_generators(
@@ -271,7 +270,7 @@ class Autoencoder(NNModel):
         # Checks whether keras net should be pre-built to
         # load weights
         if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self.__build(cfg)
+            self._build(cfg)
 
         # Try to load the saved model or weights
         self._try_load(cfg, patch_idx, prefix)
@@ -286,8 +285,7 @@ class Autoencoder(NNModel):
             cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadPredDb(self)
 
-        # Predict without generators
-        if (cfg.preloaded_db is not None):
+            # Predict without generators
             super()._start_predict(patch_idx, X_L_te, Xt_te)
             return
 
@@ -296,10 +294,7 @@ class Autoencoder(NNModel):
                                 X_te_gen=X_te_gen, 
                                 Xt_te_gen=Xt_te_gen)
 
-    ##########################################################################
-    # Private Interface
-    ##########################################################################
-    def __build(self, cfg):
+    def _build(self, cfg):
         """Build the keras Autoencoder."""
         # this is our input placeholder
         input_img = Input(shape=(cfg.arch[0],))

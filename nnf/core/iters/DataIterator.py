@@ -27,7 +27,7 @@ class DataIterator(object):
         Image data pre-processor for all iterators.
 
     _gen_next : `function`
-        Core iterator/generator that provide data.
+        Core iterator for non DskmanIterator(s) / Generator for DskmanIterator(s), that provide data.
 
     _sync_gen_next : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator`
         Core iterator that needs to be synced with `_gen_next`.
@@ -51,7 +51,7 @@ class DataIterator(object):
 
     Notes
     -----
-    Disman data iterators are utilzing a generator function in _gen_next 
+    Diskman data iterators are utilizing a generator function in _gen_next
     while the `nnmodel` data iterators are utilizing an core iterator.
     """
     __metaclass__ = ABCMeta
@@ -75,8 +75,8 @@ class DataIterator(object):
         # Used by Diskman data iterators and `nnmodel` data iterators
         self._imdata_pp = ImageDataPreProcessor(pp_params, fn_gen_coreiter)
         
-        # Core iterator or generator (initilaized in init())
-        # Diskman data iterators are utilzing a generator function in _gen_next
+        # Core iterator or generator (initialized in init_ex())
+        # Diskman data iterators are utilizing a generator function with yield in _gen_next
         # while the `nnmodel` data iterators are utilizing an core iterator.
         self._gen_next = None
 
@@ -90,7 +90,7 @@ class DataIterator(object):
         self._params = None
 
         # All the parameters are saved in instance variables to support the 
-        # clone() method implementaiton of the child classes.
+        # clone() method implementation of the child classes.
         self._pp_params = pp_params
         self._fn_gen_coreiter = fn_gen_coreiter
 
@@ -104,7 +104,7 @@ class DataIterator(object):
         Parameters
         ----------
         _gen_next : `function`
-            Core iterator/generator that provide data.
+            Core iterator/generator that provides data.
         """        
         # Set the core iterator or generator 
         self._gen_next = gen_next
@@ -163,13 +163,24 @@ class DataIterator(object):
         return True    
 
     def reset(self, gen_next):
-        """Resets the iterator to the begining."""
+        """Reset the iterator to the beginning."""
         # This method is only supported by the core iterator      
         if (self._gen_next is None or
             isinstance(self._gen_next , types.GeneratorType)):
             return False
 
         self._gen_next.reset()
+        return True
+
+    def set_batch_size(self, batch_size):
+        """Set the batch size."""
+        # This method is only supported by the core iterator
+        if (self._gen_next is None or
+                isinstance(self._gen_next , types.GeneratorType) or
+                batch_size is None):
+            return False
+
+        self._gen_next.batch_size = batch_size
         return True
 
     @abstractmethod
@@ -180,7 +191,7 @@ class DataIterator(object):
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def _release(self):
+    def release(self):
         """Release internal resources used by the iterator."""
         self._imdata_pp = None
         self._gen_next = None

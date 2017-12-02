@@ -9,11 +9,12 @@
 # -*- coding: utf-8 -*-
 # Global Imports
 import os
-import scipy
+import scipy.misc
 import scipy.io
 import numpy as np
 from warnings import warn as warning
 import matplotlib.pyplot as plt
+from keras.preprocessing.image import array_to_img
 
 # Local Imports
 from nnf.db.Format import Format
@@ -21,17 +22,17 @@ from nnf.utl.immap import immap
 
 
 class NNdb(object):
-    """NNdb represents database for NNFramwork.
+    """NNdb represents database for NNFramework.
 
     Attributes
     ----------
     name : string
         Name of the nndb object.        
         
-    db : `array_like` -uint8
+    db : ndarray -uint8
         4D Data tensor that contains images.
 
-    format : nnf.db.Format, optional
+    db_format : nnf.db.Format, optional
         Format of the database. (Default value = Format.H_W_CH_N).
 
     h : int
@@ -75,20 +76,23 @@ class NNdb(object):
     Examples
     --------
     Database with same no. of images per class, with build class idx
-    >>> nndb = NNdb('any_name', imdb, 8, true)
+    >>> imdb = np.zeros((33, 33, 3, 800))
+    >>> nndb = NNdb('any_name', imdb, 8, True)
 
     Database with varying no. of images per class, with build class idx
-    >>> nndb = NNdb('any_name', imdb, [4 3 3 1], true)
+    >>> imdb = np.zeros((33, 33, 3, 800))
+    >>> nndb = NNdb('any_name', imdb, [4 3 3 1], True)
 
     Database with given class labels
+    >>> imdb = np.zeros((33, 33, 3, 800))
     >>> nndb = NNdb('any_name', imdb, [4 3], False, [1 1 1 1 2 2 2])
     """
 
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, name, db=None, n_per_class=None, build_cls_lbl=False,
-                 cls_lbl=None, format=Format.H_W_CH_N):
+    def __init__(self, name, db: np.ndarray=None, n_per_class=None, build_cls_lbl=False, cls_lbl=None,
+                 db_format: object=Format.H_W_CH_N):
         """Construct a nndb object.
 
         Parameters
@@ -96,8 +100,9 @@ class NNdb(object):
         name : string
             Name of the nndb object.   
 
-        db : 4D tensor -uint8
-            Data tensor that contains images. (Default value = None).
+        db : ndarray
+            4D Data tensor that contains images. (Default value = None).
+            Refer `db_format` parameter for the format of this tensor.
 
         n_per_class : vector -uint16 or scalar, optional
             No. images per each class. (Default value = None).
@@ -108,30 +113,31 @@ class NNdb(object):
         cls_lbl : vector -uint16 or scalar, optional
             Class index array. (Default value = None).
 
-        format : nnf.db.Format, optinal
+        db_format : nnf.db.Format, optional
             Format of the database. (Default value = Format.H_W_CH_N, refer `nnf.db.Format`).
         """
 
         self.name = name
-        print('Costructor::NNdb ', name)
+        print('Constructor::NNdb ', name)
 
         # Error handling for arguments
-        if (np.isscalar(cls_lbl)): raise Exception('ARG_ERR: cls_lbl: vector indicating class for each sample')  # noqa: E701, E501
+        if np.isscalar(cls_lbl):
+            raise Exception('ARG_ERR: cls_lbl: vector indicating class for each sample')
 
-         # Empty nndb instance
-        if (db is None):
+        # Empty nndb instance
+        if db is None:
             self.db = None
             self.n_per_class = n_per_class
             self.build_cls_lbl = build_cls_lbl
             self.cls_lbl = cls_lbl
-            self.format = format
-            self.h = 0; self.w = 1; self.ch = 1; self.n = 0  # noqa: E701, 702        
+            self.db_format = db_format
+            self.h = 0; self.w = 1; self.ch = 1; self.n = 0  # noqa: E701, E702
             self.cls_st = None        
             self.cls_n = 0
             return
 
         # Set values for instance variables
-        self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, format)
+        self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, db_format)
 
     def merge(self, nndb):
         """Merge `nndb` instance with `self` instance.
@@ -143,32 +149,31 @@ class NNdb(object):
             NNdb object that represents the data set.
         """
 
-        if (self.db is not None and nndb.db is not None):
+        if self.db is not None and nndb.db is not None:
             assert(self.h == nndb.h and self.w == nndb.w and self.ch == nndb.ch)
             assert(self.cls_n == nndb.cls_n)
             assert(self.db.dtype == nndb.db.dtype)
-            assert(self.format == nndb.format)
+            assert(self.db_format == nndb.format)
 
         nndb_merged = None
-        format = self.format
+        db_format = self.db_format
         cls_n = self.cls_n
 
-        if (self.db is not None):
-            if (nndb.db is None):
+        if self.db is not None:
+            if nndb.db is None:
                 nndb_merged = self.clone('merged')
             else:
-                cls_n =10
+                cls_n = 10
 
-
-        if (nndb.db is not None):
-            if (self.db is None):
+        if nndb.db is not None:
+            if self.db is None:
                 nndb_merged = nndb.clone('merged')
 
-        if (self.db is None and nndb.db is None):
+        if self.db is None and nndb.db is None:
             nndb_merged = self.clone('merged')
 
-        if (nndb_merged is None):
-            nndb_merged = NNdb('merged', format=format)
+        if nndb_merged is None:
+            nndb_merged = NNdb('merged', db_format=db_format)
 
             for i in range(0, cls_n):
                 
@@ -182,14 +187,14 @@ class NNdb(object):
                 cls_end = cls_st + np.uint32(nndb.n_per_class[i]) 
                 nndb_merged.add_data(nndb.get_data_at(np.arange(cls_st, cls_end)))
 
-                # Update related paramters after adding data in the above step
+                # Update related parameters after adding data in the above step
                 nndb_merged.update_attr(True, self.n_per_class[i] + nndb.n_per_class[i])
 
         return nndb_merged
         
     def concat_features(self, nndb):
         """Concat `nndb` instance features with `self` instance features.
-            Both `nndb` and self instances must be in the format Format.H_N 
+            Both `nndb` and self instances must be in the db_format Format.H_N
             or Format.N_H (2D databases)
          
         Parameters
@@ -199,19 +204,20 @@ class NNdb(object):
         """
                     
         assert(self.n == nndb.n)
-        assert(isequal(self.n_per_class, nndb.n_per_class))
+        assert(np.array_equal(self.n_per_class, nndb.n_per_class))
         assert(self.cls_n == nndb.cls_n)
         assert(self.db.dtype == nndb.db.dtype)
-        assert(self.format == nndb.format)
-        assert(self.format == Format.H_N or self.format == Format.N_H)
-                        
-        if (self.format == Format.H_N):
+        assert(self.db_format == nndb.format)
+        assert(self.db_format == Format.H_N or self.db_format == Format.N_H)
+
+        db = None
+        if self.db_format == Format.H_N:
             db = np.concatenate((self.db, nndb.db), axis=0)
             
-        elif (self.format == Format.N_H):
+        elif self.db_format == Format.N_H:
             db = np.concatenate((self.db, nndb.db), axis=1)
                         
-        return NNdb('features_augmented', db, self.n_per_class, true, [], self.format)
+        return NNdb('features_augmented', db, self.n_per_class, True, db_format=self.db_format)
     
     def fliplr(self):
         """Flip the image order in each class of this `nndb` object."""
@@ -225,22 +231,22 @@ class NNdb(object):
             cls_end = cls_st + np.uint32(self.n_per_class[i])
                              
             tmp = features[:, cls_st:cls_end]
-            tmp = np.fliplr(tmp) # np.all(np.fliplr(A) == A[:,::-1,...])
+            tmp = np.fliplr(tmp)  # np.all(np.fliplr(A) == A[:,::-1,...])
 
-            # Add data according to the format (dynamic allocation)
+            # Add data according to the db_format (dynamic allocation)
             self.add_data(self.features_to_data(tmp, self.h, self.w, self.ch, dtype))
 
         return self
            
-    def convert_format(self, format, h, w, ch):
-        """Convert the format of this `nndb` object to target format.            
+    def convert_format(self, db_format, h, w, ch):
+        """Convert the db_format of this `nndb` object to target db_format.
             h, w, ch are conditionally optional, used only when converting 2D nndb to 4D nndb
             formats.
 
         Parameters
         ----------
-        format : nnf.db.Format
-            Target format of the database.
+        db_format : nnf.db.Format
+            Target db_format of the database.
             
         h : int, optional under conditions
             height to be used when converting from Format.H_N to Format.H_W_CH_N.
@@ -252,51 +258,51 @@ class NNdb(object):
             channels to be used when converting from Format.H_N to Format.H_W_CH_N.
         """
                                     
-        # Fetch datatype
+        # Fetch data type
         dtype = self.db.dtype
             
-        if (self.format == Format.H_W_CH_N or self.format == Format.N_H_W_CH):
-            if (format == Format.H_N):
-                self.db = cast(self.features, dtype)
-                self.h = size(self.db, 1)
+        if self.db_format == Format.H_W_CH_N or self.db_format == Format.N_H_W_CH:
+            if db_format == Format.H_N:
+                self.db = self.features.astype(dtype)
+                self.h = self.db.shape[0]
                 self.w = 1
                 self.ch = 1
                     
-            elif (format == Format.N_H):
+            elif db_format == Format.N_H:
                 self.db = np.transpose(self.features).astype(dtype)
-                self.h = size(self.db, 2)
+                self.h = self.db.shape[1]
                 self.w = 1
                 self.ch = 1
                     
-            elif (format == Format.H_W_CH_N):
+            elif db_format == Format.H_W_CH_N:
                 self.db = self.db_matlab
                 
-            elif (format == Format.N_H_W_CH):
+            elif db_format == Format.N_H_W_CH:
                 self.db = self.db_scipy
                             
-            self.format = format
+            self.db_format = db_format
                 
-        elif (self.format == Format.H_N or self.format == Format.N_H):
+        elif self.db_format == Format.H_N or self.db_format == Format.N_H:
                 
-            if (format == Format.H_W_CH_N):
-                self.db = reshape(self.db_matlab, h, w, ch, self.n)
+            if db_format == Format.H_W_CH_N:
+                self.db = self.db_matlab.reshape((h, w, ch, self.n))
                 self.h = h
                 self.w = w
                 self.ch = ch
                 
-            elif (format == Format.N_H_W_CH):
-                self.db = reshape(self.db_matlab, self.n, h, w, ch)
+            elif db_format == Format.N_H_W_CH:
+                self.db = self.db_matlab.reshape((self.n, h, w, ch))
                 self.h = h
                 self.w = w
                 self.ch = ch
                     
-            elif (format == Format.H_N):
+            elif db_format == Format.H_N:
                 self.db = self.db_matlab
                     
-            elif (format == Format.N_H):
+            elif db_format == Format.N_H:
                 self.db = self.db_scipy
                             
-            self.format = format
+            self.db_format = db_format
 
         return self
 
@@ -316,21 +322,21 @@ class NNdb(object):
 
         Examples
         --------
-        Using this method to update the attibutes of nndb dynamically.
+        Using this method to update the attributes of nndb dynamically.
 
-        >>> nndb = NNdb("EMPTY_NNDB", format=Format.H_W_CH_N)
-        >>> data = numpy.random.rand(30, 30, 1, 100)   # data tensor for each class
+        >>> nndb = NNdb("EMPTY_NNDB", db_format=Format.H_W_CH_N)
+        >>> data = np.random.rand(30, 30, 1, 100)   # data tensor for each class
         >>> nndb.add_data(data)
-        >>> nndb.update_attr(true, 100)
+        >>> nndb.update_attr(True, 100)
         """
 
         # Initialize db related fields
         self.init_db_fields__()
 
         # Set class start, and class counts of nndb
-        if (is_new_class):
-             # Set class start(s) of self, dynamic expansion
-            cls_st = self.n - sample_n # start of the most recent item addition
+        if is_new_class:
+            # Set class start(s) of self, dynamic expansion
+            cls_st = self.n - sample_n  # start of the most recent item addition
             self.cls_st = np.array([], dtype='uint32') if (self.cls_st is None) else self.cls_st
             self.cls_st = np.concatenate((self.cls_st, np.array([cls_st], dtype='uint32')))
 
@@ -350,26 +356,28 @@ class NNdb(object):
         self.cls_lbl = np.array([], dtype='uint16') if (self.cls_lbl is None) else self.cls_lbl
         self.cls_lbl = np.concatenate((self.cls_lbl, np.array([cls_lbl], dtype='uint16')))
 
-    def get_data_at(self, si):
+    def get_data_at(self, si: np.ndarray):
         """Get data from database at i.
 
         Parameters
         ----------
-        si : int
+        si : int or ndarray
             Sample index or range.
         """
 
         # Error handling for arguments
         assert(np.all(si <= self.n))
 
-        # Get data according to the format
-        if (self.format == Format.H_W_CH_N):
+        data = None
+
+        # Get data according to the db_format
+        if self.db_format == Format.H_W_CH_N:
             data = self.db[:, :, :, si]
-        elif (self.format == Format.H_N):
+        elif self.db_format == Format.H_N:
             data = self.db[:, si]
-        elif (self.format == Format.N_H_W_CH):
+        elif self.db_format == Format.N_H_W_CH:
             data = self.db[si, :, :, :]
-        elif (self.format == Format.N_H):
+        elif self.db_format == Format.N_H:
             data = self.db[si, :]
 
         return data
@@ -379,37 +387,37 @@ class NNdb(object):
 
         Parameters
         ----------
-        data : `array_like`
+        data : ndarray
             Data to be added.
 
         Notes
         -----
         Dynamic allocation for the data tensor.
         """
-        # Add data according to the format (dynamic allocation)
-        if (self.format == Format.H_W_CH_N):
+        # Add data according to the db_format (dynamic allocation)
+        if self.db_format == Format.H_W_CH_N:
             data = data[:, :, :, None] if (data.ndim == 3) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=3)
 
-        elif (self.format == Format.H_N):
+        elif self.db_format == Format.H_N:
             data = data[:, None] if (data.ndim == 1) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=1)
 
-        elif (self.format == Format.N_H_W_CH):
+        elif self.db_format == Format.N_H_W_CH:
             data = data[None, :, :, :] if (data.ndim == 3) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=0)
             
-        elif (self.format == Format.N_H):
+        elif self.db_format == Format.N_H:
             data = data[None, :] if (data.ndim == 1) else data
             self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=0)
 
     def features_to_data(self, features, h=None, w=None, ch=None, dtype=None):
-        """Converts the feature matrix to `self` compatible data format and type.
+        """Converts the feature matrix to `self` compatible data db_format and type.
             h, w, ch, dtype are conditionally optional, used only when self.db = None.
 
         Parameters
         ----------
-        features : `array_like`
+        features : ndarray
             2D feature matrix (double) compatible for matlab. (F_SIZE x SAMPLES)
 
         h : int, optional under conditions
@@ -425,10 +433,10 @@ class NNdb(object):
             data type to be used when self.db = None. 
         """
                   
-        assert((self.db is None and not (h is None or w is None or ch is None or dtype is None)) or \
-                not (self.db is None))
+        assert((self.db is None and not (h is None or w is None or ch is None or dtype is None)) or
+               not (self.db is None))
       
-        if (not (self.db is None)):
+        if not (self.db is None):
             h = self.h
             w = self.w
             ch = self.ch
@@ -437,21 +445,21 @@ class NNdb(object):
         # Sample count
         n = features.shape[1]
 
-        # Add data according to the format (dynamic allocation)
-        if (self.format == Format.H_W_CH_N):
-            data = features.reshape((h, w, ch, n))\
-                             .astype(dtype)
+        data = None
 
-        elif (self.format == Format.H_N):
-            data = data.astype(dtype)
+        # Add data according to the db_format (dynamic allocation)
+        if self.db_format == Format.H_W_CH_N:
+            data = features.reshape((h, w, ch, n)).astype(dtype)
 
-        elif (self.format == Format.N_H_W_CH):
-            data = features.reshape((h, w, ch, n))\
-                             .astype(dtype)
+        elif self.db_format == Format.H_N:
+            data = features.astype(dtype)
+
+        elif self.db_format == Format.N_H_W_CH:
+            data = features.reshape((h, w, ch, n)).astype(dtype)
             data = data.transpose(3, 0, 1, 2)
 
-        elif (self.format == Format.N_H):
-            data = np.transpose(data).astype(dtype)
+        elif self.db_format == Format.N_H:
+            data = np.transpose(features).astype(dtype)
                     
         return data        
 
@@ -464,21 +472,21 @@ class NNdb(object):
             Class index array. (Default value = None).
             
         norm : string, optional
-            'l1', 'l2', 'max', normlization for each column. (Default value = None).
+            'l1', 'l2', 'max', normalization for each column. (Default value = None).
             
         Returns
         -------
-        `array_like`
+        ndarray
             2D feature matrix. (double)
         """
 
         features = np.reshape(self.db, (self.h * self.w * self.ch, self.n)).astype('double')  # noqa: E501
 
         # Select class
-        if (cls_lbl is not None):
+        if cls_lbl is not None:
             features = features[:, self.cls_lbl == cls_lbl]
 
-        if (norm is not None):
+        if norm is not None:
             from sklearn.preprocessing import normalize
             features = normalize(features, axis=0, norm=norm)
 
@@ -492,30 +500,30 @@ class NNdb(object):
         cls_lbl : scalar, optional
             Class index array. (Default value = None).
 
-        m : `array_like`, optional
+        m : ndarray, optional
             Mean vector to calculate feature mean difference. (Default value = None).
 
         Returns
         -------
-        nndb : :obj:`NNdb`
+        :obj:`NNdb`
             NNdb object (Format.H_N) that represents the mean-diff dataset.
             
-        m : `array_like` -double
+        ndarray -double
                 Calculated mean.
         """
 
         features = self.get_features(cls_lbl)
-        if (m is None): m = np.mean(features, 1)
+        if m is None: m = np.mean(features, 1)  # noqa: E701, E501
         
         features = features - np.tile(m, (1, self.n))        
-        nndb = NNdb(self.name + ' (mean-diff)', features, self.n_per_class, false, self.cls_lbl, Format.H_N)
+        nndb = NNdb(self.name + ' (mean-diff)', features, self.n_per_class, False, self.cls_lbl, Format.H_N)  # noqa: E701, E501
 
-        return (nndb, m)
+        return nndb, m
 
-    def set_db(self, db, n_per_class, build_cls_lbl, cls_lbl, format):
+    def set_db(self, db: np.ndarray, n_per_class, build_cls_lbl, cls_lbl, db_format: object):
         """Set database and update relevant instance variables.
 
-        i.e (db, format, cls_lbl, cls_n, etc)
+        i.e (db, db_format, cls_lbl, cls_n, etc)
 
         Parameters
         ----------
@@ -533,32 +541,39 @@ class NNdb(object):
         cls_lbl : vector -uint16 or scalar
             Class index array.
 
-        format : nnf.db.Format
+        db_format : nnf.db.Format
             Format of the database.
         """
         # Error handling for arguments
-        if (db is None): raise Exception('ARG_ERR: db: undefined')  # noqa: E701, E501
-        if (format is None): raise Exception('ARG_ERR: format: undefined')  # noqa: E701, E501
-        if ((cls_lbl is not None) and  build_cls_lbl): warning('ARG_CONFLICT: cls_lbl, build_cls_lbl')  # noqa: E701, E501
+        if db is None: raise Exception('ARG_ERR: db: undefined')  # noqa: E701, E501
+        if db_format is None: raise Exception('ARG_ERR: db_format: undefined')  # noqa: E701, E501
+        if (cls_lbl is not None) and build_cls_lbl: warning('ARG_CONFLICT: cls_lbl, build_cls_lbl')  # noqa: E701, E501
+
+        # Data belong to same class need to be placed in consecutive blocks
+        if (cls_lbl is not None):
+            _, idc = np.unique(cls_lbl, return_index=True)
+
+            if (not np.array_equal(np.sort(idc), idc)):
+                raise Exception('Data belong to same class need to be placed in consecutive blocks')
 
         # Set defaults for n_per_class
-        if (n_per_class is None and cls_lbl is None):
-            if (format == Format.H_W_CH_N):
+        if n_per_class is None and cls_lbl is None:
+            if db_format == Format.H_W_CH_N:
                 n_per_class = db.shape[3]
-            elif (format == Format.H_N):
+            elif db_format == Format.H_N:
                 n_per_class = db.shape[1]
-            elif (format == Format.N_H_W_CH):
+            elif db_format == Format.N_H_W_CH:
                 n_per_class = db.shape[0]
-            elif (format == Format.N_H):
+            elif db_format == Format.N_H:
                 n_per_class = db.shape[0]
 
-        elif (n_per_class is None):
+        elif n_per_class is None:
             # Build n_per_class from cls_lbl
-            _, n_per_class =  np.unique(cls_lbl, return_counts=True)
+            _, n_per_class = np.unique(cls_lbl, return_counts=True)
 
         # Set defaults for instance variables
-        self.db = db; self.format = format; self.build_cls_lbl = build_cls_lbl  # noqa: E701, 702
-        self.h = 0; self.w = 1; self.ch = 1; self.n = 0  # noqa: E701, 702
+        self.db = db; self.db_format = db_format; self.build_cls_lbl = build_cls_lbl  # noqa: E701, E702
+        self.h = 0; self.w = 1; self.ch = 1; self.n = 0  # noqa: E701, E702
         self.n_per_class = n_per_class
         self.cls_st = None
         self.cls_lbl = cls_lbl
@@ -566,22 +581,22 @@ class NNdb(object):
 
         # Set values for instance variables
         self.db = db
-        self.format = format
+        self.db_format = db_format
 
-        # Set h, w, ch, np according to the format
-        if (format == Format.H_W_CH_N):
+        # Set h, w, ch, np according to the db_format
+        if db_format == Format.H_W_CH_N:
             (self.h, self.w, self.ch, self.n) = np.shape(self.db)
-        elif (format == Format.H_N):
+        elif db_format == Format.H_N:
             (self.h, self.n) = np.shape(self.db)
-        elif (format == Format.N_H_W_CH):
+        elif db_format == Format.N_H_W_CH:
             (self.n, self.h, self.w, self.ch) = np.shape(self.db)
-        elif (format == Format.N_H):
+        elif db_format == Format.N_H:
             (self.n, self.h) = np.shape(self.db)
 
         # Set class count, n_per_class, class start index
-        if (np.isscalar(n_per_class)):
-            if (self.n % n_per_class > 0): raise Exception('Total image count (n) is not ' +  # noqa: E701, E501
-                                                        'divisable by image per class (n_per_class)')  # noqa: E701, E501
+        if np.isscalar(n_per_class):
+            if self.n % n_per_class > 0: raise Exception('Total image count (n) is not ' +  # noqa: E701, E501
+                                                        'divisible by image per class (n_per_class)')  # noqa: E701, E501
             self.cls_n = np.uint16(self.n / n_per_class)
             self.n_per_class = np.tile(n_per_class, self.cls_n).astype('uint16')  # noqa: E501
             self.cls_st = (self.n_per_class * np.arange(0, self.cls_n, dtype='uint16')).astype('uint32')  # noqa: E501
@@ -589,11 +604,11 @@ class NNdb(object):
             self.cls_n = np.size(n_per_class)
             self.n_per_class = n_per_class
 
-            if (self.cls_n > 0):
+            if self.cls_n > 0:
                 self.cls_st = np.zeros(np.size(n_per_class), dtype='uint32')
                 self.cls_st[0] = 0
 
-                if (self.cls_n > 1):
+                if self.cls_n > 1:
                     st = n_per_class[0]
                     for i in range(1, self.cls_n):
                         self.cls_st[i] = st 
@@ -603,11 +618,11 @@ class NNdb(object):
         self.cls_lbl = cls_lbl
 
         # Build uniform cls labels if cls_lbl is not given
-        if (build_cls_lbl and cls_lbl is None):
+        if build_cls_lbl and cls_lbl is None:
             self.build_sorted_cls_lbl()
 
     def build_sorted_cls_lbl(self):
-        """Build a sorted class indicies/labels  for samples."""
+        """Build a sorted class indices/labels  for samples."""
         
         n_per_class = self.n_per_class
 
@@ -623,10 +638,10 @@ class NNdb(object):
 
     def clone(self, name):
         """Create a copy of this NNdb object."""
-        if (self.cls_lbl is not None):
-            return NNdb(name, self.db, self.n_per_class, False, self.cls_lbl, self.format)  # noqa: E501
+        if self.cls_lbl is not None:
+            return NNdb(name, self.db, self.n_per_class, False, self.cls_lbl, self.db_format)  # noqa: E501
         else:
-            return NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format)  # noqa: E501
+            return NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.db_format)  # noqa: E501
 
     def show_ws(self, cls_n=None, n_per_class=None, resize=None, offset=0, ws=None, title=None):
         """Visualize the db in a image grid.
@@ -639,8 +654,11 @@ class NNdb(object):
         n_per_class : int, optional
             Images per class. (Default value = None).
 
-        resize : int, optional
-            resize factor. (Default value = None).
+        resize : float or tuple, optional
+            Resize factor.
+            * float - Fraction of current size.
+            * tuple - Size of the output image.
+             (Default value = None).
 
         offset : int, optional
             Image index offset to the dataset. (Default value = None).
@@ -660,18 +678,19 @@ class NNdb(object):
         Examples
         --------
         Show first 5 subjects with 8 images per subject. (offset = 0)
+        >>> nndb = NNdb('DB')
         >>> nndb.show(5, 8)
 
-        Show next 5 subjects with 8 images per subject,
-        starting at (5*8)th image.
+        Show next 5 subjects with 8 images per subject, starting at (5*8)th image.
+        >>> nndb = NNdb('DB')
         >>> nndb.show_ws(5, 8, offset=5*8)
         """
     
         # Set the defaults
-        if (ws is None): ws = {}
-        if not ('height' in ws): ws['height'] = 5
-        if not ('width' in ws): ws['width'] = 5
-        if not ('color' in ws): ws['color'] = (255, 255, 255) if (self.ch > 1)  else (255)
+        if ws is None: ws = {}
+        if 'height' not in ws: ws['height'] = 5
+        if 'width' not in ws: ws['width'] = 5
+        if 'color' not in ws: ws['color'] = (255, 255, 255) if self.ch > 1 else tuple([255])
         immap(self.db_scipy, rows=cls_n, cols=n_per_class, scale=resize, offset=offset, ws=ws, title=title)
 
     def show(self, cls_n=None, n_per_class=None, resize=None, offset=0, title=None):
@@ -685,8 +704,11 @@ class NNdb(object):
         n_per_class : int, optional
             Images per class. (Default value = None).
 
-        resize : int, optional
-            resize factor. (Default value = None).
+        resize : float or tuple, optional
+            Resize factor.
+            * float - Fraction of current size.
+            * tuple - Size of the output image.
+             (Default value = None).
 
         offset : int, optional
             Image index offset to the dataset. (Default value = None).
@@ -697,10 +719,11 @@ class NNdb(object):
         Examples
         --------
         Show first 5 subjects with 8 images per subject. (offset = 0)
+        >>> nndb = NNdb('DB')
         >>> nndb.show(5, 8)
 
-        Show next 5 subjects with 8 images per subject,
-        starting at (5*8)th image.
+        Show next 5 subjects with 8 images per subject, starting at (5*8)th image.
+        >>> nndb = NNdb('DB')
         >>> nndb.show_ws(5, 8, offset=5*8)
         """        
         immap(self.db_scipy, rows=cls_n, cols=n_per_class, scale=resize, offset=offset, title=title)
@@ -713,10 +736,10 @@ class NNdb(object):
         filepath : string
             Path to the file.
         """
-        imdb_obj = {'db': self.db_matlab, 'class' : self.cls_lbl, 'im_per_class' : self.n_per_class}
+        imdb_obj = {'db': self.db_matlab, 'class': self.cls_lbl, 'im_per_class': self.n_per_class}
         scipy.io.savemat(filepath, {'imdb_obj': imdb_obj})
  
-    def save_to_dir(self, dirpath, create_cls_dir=True):
+    def save_to_dir(self, dirpath=None, create_cls_dir=True):
         """Save images to a directory. 
 
         Parameters
@@ -728,28 +751,28 @@ class NNdb(object):
             Create directories for individual classes. (Default value = True).
         """                        
         # Make a new directory to save images
-        if (~isempty(dirpath) and not os.path.exists(dirpath)):
-            mkdir(dirpath)
+        if dirpath and not os.path.exists(dirpath):
+            os.makedirs(dirpath)
                     
         img_i = 1
         for cls_i in range(self.cls_n):
 
             cls_name = str(cls_i)
-            if (create_cls_dir and not os.path.exists(os.path.join(dirpath, cls_name))):
-                 os.makedirs(os.path.join(dirpath, cls_name))          
+            if create_cls_dir and not os.path.exists(os.path.join(dirpath, cls_name)):
+                os.makedirs(os.path.join(dirpath, cls_name))
 
             for cls_img_i in range(self.n_per_class[cls_i]):
-                if (create_cls_dir):
-                    img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True);
-                    fname = '{img_name}.jpg'.format(img_name=str(cls_img_i))
-                    img.save(os.path.join(dirpath, cls_name, fname))
+                if create_cls_dir:
+                    img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True)
+                    filename = '{img_name}.jpg'.format(img_name=str(cls_img_i))
+                    img.save(os.path.join(dirpath, cls_name, filename))
 
                 else:
-                    img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True);
-                    fname = '{cls_name}_{cls_img_index}.jpg'.format(cls_name=cls_name, cls_img_index=str(cls_img_i))
-                    img.save(os.path.join(dirpath, fname))
+                    img = array_to_img(self.get_data_at(img_i), 'channels_last', scale=True)
+                    filename = '{cls_name}_{cls_img_index}.jpg'.format(cls_name=cls_name, cls_img_index=str(cls_img_i))
+                    img.save(os.path.join(dirpath, filename))
                     
-                img_i = img_i + 1;
+                img_i = img_i + 1
 
     def plot(self, n=None, offset=None):
         """Plot the features.
@@ -766,25 +789,28 @@ class NNdb(object):
 
         Examples
         --------
-        >>>plot 5 samples. (offset = 1)
-        >>>.plot(5, 8)
+        plot 5 samples. (offset = 0)
+        >>> nndb = NNdb('DB')
+        >>> nndb.plot(5, 8)
 
-        >>>plot 5 samples starting from 10th sample
-        >>>.plot(5, 10)
+        plot 5 samples starting from 11th sample
+        >>> nndb = NNdb('DB')
+        >>> nndb.plot(5, 10)
         """
         # Set defaults for arguments
-        if (n is None): n = self.n  # noqa: E701
-        if (offset is None): offset = 0  # noqa: E701
+        if n is None: n = self.n  # noqa: E701
+        if offset is None: offset = 0  # noqa: E701
 
+        # noinspection PyPep8Naming
         X = self.features
-        fsize = X.shape[0]
+        fdim = X.shape[0]
 
         # Error handling
-        if (fsize > 3): raise Exception('self.h = ' + str(self.h) +  # noqa: E701, E501
+        if fdim > 3: raise Exception('self.h = ' + str(self.h) +  # noqa: E701, E501
                                         ', must be 2 for (2D) or 3 for (3D) plots')  # noqa: E701, E501
 
-        # Draw with colors if labels are avaiable
-        if (self.cls_lbl is not None):
+        # Draw with colors if labels are available
+        if self.cls_lbl is not None:
             for i in range(0, self.cls_n):
 
                 # Set st and en for class i
@@ -792,27 +818,27 @@ class NNdb(object):
                 en = st + np.uint32(self.n_per_class[i])
 
                 # Break
-                if (st >= offset + n): break  # noqa: E701
+                if st >= offset + n: break  # noqa: E701
 
                 # Draw samples starting at offset
-                if (en > offset):
+                if en > offset:
                     st = offset
                 else:
                     continue
 
                 # Draw only n samples
-                if (en >= offset + n): en = offset + n  # noqa: E701
+                if en >= offset + n: en = offset + n  # noqa: E701
 
                 # Draw 2D or 3D plot
-                if (fsize == 2):
+                if fdim == 2:
                     color = self.cls_lbl[st:en]  # noqa: F841
                     plt.scatter(X[0, st:en], X[1, st:en], c=color)
                     # s = scatter(X(1, st:en), X(2, st:en), 25, c, 'filled', \
                     #           'MarkerEdgeColor', 'k')
                     # s.LineWidth = 0.1
 
-                elif (fsize == 3):
-                    c = self.cls_lbl[st:en]  # noqa: F841
+                # elif fdim == 3:
+                    # c = self.cls_lbl[st:en]  # noqa: F841
                     # s = scatter3(X(1, st:en), X(2, st:en), X(3, st:en), \
                     #             25, c, 'filled', 'MarkerEdgeColor', 'k')
                     # s.LineWidth = 0.1
@@ -834,7 +860,7 @@ class NNdb(object):
         """
 
         # Init empty NNdb to collect images
-        nndb = NNdb(db_name, format=Format.H_W_CH_N)
+        nndb = NNdb(db_name, db_format=Format.H_W_CH_N)
         cls_names = [f for f in os.listdir(dirpath)]
 
         # Iterator
@@ -848,7 +874,7 @@ class NNdb(object):
                 # if img_name.endswith('.jpg'):
                 img = scipy.misc.imread(os.path.join(cls_dir, img_name))
 
-                if (img.ndim == 2):
+                if img.ndim == 2:
                     img = np.expand_dims(img, 2)
 
                 # Update NNdb
@@ -862,18 +888,18 @@ class NNdb(object):
     # Private Interface
     ##########################################################################
     def init_db_fields__(self):
-        if (self.format == Format.H_W_CH_N):
+        if self.db_format == Format.H_W_CH_N:
             self.h, self.w, self.ch, self.n = self.db.shape
             
-        elif (self.format == Format.H_N):
+        elif self.db_format == Format.H_N:
             self.w = 1
             self.ch = 1
             self.h, self.n = self.db.shape
 
-        elif (self.format == Format.N_H_W_CH):
+        elif self.db_format == Format.N_H_W_CH:
             self.n, self.h, self.w, self.ch = self.db.shape
 
-        elif (self.format == Format.N_H):
+        elif self.db_format == Format.N_H:
             self.w = 1
             self.ch = 1
             self.n, self.h = self.db.shape
@@ -886,87 +912,86 @@ class NNdb(object):
         """db compatible for convolutional networks."""
         
         # N x CH x H x W
-        if (self.format == Format.N_H_W_CH or self.format == Format.H_W_CH_N):
+        if self.db_format == Format.N_H_W_CH or self.db_format == Format.H_W_CH_N:
             return self.db_scipy.transpose((0, 3, 1, 2))
 
         # N x 1 x H x 1
-        elif (self.format == Format.N_H or self.format == Format.H_N):
+        elif self.db_format == Format.N_H or self.db_format == Format.H_N:
             return self.db_scipy[:, np.newaxis, :, np.newaxis]
 
         else:
-            raise Exception("Unsupported db format")
+            raise Exception("Unsupported db db_format")
 
     @property
     def db_convo_tf(self):
         """db compatible for convolutional networks."""
         
         # N x H x W x CH
-        if (self.format == Format.N_H_W_CH or self.format == Format.H_W_CH_N):
+        if self.db_format == Format.N_H_W_CH or self.db_format == Format.H_W_CH_N:
             return self.db_scipy
 
         # N x H
-        elif (self.format == Format.N_H or self.format == Format.H_N):
+        elif self.db_format == Format.N_H or self.db_format == Format.H_N:
             return self.db_scipy[:, :, np.newaxis, np.newaxis]
 
         else:
-            raise Exception("Unsupported db format")
+            raise Exception("Unsupported db db_format")
 
     @property
     def db_scipy(self):
         """db compatible for scipy library.""" 
 
         # N x H x W x CH or N x H  
-        if (self.format == Format.N_H_W_CH or self.format == Format.N_H):
+        if self.db_format == Format.N_H_W_CH or self.db_format == Format.N_H:
             return self.db
 
         # H x W x CH x N
-        elif (self.format == Format.H_W_CH_N):
+        elif self.db_format == Format.H_W_CH_N:
             return np.rollaxis(self.db, 3)
 
         # H x N
-        elif (self.format == Format.H_N):
+        elif self.db_format == Format.H_N:
             return np.rollaxis(self.db, 1)
 
         else:
-            raise Exception("Unsupported db format")
+            raise Exception("Unsupported db db_format")
 
     @property
     def features_scipy(self):
         """2D feature matrix (double) compatible scipy library."""
-        return self.db_scipy.reshape((self.n, self.h * self.w * self.ch))\
-                 .astype('double')
+        return self.db_scipy.reshape((self.n, self.h * self.w * self.ch)).astype('double')
 
     @property
     def db_matlab(self):
         """db compatible for matlab.""" 
 
         # H x W x CH x N or H x N  
-        if (self.format == Format.H_W_CH_N or self.format == Format.H_N):
+        if self.db_format == Format.H_W_CH_N or self.db_format == Format.H_N:
             return self.db
 
         # N x H x W x CH
-        elif (self.format == Format.N_H_W_CH):
+        elif self.db_format == Format.N_H_W_CH:
             return np.transpose(self.db, (1, 2, 3, 0))
 
         # N x H
-        elif (self.format == Format.N_H):
+        elif self.db_format == Format.N_H:
             return np.rollaxis(self.db, 1)
 
         else:
-            raise Exception("Unsupported db format")
+            raise Exception("Unsupported db db_format")
 
     @property
     def features(self):
         """2D feature matrix (double) compatible for matlab."""                
-        return self.db_matlab.reshape((self.h * self.w * self.ch, self.n))\
-                 .astype('double')
+        return self.db_matlab.reshape((self.h * self.w * self.ch, self.n)).astype('double')
 
     @property
     def zero_to_one(self):
         """db converted to 0-1 range. database data type will be converted to double."""                
 
         # Construct a new object
-        return NNdb(self.name + ' (0-1)', np.double(self.db)/255, self.n_per_class, false, self.cls_lbl, self.format)
+        return NNdb(self.name + ' (0-1)', self.db.astype(np.float64) / 255, self.n_per_class, False,
+                    self.cls_lbl, self.db_format)
 
     @property
     def im_ch_axis(self):
@@ -974,13 +999,13 @@ class NNdb(object):
 
             Exclude the sample axis.
         """
-        if (self.format == Format.H_W_CH_N):
+        if self.db_format == Format.H_W_CH_N:
             return 2
-        elif (self.format == Format.H_N):
+        elif self.db_format == Format.H_N:
             return 0
-        elif (self.format == Format.N_H_W_CH):
+        elif self.db_format == Format.N_H_W_CH:
             return 2
-        elif (self.format == Format.N_H):
+        elif self.db_format == Format.N_H:
             return 0
         else:
-            raise Exception("Unsupported db format")
+            raise Exception("Unsupported db db_format")

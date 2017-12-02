@@ -374,9 +374,9 @@ class Cifar10Db(PreLoadedDb):
 
             for i in range(im_count):
                 # Scale the image (low dimension/resolution)
-                cimg = np.transpose(Xte[i], (1, 2, 0))  # scipy format
+                cimg = np.transpose(Xte[i], (1, 2, 0))  # scipy db_format
                 cimg = scipy.misc.imresize(cimg, scale)
-                newXte[i] = np.rollaxis(cimg, 2, 0)  # VGG16 format
+                newXte[i] = np.rollaxis(cimg, 2, 0)  # VGG16 db_format
 
                 # Fix categorical labels for VGG16
                 nb_class = self.get_nb_class()

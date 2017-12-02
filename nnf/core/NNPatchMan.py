@@ -24,7 +24,7 @@ class NNPatchMan(NNFramework):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, generator, dbparams=[]):
+    def __init__(self, generator, dbparams=None):
         """Constructs :obj:`NNPatchMan` instance.
 
         Parameters
@@ -62,14 +62,14 @@ class NNPatchMan(NNFramework):
 
         cfg : :obj:`NNCfg`
             Neural Network configuration that will be used in training. 
-            Useful to build the deep stacked network after layer-wise pre-trianing.
+            Useful to build the deep stacked network after layer-wise pre-training.
 
         Notes
         -----
-        Some of the layers may not be pre-trianed. Hence precfgs itself is
+        Some of the layers may not be pre-trained. Hence precfgs itself is
         not sufficient to determine the architecture of the final 
         stacked network.
-        TODO: Parallelize processing (1 level - model level) or (2 level - patch level)
+        TODO: Parallel processing (1 level - model level) or (2 level - patch level)
         """
         # Parallization Level-1: patch level
         # Parallization Level-2: each patch's model level

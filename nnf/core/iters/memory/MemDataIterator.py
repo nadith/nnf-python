@@ -25,8 +25,7 @@ class MemDataIterator(DataIterator):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, edataset, nndb, nb_class, pp_params=None, 
-                                                        fn_gen_coreiter=None):
+    def __init__(self, edataset, nndb, nb_class, pp_params=None, fn_gen_coreiter=None):
         """Construct a MemDataIterator instance.
 
         Parameters
@@ -50,10 +49,10 @@ class MemDataIterator(DataIterator):
         """
         super().__init__(pp_params, fn_gen_coreiter, edataset, nb_class)
 
-        # NNdb database to create the iteartor
+        # NNdb database to create the iterator
         self.nndb = nndb
 
-    def init(self, params=None, y=None, setting=None):
+    def init_ex(self, params=None, y=None, setting=None):
         """Initialize the instance.
 
         Parameters
@@ -63,7 +62,7 @@ class MemDataIterator(DataIterator):
         """
         params = {} if (params is None) else params
 
-        # Set db and _image_shape (important for convonets, and fit() method below)
+        # Set db and _image_shape (important for convolutional nets, and fit() method below)
         data_format = params['data_format'] if ('data_format' in params) else None
         data_format = K.image_data_format() if (data_format is None) else data_format
         target_size = (self.nndb.h, self.nndb.w)
@@ -96,11 +95,11 @@ class MemDataIterator(DataIterator):
                                 self._imdata_pp.rounds,
                                 self._imdata_pp.seed)
         else:
-            self.imdata_pp_.apply(setting)
+            self._imdata_pp.apply(setting)
 
-        gen_next = self._imdata_pp.flow(db, self.nndb.cls_lbl, 
-                                            self._nb_class, params=params)
-        settings = self.imdata_pp_.settings
+        gen_next = self._imdata_pp.flow_ex(db, self.nndb.cls_lbl,
+                                           self._nb_class, params=params)
+        settings = self._imdata_pp.setting
         super().init(gen_next, params)
         return settings
 
@@ -108,14 +107,14 @@ class MemDataIterator(DataIterator):
         """Create a copy of this object."""
         new_obj = MemDataIterator(self.edataset, self.nndb, self._nb_class,
                                     self._pp_params, self._fn_gen_coreiter)
-        new_obj.init(self._params)
+        new_obj.init_ex(self._params)
         new_obj.sync(self._sync_gen_next)
         return new_obj
 
     def sync_generator(self, iter):
         """Sync the secondary iterator with this iterator.
 
-        Sync the secondary core iterator with this core itarator internally.
+        Sync the secondary core iterator with this core iterator internally.
         Used when data needs to be generated with its matching target.
 
         Parameters
@@ -134,7 +133,7 @@ class MemDataIterator(DataIterator):
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def _release(self):
+    def release(self):
         """Release internal resources used by the iterator."""
-        super()._release()
+        super().release()
         del self.nndb

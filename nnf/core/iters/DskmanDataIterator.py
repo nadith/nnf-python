@@ -52,7 +52,7 @@ class DskmanDataIterator(DataIterator):
 
     Notes
     -----
-    Union operations may result in ommitting duplicate entries in class ranges or 
+    Union operations may result in omitting duplicate entries in class ranges or
     column ranges. This is addressed in the code.        
 
     Perf for col_ranges and cls_ranges done since the lookup is performed on
@@ -63,17 +63,17 @@ class DskmanDataIterator(DataIterator):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, db_pp_params):
+    def __init__(self, pp_params):
         """Constructor of the abstract class :obj:`DataIterator`.
 
-        Must call init() to intialize the instance.
+        Must call init_ex() to initialize the instance.
 
         Parameters
         ----------
-        db_pp_params : :obj:`dict`
+        pp_params : :obj:`dict`
             Pre-processing parameters for :obj:`ImageDataPreProcessor`.
         """
-        super().__init__(db_pp_params)
+        super().__init__(pp_params)
               
         # List of class ranges (list of lists)
         # i.e 
@@ -97,7 +97,7 @@ class DskmanDataIterator(DataIterator):
         # INHERITED: Used in __next__() to utilize the generator with yield
         self._gen_next = None
 
-    def init(self, cls_ranges, col_ranges, read_data):
+    def init_ex(self, cls_ranges, col_ranges, read_data):
         """Initialize the :obj:`DskmanDataIterator` instance.
 
         Parameters
@@ -112,7 +112,8 @@ class DskmanDataIterator(DataIterator):
             Whether to read the actual data.
         """
         # gen_next is ignored since using a custom 'self._gen_next' below
-        super().init(gen_next=None)
+        # iter_param is ignored since it's not applicable in this context
+        super().init(gen_next=None, params=None)
 
         # PERF: Whether to read the data
         self._read_data = read_data
@@ -163,7 +164,7 @@ class DskmanDataIterator(DataIterator):
                         return union
 
                     # Issue a warning if user-required order is going to be altered
-                    tmp = sort(range)
+                    tmp = np.sort(range)
                     if (not np.array_equal(tmp, range)):
                         warnings.warn('%s %s is is not in sorted order.' % Dataset.str(Dataset.enum(ri)), name)
 
@@ -195,9 +196,9 @@ class DskmanDataIterator(DataIterator):
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def _release(self):
+    def release(self):
         """Release internal resources used by the iterator."""
-        super()._release()
+        super().release()
         del self.cls_ranges
         del self.col_ranges
         del self.cls_ranges_max
@@ -219,7 +220,7 @@ class DskmanDataIterator(DataIterator):
 
         Returns
         -------
-        `array_like`
+        ndarray
             Color image or raw data item.
 
         :obj:`list`
@@ -286,7 +287,7 @@ class DskmanDataIterator(DataIterator):
 
         Returns
         -------
-        `array_like`
+        ndarray
             maybe an image or raw data item.
 
         :obj:`list`
@@ -348,7 +349,7 @@ class DskmanDataIterator(DataIterator):
         return cls_not_visited
 
     def __filter_datasets_by_cls_col_idx(self, cls_idx, col_idx, cls_counter, clses_visited, dataset_count):
-        """Filter range indices by class index (cls_idx) and coloumn index (col_index).
+        """Filter range indices by class index (cls_idx) and column index (col_index).
 
         Handle repeated columns as well as processing special enum values. i.e Select.ALL|...
 
@@ -462,7 +463,7 @@ class DskmanDataIterator(DataIterator):
 
         Yields
         ------
-        `array_like`
+        ndarray
             maybe an image or raw data item.
 
         :obj:`list`
@@ -484,7 +485,7 @@ class DskmanDataIterator(DataIterator):
         -----
         .. warning:: LIMITATION: Class Repeats: sel.cls_range = [0, 0, 0, 2] are not supported
                     Reason: since the effect gets void due to the union operation
-                    TODO:   Copy and append sel.xx_col_indices to it self when there is a class repetition.   
+                    TODO:   Copy and append sel.xx_col_indices to itself when there is a class repetition.
         """
         # Itearate the union of the class ranges i.e (tr, val, te, etc)
         i = 0

@@ -114,11 +114,11 @@ class NNPatchGenerator:
                 nnpatches.append(self.new_nnpatch(self.h, self.w, tuple(offset)))
 
                 # Update the x direction of the offset
-                offset[1] = offset[1] + self.xstride;
+                offset[1] = offset[1] + self.xstride
                                 
             # Update the y direction of the offset, reset x direction offset
-            offset[0] = offset[0] + self.ystride;
-            offset[1] = 0;
+            offset[0] = offset[0] + self.ystride
+            offset[1] = 0
 
         return nnpatches
         

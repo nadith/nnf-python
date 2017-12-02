@@ -30,15 +30,15 @@ class DskmanMemDataIterator(DskmanDataIterator):
     #################################################################
     # Public Interface
     #################################################################
-    def __init__(self, db_pp_params):
+    def __init__(self, pp_params):
         """Construct a DskmanMemDataIterator instance.
 
         Parameters
         ----------
-        db_pp_params : :obj:`dict`
+        pp_params : :obj:`dict`
             Pre-processing parameters for :obj:`ImageDataPreProcessor`.
         """
-        super().__init__(db_pp_params)
+        super().__init__(pp_params)
         self.nndb = None
         self._save_to_dir = None
 
@@ -67,15 +67,36 @@ class DskmanMemDataIterator(DskmanDataIterator):
         """Image channel axis."""
         return self.nndb.im_ch_axis
 
-    #################################################################
-    # Protected Interface
-    #################################################################
-    def _release(self):
+    def release(self):
         """Release internal resources used by the iterator."""
-        super()._release()
+        super().release()
         del self.nndb
         del self._save_to_dir
 
+    def get_cimg_frecord(self, cls_idx, col_idx):
+        """Get image and file record (frecord) at cls_idx, col_idx.
+
+        Parameters
+        ----------
+        cls_idx : int
+            Class index. Belongs to `union_cls_range`.
+
+        col_idx : int
+            Column index. Belongs to `union_col_range`.
+
+        Returns
+        -------
+        ndarray
+            Color image.
+
+        :obj:`list`
+            file record. [file_path, file_position, class_label]
+        """
+        return self._get_cimg_frecord_in_next(cls_idx, col_idx)
+
+    #################################################################
+    # Protected Interface
+    #################################################################
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
         """Get image and file record (frecord) at cls_idx, col_idx.
 
@@ -89,7 +110,7 @@ class DskmanMemDataIterator(DskmanDataIterator):
 
         Returns
         -------
-        `array_like`
+        ndarray
             Color image.
 
         :obj:`list`

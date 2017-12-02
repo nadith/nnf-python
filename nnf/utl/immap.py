@@ -20,7 +20,7 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
 
     Parameters
     ----------
-    X : `array_like` -uint8
+    X : ndarray -uint8
         2D Data tensor that contains images.
 
         Format for color images: (Samples x H x W x CH).
@@ -33,8 +33,11 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
     cols : int
         Number of columns in the grid.
 
-    scale : int, optional
-        Scale factor. (Default value = None).
+    scale : float or tuple, optional
+        Scale factor.
+        * float - Fraction of current size.
+        * tuple - Size of the output image.
+         (Default value = None).
 
     offset : int, optional
         Offset to the first image (Default value = 0).
@@ -53,7 +56,7 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
 
     Returns
     -------
-    `array_like`
+    ndarray
         2D data tensor that contains image grid.
 
     Examples
@@ -89,7 +92,7 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
     >> %matplotlib inline - when you want an inline plot
     """
     # Error handling for arguments
-    if (len(X.shape) != 4): raise Exception('ARG_ERR: X: 4D tensor in the format H x W x CH x N')  # noqa: E701, E501
+    if (len(X.shape) != 4): raise Exception('ARG_ERR: X: 4D tensor in the db_format H x W x CH x N')  # noqa: E701, E501
 
     # Set defaults
     if (rows is None): rows = 1
@@ -109,7 +112,7 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
     if (scale is not None):
         # Scale Operation
         if (np.isscalar(scale)):
-            newX = np.zeros((im_count, h*scale, w*scale, ch), X.dtype)
+            newX = np.zeros((im_count, int(h*scale), int(w*scale), ch), X.dtype)
         else:
             newX = np.zeros((im_count, scale[0], scale[1], ch), X.dtype)
 
@@ -156,6 +159,8 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
 
     # Fill the grid
     for i in range(0, rows):
+        im_index = i * cols
+
         for j in range(0, cols):
             im_index = i * cols + j
             if (im_index >= im_count): break  # noqa: E701
@@ -164,7 +169,7 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
                       (j * (dim_x + + ws['width'])) : ((j * (dim_x + ws['width'])) + dim_x), :] \
                         = newX[im_index, :, :, :]
 
-        if (im_index > im_count): break  # noqa: E701
+        if im_index > im_count: break  # noqa: E701
 
     # grayscale compatibility
     image_map = np.squeeze(image_map)
@@ -174,13 +179,13 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
     ax = f.add_subplot(111)
 
     # Figure title
-    if (title is None):
+    if title is None:
         ax.set_title(str(dim_y) + 'x' + str(dim_x))
     else:
         ax.set_title(title)
 
     # Visualizing the grid
-    if (ch == 1):
+    if ch == 1:
         ax.imshow(image_map, cmap=matplotlib.cm.gray)
     else:
         ax.imshow(image_map)

@@ -110,6 +110,6 @@ class BigDataDirectoryIterator(DirectoryIterator):
                 x = np.expand_dims(x, axis=0)
 
         # TODO: Apply necessary transofmraiton
-        #x = self.image_data_generator.random_transform(x)
+        #x = self.imdata_pp.random_transform(x)
         x = self.image_data_generator.standardize(x)
         return x, cls_lbl

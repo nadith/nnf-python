@@ -123,7 +123,7 @@ class TestCNNModel(object):
 
         cnncfg.numepochs = 2
         cnncfg.validation_steps = 3 #800
-        cnncfg.steps_per_epoch = 5 #600
+        cnncfg.steps_per_epoch = 100 #5 #600
         nnpatchman.train(cnncfg)
         #nnpatchman.test(cnncfg)
         nnpatchman.predict(cnncfg)
@@ -146,38 +146,39 @@ class TestCNNModel(object):
     def __indsk_dbparams(self, db_dir, sel):
         """Use database at db_dir, write the processed data on to the disk, iterators read from the disk."""
         dbparam1 = {'alias': "DB1",
-                'db_dir': db_dir, 'selection': sel,
-                'iter_param': {'class_mode':'categorical',
-                                'batch_size':100,
-                                'target_size':(256,256)
-                                },
-                'iter_pp_param': {'rescale':1./255},
-                'iter_in_mem': False}
+                    'dskman_param': {'db_dir': db_dir, 'target_size': (256, 256)},
+                    'selection': sel,
+                    'iter_param': {'class_mode':'categorical',
+                                   'batch_size':100,
+                                   },
+                    'iter_pp_param': {'rescale':1./255},
+                    'iter_in_mem': False}
 
         return dbparam1
 
     def __mem_to_dsk_indsk_dbparams(self, nndb, db_dir, sel):
         """Use nndb, write the processed data on to the disk, iterators read from the disk."""
         dbparam1 = {'alias': "DB1",
-                'nndb': nndb, 'db_dir': db_dir, 'selection': sel, 
-                'iter_param': {'class_mode':'categorical',
-                                'batch_size':100,
-                                'target_size':(256,256)
-                                },
-                'iter_pp_param': {'rescale':1./255},
-                'iter_in_mem': False}
+                    'nndb': nndb, 'dskman_param': {'db_dir': db_dir, 'target_size': (256, 256)},
+                    'selection': sel,
+                    'iter_param': {'class_mode':'categorical',
+                                   'batch_size':100,
+                                   },
+                    'iter_pp_param': {'rescale':1./255},
+                    'iter_in_mem': False}
 
         return dbparam1
 
     def __mem_to_dsk_inmem_dbparams(self, nndb, db_dir, sel):
         """Use nndb, write the processed data on to the disk, iterators read from the memory."""
         dbparam1 = {'alias': "DB1",
-                'nndb': nndb, 'db_dir': db_dir, 'selection': sel, 
-                'iter_param': {'class_mode':'categorical',
-                                'batch_size':100
-                                },
-                'iter_pp_param': {'rescale':1./255},
-                'iter_in_mem': True}
+                    'nndb': nndb, 'dskman_param': {'db_dir': db_dir},
+                    'selection': sel,
+                    'iter_param': {'class_mode':'categorical',
+                                   'batch_size':100
+                                   },
+                    'iter_pp_param': {'rescale':1./255},
+                    'iter_in_mem': True}
         
         return dbparam1
 

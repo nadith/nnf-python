@@ -33,19 +33,19 @@ class CNNModel(NNModel):
     Attributes
     ----------
     X_L : :obj:`tuple`
-        In the format (`array_like` data tensor, labels).
+        In the format (ndarray data tensor, labels).
         If the `nnmodel` is not expecting labels, set it to None.
 
-    Xt : `array_like`
+    Xt : ndarray
         Target data tensor.
         If the `nnmodel` is not expecting a target data tensor,
         set it to None.
 
     X_L_val : :obj:`tuple`
-        In the format (`array_like` validation data tensor, labels).
+        In the format (ndarray validation data tensor, labels).
         If the `nnmodel` is not expecting labels, set it to None.
 
-    Xt_val : `array_like`
+    Xt_val : ndarray
         Validation target data tensor.
         If the `nnmodel` is not expecting a validation target data tensor,
         set it to None.

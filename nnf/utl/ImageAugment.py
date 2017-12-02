@@ -60,7 +60,7 @@ class ImageAugment(object):
         fsize = nndb.h*nndb.w*nndb.ch
 
         # Create a new database to save the generated data
-        nndb_aug = NNdb('augmented', format=nndb.format)
+        nndb_aug = NNdb('augmented', db_format=nndb.format)
 
         for i in range(0, nndb.cls_n):
     
@@ -118,7 +118,7 @@ class ImageAugment(object):
         X_train = nndb.db_scipy
 
         # Create a new database to save the generated data in batches
-        nndb_aug = NNdb('augmented', format=nndb.format)
+        nndb_aug = NNdb('augmented', db_format=nndb.format)
 
         # To enforce each image to have the same transformation within a round
         if ('random_transform_seed' in pp_params and isinstance(pp_params['random_transform_seed'], list)):        
@@ -161,7 +161,7 @@ class ImageAugment(object):
                 tmp_X = np.zeros((nndb.n, nndb.h, nndb.w, nndb.ch), dtype='uint8')
                 cls_i = 1
 
-                for (X_batch, X_batch) in ImageDataPreProcessor(pp_params, None).flow(nndb.db_scipy, None, None, params=params):
+                for (X_batch, X_batch) in ImageDataPreProcessor(pp_params, None).flow_ex(nndb.db_scipy, None, None, params=params):
                     if (cls_i >= nndb.cls_n):
                         break
 
@@ -169,8 +169,8 @@ class ImageAugment(object):
                     cls_i += 1
 
                 if (nndb_all is None):
-                    nndb_all = NNdb('batch', tmp_X, n_per_class, True, format=Format.N_H_W_CH)
+                    nndb_all = NNdb('batch', tmp_X, n_per_class, True, db_format=Format.N_H_W_CH)
                 else:
-                    nndb_all = nndb_all.merge(NNdb('batch', tmp_X, n_per_class, True, format=Format.N_H_W_CH))
+                    nndb_all = nndb_all.merge(NNdb('batch', tmp_X, n_per_class, True, db_format=Format.N_H_W_CH))
     
         return nndb_all

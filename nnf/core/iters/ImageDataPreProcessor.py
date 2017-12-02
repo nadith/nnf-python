@@ -14,6 +14,7 @@ from nnf.core.iters.ImageDataGenerator import ImageDataGenerator
 from nnf.core.iters.memory.NumpyArrayIterator import NumpyArrayIterator
 from nnf.core.iters.disk.DirectoryIterator import DirectoryIterator
 
+
 class ImageDataPreProcessor(ImageDataGenerator):
     """ImageDataPreProcessor represents the pre-processor for image data.
 
@@ -44,29 +45,31 @@ class ImageDataPreProcessor(ImageDataGenerator):
         self.mapminmax_setting = None
 
     def apply(self, setting):
-        """Apply settings on `self`."""
-        if (settings is None): return
+        """Apply setting on `self`."""
 
-        self.mean = settings.mean
-        self.std = settings.std
-        self.principal_components = settings.principal_components
-        self.whiten_components = settings.whiten_components
-        self.mapminmax_setting = settings.mapminmax_setting
+        if setting is None:
+            return
+
+        self.mean = setting['mean']
+        self.std = setting['std']
+        self.principal_components = setting['principal_components']
+        self.whiten_components = setting['whiten_components']
+        self.mapminmax_setting = setting['mapminmax_setting']
 
     def standardize(self, x):
         """Standardize data sample."""
 
         # VGG16Model specific pre-processing param
         if (self._pp_params is not None
-            and ('normalize_vgg16' in self._pp_params) and
-            self._pp_params['normalize_vgg16']):
+                and ('normalize_vgg16' in self._pp_params)
+                and self._pp_params['normalize_vgg16']):
             x[0, :, :] -= 103.939
             x[1, :, :] -= 116.779
             x[2, :, :] -= 123.68
 
         x = super().standardize(x)
 
-        #if (self.mapminmax_setting is not None):
+        # if (self.mapminmax_setting is not None):
         #    x = mapminmax('apply', x, self.mapminmax_setting)
         return x
 
@@ -74,7 +77,7 @@ class ImageDataPreProcessor(ImageDataGenerator):
             augment=False,
             rounds=1,
             seed=None):
-        '''Required for featurewise_center, featurewise_std_normalization
+        """Required for featurewise_center, featurewise_std_normalization
         and zca_whitening.
 
         # Arguments
@@ -86,25 +89,28 @@ class ImageDataPreProcessor(ImageDataGenerator):
             rounds: If `augment`,
                 how many augmentation passes to do over the data
             seed: random seed.
-        '''            
-        super().fit(self, X, augment, rounds, seed)
-            
+        """
+        super().fit(X, augment, rounds, seed)
+
         # Perform whitening/mapminmax/etc
         if (self._pp_params is not None
-            and ('mapminmax' in self._pp_params)):
+                and ('mapminmax' in self._pp_params)):
             minmax_range = self._pp_params['mapminmax']
-            #[~, self.mapminmax_setting] = mapminmax(X, minmax_range(1), minmax_range(2))
+            # [~, self.mapminmax_setting] = mapminmax(X, minmax_range(1), minmax_range(2))
 
-    def flow(self, X, y=None, nb_class=None, params=None):
-        """Construct a core iterator instancef for in memory database traversal.
+    def flow_ex(self, X, y=None, nb_class=None, params=None):
+        """Construct a core iterator instance for in memory database traversal.
 
         Parameters
         ----------
-        X : `array_like`
+        X : ndarray
             Data in tensor. Format: Samples x dim1 x dim2 ...
 
-        y : `array_like`
+        y : ndarray
             Vector indicating the class labels.
+
+        nb_class : int
+            Number of classes.
 
         params : :obj:`dict`
             Core iterator parameters. 
@@ -114,20 +120,21 @@ class ImageDataPreProcessor(ImageDataGenerator):
         :obj:`NumpyArrayIterator`
             Core iterator.
         """
-        if (self._fn_gen_coreiter is None):
+        if self._fn_gen_coreiter is None:
             return NumpyArrayIterator(X, y, nb_class, self, params)
 
         else:
-            try:
+            core_iter = None
+            if callable(self._fn_gen_coreiter):
                 core_iter = self._fn_gen_coreiter(X, y, nb_class, self, params)
-                if (not isinstance(core_iter, NumpyArrayIterator)): raise Exception()  # Error handlings               
-                return core_iter
 
-            except:
+            if not isinstance(core_iter, NumpyArrayIterator):
                 raise Exception("`fn_gen_coreiter` is not a child of `NumpyArrayIterator` class")
 
-    def flow_from_directory(self, frecords, nb_class, params=None):
-        """Construct a core iterator instancef for disk database traversal.
+            return core_iter
+
+    def flow_from_directory_ex(self, frecords, nb_class, params=None):
+        """Construct a core iterator instance for disk database traversal.
 
         Parameters
         ----------
@@ -145,27 +152,29 @@ class ImageDataPreProcessor(ImageDataGenerator):
         :obj:`DirectoryIterator`
             Core iterator.
         """
-        if (self._fn_gen_coreiter is None):
-            return DirectoryIterator(frecords, nb_class, self, params)    
-    
-        else:
-            try:
-                core_iter = self._fn_gen_coreiter(frecords, nb_class, self, params)
-                if (not isinstance(core_iter, DirectoryIterator)): raise Exception()  # Error handling
-                return core_iter
+        if self._fn_gen_coreiter is None:
+            return DirectoryIterator(frecords, nb_class, self, params)
 
-            except:
+        else:
+            core_iter = None
+            if callable(self._fn_gen_coreiter):
+                core_iter = self._fn_gen_coreiter(frecords, nb_class, self, params)
+
+            if not isinstance(core_iter, DirectoryIterator):
                 raise Exception("`fn_gen_coreiter` is not a child of `DirectoryIterator` class")
+
+            return core_iter
 
     ##########################################################################
     # Dependant Properties
     ##########################################################################
     @property
-    def settings(self):
-        """Calculated settings to use on val/te/etc datasets."""
-        value = {}
-        value['mean'] = self.mean
-        value['std'] = self.std
-        value['principal_components'] = self.principal_components
-        value['whiten_components'] = self.whiten_components
-        value['mapminmax_setting'] = self.mapminmax_setting
+    def setting(self):
+        """Calculated setting to use on val/te/etc datasets."""
+        value = {'mean': self.mean,
+                 'std': self.std,
+                 'principal_components': self.principal_components,
+                 'whiten_components': self.whiten_components,
+                 'mapminmax_setting': self.mapminmax_setting
+                 }
+        return value

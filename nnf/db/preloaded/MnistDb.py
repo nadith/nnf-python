@@ -195,7 +195,7 @@ class MnistDb(PreLoadedDb):
 
         Notes
         -----
-        Depending on the model, the labels need to be categorial or in a vector 
+        Depending on the model, the labels need to be categorical or in a vector
         arrangement.
         """
         tr_offset = int(0.8*self.tr_n)

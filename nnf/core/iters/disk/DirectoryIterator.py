@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 # Global Imports
 from warnings import warn as warning
-from keras.preprocessing.image import load_img
+from keras.preprocessing.image import load_img, array_to_img
 from keras.preprocessing.image import img_to_array
 from keras import backend as K
 import numpy as np
+import os
 
 # Local Imports
 from nnf.core.iters.Iterator import Iterator
@@ -87,8 +88,8 @@ class DirectoryIterator(Iterator):
             self.input_vectorized = params['input_vectorized'] if ('input_vectorized' in params) else False
             data_format = params['data_format'] if ('data_format' in params) else None
             class_mode = params['class_mode'] if ('class_mode' in params) else None
-            batch_size = params['batch_size'] if ('batch_size' in params) else 32
-            shuffle = params['shuffle'] if ('shuffle' in params) else True
+            batch_size = params['batch_size'] if ('batch_size' in params) else 32  # default if nncfg.batch_size is not specified.
+            shuffle = params['shuffle'] if ('shuffle' in params) else True  # default if nncfg.shuffle is not specified.
             seed = params['seed'] if ('seed' in params) else None
             save_to_dir = params['save_to_dir'] if ('save_to_dir' in params) else None
             save_prefix = params['save_prefix'] if ('save_prefix' in params) else ''
@@ -148,10 +149,10 @@ class DirectoryIterator(Iterator):
 
         Returns
         -------
-        `array_like` :
+        ndarray
             `batch_x` data matrix. Format: Samples x Features
 
-        `array_like` :
+        ndarray
             `batch_y` class label vector or 'batch_x' matrix. refer code.
         """
         with self.lock:

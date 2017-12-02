@@ -12,6 +12,7 @@
 # Local Imports
 from nnf.db.Format import Format
 
+
 class NNPatch(object):
     """NNPatch describes the patch information.
 
@@ -77,43 +78,115 @@ class NNPatch(object):
         nnmodels : :obj:`NNModel` or list of :obj:`NNModel`
             list of :obj:`NNModel` instances.
         """
-        if (isinstance(nnmodels, list)):
+        if isinstance(nnmodels, list):
             self.nnmodels = self.nnmodels + nnmodels
         else:
             self.nnmodels.append(nnmodels)
 
-    def init_nnpatch_fields(self, pimg, format):
+    def init_nnpatch_fields(self, pimg, db_format):
         """Initialize the fields of `nnpatch` with the information provided.
 
         .. warning:: Offset field will not be set via this method.
 
         Parameters
         ----------
-        pimg : `array_like`
+        pimg : ndarray
             Color image patch or raw data item.
 
-        format : nnf.db.Format
+        db_format : nnf.db.Format
             Format of the database.
         """
         # TODO: offset needs to be adjusted accordingly
-        if (format == Format.H_W_CH_N):
+        if db_format == Format.H_W_CH_N:
             self.h, self.w, _ = pimg.shape
             
-        elif (format == Format.H_N):
+        elif db_format == Format.H_N:
             self.w = 1
             self.h = pimg.shape[0]
 
-        elif (format == Format.N_H_W_CH):
+        elif db_format == Format.N_H_W_CH:
             self.h, self.w, _ = pimg.shape
 
-        elif (format == Format.N_H):
+        elif db_format == Format.N_H:
             self.w = 1
             self.h = pimg.shape[0]
+
+    def init_models(self, dict_iterstore, list_iterstore, dbparam_save_dirs):
+        """Generate, initialize and register `nnmodels` for this patch.
+
+        Parameters
+        ----------
+        list_iterstore : :obj:`list`
+            List of iterstores for :obj:`DataIterator`.
+
+        dict_iterstore : :obj:`dict`
+            Dictionary of iterstores for :obj:`DataIterator`.
+
+        dbparam_save_dirs : :obj:`list`
+            Paths to temporary directories for each user db-param of this
+            `nnpatch`.
+
+        Notes
+        -----
+        Invoked by :obj:`NNPatchMan`.
+
+        Note
+        ----
+        Used only in Patch Based Framework.
+        """
+        self.add_model(self._generate_nnmodels())
+
+        # Assign this patch and iterstores to each model
+        for model in self.nnmodels:
+            model.add_nnpatches(self)
+            model.add_iterstores(list_iterstore, dict_iterstore)
+            model.add_save_dirs(dbparam_save_dirs)
+
+    def setdefault_udata(self, ekey, value):
+        """Set the default value in `_user_data` dictionary.
+
+        Parameters
+        ----------
+        ekey : :obj:`Dataset`
+            Enumeration of `Dataset`. (`Dataset.TR`|`Dataset.VAL`|`Dataset.TE`|...)
+
+        value : :obj:`list`
+            Default value [] or List of database for each user dbparam.
+        """
+        return self._user_data.setdefault(ekey, value)
+
+    def set_udata(self, ekey, value):
+        """Set the value in `_user_data` dictionary.
+
+        Parameters
+        ----------
+        ekey : :obj:`Dataset`
+            Enumeration of `Dataset`. (`Dataset.TR`|`Dataset.VAL`|`Dataset.TE`|...)
+
+        value : :obj:`list`
+            List of database for each user dbparam.
+        """
+        self._user_data[ekey] = value
+
+    def get_udata(self, ekey):
+        """Get the value in `_user_data` dictionary.
+
+        Parameters
+        ----------
+        ekey : :obj:`Dataset`
+            Enumeration of `Dataset`. (`Dataset.TR`|`Dataset.VAL`|`Dataset.TE`|...)
+
+        Returns
+        -------
+        :obj:`list`
+            List of database for each user dbparam.
+        """
+        return self._user_data[ekey]
 
     ##########################################################################
     # Special Interface
     ##########################################################################
-    def __eq__(self,nnpatch):
+    def __eq__(self, nnpatch):
         """Equality of two :obj:`NNPatch` instances.
 
         Parameters
@@ -127,9 +200,8 @@ class NNPatch(object):
             True if both instances are the same. False otherwise.
         """
         iseq = False
-        if ((self.h == nnpatch.h) and
-            (self.w == nnpatch.w) and
-            (self.offset == nnpatch.offset)):
+        if ((self.h == nnpatch.h) and (self.w == nnpatch.w) and
+                (self.offset == nnpatch.offset)):
             iseq = True
 
         return iseq
@@ -154,79 +226,8 @@ class NNPatch(object):
         Used only in Patch Based Framework. Extend this method to implement
         custom generation of `nnmodels`.
         """
-        assert(False)
+        assert False
 
-    def _init_models(self, dict_iterstore, list_iterstore, dbparam_save_dirs):
-        """Generate, initialize and register `nnmodels` for this patch.
-
-        Parameters
-        ----------
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
-
-        dbparam_save_dirs : :obj:`list`
-            Paths to temporary directories for each user db-param of this
-            `nnpatch`.
-
-        Notes
-        -----
-        Invoked by :obj:`NNPatchMan`.
-
-        Note
-        ----
-        Used only in Patch Based Framework.
-        """
-        self.add_model(self._generate_nnmodels())
-
-        # Assign this patch and iterstores to each model
-        for model in self.nnmodels:
-            model._add_nnpatches(self)
-            model._add_iterstores(list_iterstore, dict_iterstore)
-            model._add_save_to_dirs(dbparam_save_dirs)
-
-    def _setdefault_udata(self, ekey, value):
-        """Set the default value in `_user_data` dictionary.
-
-        Parameters
-        ----------
-        ekey : :obj:`Dataset`
-            Enumeration of `Dataset`. (`Dataset.TR`|`Dataset.VAL`|`Dataset.TE`|...)
-
-        value : :obj:`list`
-            Default value [] or List of database for each user dbparam.
-        """
-        return self._user_data.setdefault(ekey, value)
-
-    def _set_udata(self, ekey, value):
-        """Set the value in `_user_data` dictionary.
-
-        Parameters
-        ----------
-        ekey : :obj:`Dataset`
-            Enumeration of `Dataset`. (`Dataset.TR`|`Dataset.VAL`|`Dataset.TE`|...)
-
-        value : :obj:`list`
-            List of database for each user dbparam.
-        """
-        self._user_data[ekey] = value
-
-    def _get_udata(self, ekey):
-        """Get the value in `_user_data` dictionary.
-
-        Parameters
-        ----------
-        ekey : :obj:`Dataset`
-            Enumeration of `Dataset`. (`Dataset.TR`|`Dataset.VAL`|`Dataset.TE`|...)
-
-        Returns
-        -------
-        :obj:`list`
-            List of database for each user dbparam.       
-        """
-        return self._user_data[ekey]
 
     ##########################################################################
     # Dependant Properties
@@ -238,10 +239,15 @@ class NNPatch(object):
         Returns
         -------
         str
-            Patch idenfication string. May not be unique.
+            Patch identification string. May not be unique.
         """
-        patch_id = '{offset_x}_{offset_y}_{height}_{width}'.format(offset_x=self.offset[0],
-                                                                    offset_y=self.offset[1],
-                                                                    height=self.h,
-                                                                    width=self.w)
+        height = 'H' if self.h is None else self.h
+        width = 'W' if self.w is None else self.w
+
+        patch_id = '{offset_x}_{offset_y}_{height}_{width}'.format(
+            offset_x=self.offset[0],
+            offset_y=self.offset[1],
+            height=height,
+            width=width)
+
         return patch_id

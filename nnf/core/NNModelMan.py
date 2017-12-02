@@ -47,7 +47,7 @@ class NNModelMan(NNFramework):
         for nnmodel in self.nnmodels:
 
             # Generate nnpatches
-            nnmodel._init_nnpatches()
+            nnmodel.init_nnpatches()
 
             # Process dbparams and attach dbs to nnpatches
             self._process_db_params(nnmodel.nnpatches, dbparams)

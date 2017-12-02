@@ -77,7 +77,7 @@ class TestDAEModel(object):
             # Append `pre_cfg` to `daepcfgs` list
             daepcfgs.append(pre_cfg)
 
-            # Peform pre-training
+            # Perform pre-training
             nnpatchman.pre_train(daepcfgs, daecfg)
 
         # To save the model & weights
@@ -115,16 +115,16 @@ class TestDAEModel(object):
         db_dir = os.path.join(data_folder, "disk_db")
 
         # Use nndb, iterators read from the memory
-        list_dbparams = self.__inmem_dbparams(nndb, sel)
+        # list_dbparams = self.__inmem_dbparams(nndb, sel)
 
         # Use database at db_dir, write the processed data on to the disk, iterators read from the disk
-        # list_dbparams = self.__indsk_dbparams(os.path.join(db_dir, "_processed_DB1"), sel)
+        list_dbparams = self.__indsk_dbparams(os.path.join(db_dir, "_processed_DB1"), sel)
 
         # Use nndb, write the processed data on to the disk, iterators read from the disk.
         #list_dbparams = self.__mem_to_dsk_indsk_dbparams(nndb, db_dir, sel)
 
         # Use nndb, write the processed data on to the disk, but iterators read from the memory.
-        #list_dbparams = self.__mem_to_dsk_inmem_dbparams(nndb, db_dir, sel)
+        # list_dbparams = self.__mem_to_dsk_inmem_dbparams(nndb, db_dir, sel)
 
         nnpatchman = NNPatchMan(DAEPatchGen(), list_dbparams)
 
@@ -138,7 +138,7 @@ class TestDAEModel(object):
             nnpatchman.pre_train(daepcfgs, daecfg)
 
         nnpatchman.train(daecfg)
-        #nnpatchman.predict(daecfg)
+        nnpatchman.predict(daecfg)
 
     ##########################################################################
     # Private Interface
@@ -146,57 +146,58 @@ class TestDAEModel(object):
     def __inmem_dbparams(self, nndb, sel):
         """Use nndb, iterators read from the memory"""
         dbparam1 = {'alias': "DB1",
-                'nndb': nndb, 'selection': sel,
-                'iter_param': {'class_mode':None, 
-                                'input_vectorized':True, 
-                                'batch_size':1
-                                },
-                'iter_pp_param': {'rescale':1./255},
-                'iter_in_mem': True}
+                    'nndb': nndb, 'selection': sel,
+                    'iter_param': {'class_mode': None,
+                                   'input_vectorized': True,
+                                   'batch_size': 1
+                                   },
+                    'iter_pp_param': {'rescale': 1. / 255},
+                    'iter_in_mem': True}
 
         return dbparam1
 
     def __indsk_dbparams(self, db_dir, sel):
         """Use database at db_dir, write the processed data on to the disk, iterators read from the disk."""
         dbparam1 = {'alias': "DB1",
-                'db_dir': db_dir, 'selection': sel,
-                'iter_param': {'class_mode':None, 
-                                'input_vectorized':True,
-                                'batch_size':1,
-                                'target_size':(33,33), 
-                                'color_mode':'grayscale'
-                                },
-                'iter_pp_param': {'rescale':1./255},
-                'iter_in_mem': False}
+                    'dskman_param': {'db_dir': db_dir, 'target_size': (33, 33)},
+                    'selection': sel,
+                    'iter_param': {'class_mode': None,
+                                   'input_vectorized': True,
+                                   'batch_size': 1,
+                                   'color_mode': 'grayscale'
+                                   },
+                    'iter_pp_param': {'rescale': 1. / 255},
+                    'iter_in_mem': False}
 
         return dbparam1
 
     def __mem_to_dsk_indsk_dbparams(self, nndb, db_dir, sel):
         """Use nndb, write the processed data on to the disk, iterators read from the disk."""
         dbparam1 = {'alias': "DB1",
-                'nndb': nndb, 'db_dir': db_dir, 'selection': sel, 
-                'iter_param': {'class_mode':None, 
-                                'input_vectorized':True,
-                                'batch_size':1,
-                                'target_size':(33,33), 
-                                'color_mode':'grayscale'
-                                },
-                'iter_pp_param': {'rescale':1./255},
-                'iter_in_mem': False}
+                    'nndb': nndb, 'dskman_param': {'db_dir': db_dir, 'target_size': (33, 33)},
+                    'selection': sel,
+                    'iter_param': {'class_mode': None,
+                                   'input_vectorized': True,
+                                   'batch_size': 1,
+                                   'color_mode': 'grayscale'
+                                   },
+                    'iter_pp_param': {'rescale': 1. / 255},
+                    'iter_in_mem': False}
 
         return dbparam1
 
     def __mem_to_dsk_inmem_dbparams(self, nndb, db_dir, sel):
         """Use nndb, write the processed data on to the disk, iterators read from the memory."""
         dbparam1 = {'alias': "DB1",
-                'nndb': nndb, 'db_dir': db_dir, 'selection': sel, 
-                'iter_param': {'class_mode':None, 
-                                'input_vectorized':True, 
-                                'batch_size':1
-                                },
-                'iter_pp_param': {'rescale':1./255},
-                'iter_in_mem': True}
-        
+                    'nndb': nndb, 'dskman_param': {'db_dir': db_dir},
+                    'selection': sel,
+                    'iter_param': {'class_mode': None,
+                                   'input_vectorized': True,
+                                   'batch_size': 1
+                                   },
+                    'iter_pp_param': {'rescale': 1. / 255},
+                    'iter_in_mem': True}
+
         return dbparam1
 
     ##########################################################################

@@ -22,18 +22,18 @@ class NumpyArrayIterator(Iterator):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, X, y, nb_class, image_data_pp, params=None):
+    def __init__(self, X, y, nb_class, imdata_pp, params=None):
         """Construct a :obj:`NumpyArrayIterator` instance.
 
         Parameters
         ----------
-        X : `array_like`
+        X : ndarray
             Data in 2D matrix. Format: Samples x Features.
 
-        y : `array_like`
+        y : ndarray
             Vector indicating the class labels.
 
-        image_data_pp : :obj:`ImageDataPreProcessor`
+        imdata_pp : :obj:`ImageDataPreProcessor`
             Image data pre-processor.
 
         params : :obj:`dict`
@@ -88,7 +88,7 @@ class NumpyArrayIterator(Iterator):
         else:
             self.y = None
 
-        self.image_data_generator = image_data_pp
+        self.imdata_pp = imdata_pp
         self.data_format = data_format
         self.image_shape = _image_shape
 
@@ -119,10 +119,10 @@ class NumpyArrayIterator(Iterator):
 
         Returns
         -------
-        `array_like` :
+        ndarray
             `batch_x` data matrix. Format: Samples x Features
 
-        `array_like` :
+        ndarray
             `batch_y` class label vector or 'batch_x' matrix. refer code.
         """
         # for python 2.x.
@@ -152,7 +152,7 @@ class NumpyArrayIterator(Iterator):
                 img = array_to_img(batch_x[i], self.data_format, scale=True)
                 fname = '{prefix}_{index}_{hash}.{format}'.format(prefix=self.save_prefix,
                                                                   index=current_index + i,
-                                                                  hash=np.random.randint(1e4),
+                                                                  hash=np.random.randint(10000),
                                                                   format=self.save_format)
                 img.save(os.path.join(self.save_to_dir, fname))
         
@@ -203,13 +203,13 @@ class NumpyArrayIterator(Iterator):
 
         Parameters
         ----------
-        X : `array_like`
-            Data matrix. Format Samples x ...
+        X : ndarray
+            Data matrix. Format = Samples x ...
 
         j : int
             Index of the data item to be featched. 
         """
         x = self.X[j]
-        x, _ = self.image_data_generator.random_transform(x.astype('float32'))
-        x = self.image_data_generator.standardize(x)
+        x, _ = self.imdata_pp.random_transform(x.astype('float32'))
+        x = self.imdata_pp.standardize(x)
         return x
