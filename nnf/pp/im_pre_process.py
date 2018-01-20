@@ -32,7 +32,7 @@ def im_pre_process(img, params):
     if ('histmatch' not in params): params['histmatch'] = False
     if ('cann_img' not in params): params['cann_img'] = None
 
-    # Histrogram eqaulization
+    # Histogram equalization
     if (params['histeq']):
         dtype = img.dtype
         img = hist_eq_ch(img, params['ch_axis'])
@@ -49,7 +49,7 @@ def im_pre_process(img, params):
 #    %         end
 #    end
     
-    # Histrogram matching
+    # Histogram matching
     if (params['histmatch'] and params['cann_img'] is not None):
         dtype = params['cann_img'].dtype
         img = hist_match_ch(img, params['cann_img'], params['ch_axis'])

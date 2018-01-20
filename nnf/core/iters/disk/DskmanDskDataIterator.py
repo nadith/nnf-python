@@ -8,15 +8,16 @@
 """
 
 # Global Imports
-from keras.preprocessing.image import load_img
-from keras.preprocessing.image import img_to_array
-from warnings import warn as warning
-import numpy as np
 import os
+import numpy as np
+from warnings import warn as warning
+from keras.preprocessing.image import img_to_array
+
 
 # Local Imports
+from nnf.utl.internals import load_img
 from nnf.core.iters.DskmanDataIterator import DskmanDataIterator
-from nnf.db.Format import Format
+
 
 class DskmanDskDataIterator(DskmanDataIterator):
     """DskmanDataIterator iterates the data in the disk for :obj:`NNDiskMan'.
@@ -59,9 +60,9 @@ class DskmanDskDataIterator(DskmanDataIterator):
         # value = [file_path_1, file_path_2, ...] <= list of file paths
         self.paths = {}
         
-        # Keyed by the cls_idx
+        # Indexed by cls_idx
         # value = <int> denoting the images per class
-        self.n_per_class = {}
+        self.n_per_class = np.array([], dtype=np.uint16)
         
         # INHERITED: Whether to read the data
         # self._read_data
@@ -113,31 +114,28 @@ class DskmanDskDataIterator(DskmanDataIterator):
 
             # Initialize [paths|n_per_class] dictionaries with related cls_idx
             fpaths = self.paths.setdefault(cls_idx, [])            
-            n_per_class = self.n_per_class.setdefault(cls_idx, 0)
+            n_per_class = 0
 
             # Update paths
             for fname in files:
                 fpath = os.path.join(root, fname)
                 fpaths.append(fpath)
                 n_per_class += 1
- 
-            # assert(cls_idx == self.cls_n)
 
-            # Update n_per_class dictionary
-            self.n_per_class[cls_idx] = n_per_class
-            cls_idx += 1
+            # Update n_per_class list
+            self.n_per_class = np.append(self.n_per_class, n_per_class)
 
-            # Update class count       
-            self.cls_n += 1
+            # Increment the class index
+            cls_idx = cls_idx + 1
+
+        # Update class count
+        self.cls_n  = cls_idx
 
     def get_im_ch_axis(self):
         """Image channel axis."""
         # Ref: _get_cimg_frecord_in_next(...) method
         return 2
 
-    ##########################################################################
-    # Protected: DskmanDataIterator Overrides
-    ##########################################################################
     def release(self):
         """Release internal resources used by the iterator."""
         super().release()
@@ -146,6 +144,9 @@ class DskmanDskDataIterator(DskmanDataIterator):
         del self.n_per_class
         del self.cls_idx_to_dir
 
+    ##########################################################################
+    # Protected: DskmanDataIterator Overrides
+    ##########################################################################
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
         """Get image and file record (frecord) at cls_idx, col_idx.
 
@@ -177,10 +178,11 @@ class DskmanDskDataIterator(DskmanDataIterator):
         # Read the actual data only if necessary
         cimg = None
         if (self._read_data):
-            cimg = load_img(impath, grayscale=False, target_size=None)
+            cimg = load_img(impath, use_rgb=None, target_size=None)
             cimg = img_to_array(cimg, data_format='channels_last')
 
-        return cimg, [impath, np.uint8(0), np.uint16(cls_idx)]  # [fpath, fpos, cls_lbl]
+        [fpath_to_class, filename] = os.path.split(impath)
+        return cimg, [fpath_to_class, filename, np.uint16(cls_idx)]  # [fpath_to_class, fpos/filename, cls_lbl]
 
     def _is_valid_cls_idx(self, cls_idx, show_warning=True):
         """Check the validity of class index.

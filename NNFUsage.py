@@ -9,10 +9,23 @@ __status__ = "Development"  # "Prototype", "Development", or "Production".
 
 import os
 import scipy.io
+import numpy as np
+from nnf.test.dl.Globals import *
 
 # Get the current working directory, define a `DataFolder`
 cwd = os.getcwd()
 data_folder = os.path.join(cwd, "DataFolder")
+model_folder = os.path.join(cwd, "ModelFolder")
+
+##############################################################################
+# Run this segment of code ONLY once to download all the data files and
+# model files from the FTP server.
+##############################################################################
+# from nnf.utl.FTPDownloader import FTPDownloader
+# ftpd = FTPDownloader(host='203.170.82.33', user='buildwac', passwd='<request_author>')
+# ftpd.download(data_folder, '/public_html/data/nnf/DataFolder')
+# ftpd.download(model_folder, '/public_html/data/nnf/ModelFolder')
+##############################################################################
 
 # Load image database `AR`
 filepath = os.path.join(data_folder, 'IMDB_66_66_AR_8.mat')
@@ -40,41 +53,46 @@ imdb_obj = matStruct['imdb_obj']
 
 # Augment database with random transformation ################################
 ##############################################################################
-
 # # 1: Augment with linear transformations.
-# # Initialize transformation related params for random transfomations
+# # Initialize transformation related params for random transformations
 # from nnf.db.NNdb import NNdb
 # from nnf.utl.ImageAugment import ImageAugment
 # pp_params = {}
-# #pp_params['rotation_range'] = 2
-# pp_params['width_shift_range'] = 0.04
-# #pp_params['force_horizontal_flip'] = True
+# pp_params['rotation_range'] = 2
+# pp_params['width_shift_range'] = 0.1
+# pp_params['force_horizontal_flip'] = True
 # nndb = NNdb('Original', imdb_obj.db, 8, True)
 # nndb_aug = ImageAugment.linear_transform(nndb, pp_params, 1, False)
 # nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
 # nndb_aug.save('IMDB_66_66_AR_8_LTRFM_WSHIFT.mat')
 
 # # 1.1: To enforce each image to have the same transformation in both rounds
+# from nnf.db.NNdb import NNdb
+# from nnf.utl.ImageAugment import ImageAugment
 # pp_params = {}
 # pp_params['rotation_range'] = 50
 # pp_params['random_transform_seed'] = 10
+# nndb = NNdb('Original', imdb_obj.db, 8, True)
 # nndb_aug = ImageAugment.linear_transform(nndb, pp_params, 2, False)
 # nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
 
 # # 1.2: To enforce each image to have the same transformation within a round
+# from nnf.db.NNdb import NNdb
+# from nnf.utl.ImageAugment import ImageAugment
 # pp_params = {}
 # pp_params['rotation_range'] = 50
 # pp_params['random_transform_seed'] = [10, 20] # two rounds, two seeds
+# nndb = NNdb('Original', imdb_obj.db, 8, True)
 # nndb_aug = ImageAugment.linear_transform(nndb, pp_params, 2, False)
 # nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
 
 # # 2: Augment with gaussian data generation.
 # from nnf.db.NNdb import NNdb
 # from nnf.utl.ImageAugment import ImageAugment
-# nndb = NNdb('Original', imdb_obj.db, 8, True)
 # info = {}
 # info['noise_ratio'] = 0.05
 # info['samples_per_class'] = 8
+# nndb = NNdb('Original', imdb_obj.db, 8, True)
 # nndb_aug = ImageAugment.gauss_data_gen(nndb, info, False)
 # nndb_aug.show(10, np.int(np.unique(nndb_aug.n_per_class)))
 # nndb_aug.save('IMDB_66_66_AR_8_GTRFM_0.05.mat')
@@ -85,7 +103,7 @@ imdb_obj = matStruct['imdb_obj']
 # from nnf.db.DbSlice import DbSlice
 # from nnf.db.Selection import Selection
 # from nnf.db.Selection import Select
-
+#
 # # 1:
 # nndb = NNdb('original', imdb_obj.db, 8, True)
 # sel = Selection()
@@ -100,7 +118,7 @@ imdb_obj = matStruct['imdb_obj']
 # sel.te_class_range      = np.uint8(np.arange(80, 100))
 # [nndb_tr, nndb_val, nndb_te, nndb_tr_out, nndb_val_out, nndb_te_out, _] =\
 #                        DbSlice.slice(nndb, sel)
-
+#
 # # Visualize first 10 identities of all nndb splits
 # nndb_tr.show(10, 4)
 # nndb_val.show(10, 3)
@@ -190,7 +208,7 @@ imdb_obj = matStruct['imdb_obj']
 # from nnf.db.DbSlice import DbSlice
 # from nnf.db.Selection import Selection
 # from nnf.db.Selection import Select
-
+#
 # # 1: LDA
 # nndb = NNdb('original', imdb_obj.db, 8, True)
 # sel = Selection()
@@ -209,52 +227,71 @@ imdb_obj = matStruct['imdb_obj']
 # Deep Learning Framework ####################################################
 ##############################################################################
 # # 1: AE Model
+# Globals.TEST_ITERMODE = TestIterMode.ITER_MEM
 # from nnf.test.dl.TestAEModel import TestAEModel
 # TestAEModel().Test()
-
+#
 # # 1.1: AE Model (pre-loaded database)
+# Globals.TEST_ITERMODE = TestIterMode.ITER_NO
 # from nnf.test.dl.TestAEModel import TestAEModel
 # TestAEModel().Test_preloaded_db()
-
+#
 # # 2: DAE Model ###############################################################
+# Globals.TEST_ITERMODE = TestIterMode.ITER_MEM
 # from nnf.test.dl.TestDAEModel import TestDAEModel
 # TestDAEModel().Test()
-
+#
 # # 2.1: DAE Model (without pre-training)
+# Globals.TEST_ITERMODE = TestIterMode.ITER_DSK
 # from nnf.test.dl.TestDAEModel import TestDAEModel
 # TestDAEModel().Test(pretrain=False)
 #
 # # 2.2: DAE Model (pre-loaded database)
+# Globals.TEST_ITERMODE = TestIterMode.ITER_NO
 # from nnf.test.dl.TestDAEModel import TestDAEModel
 # TestDAEModel().Test_preloaded_db()
-
+#
 # # 3: DAEReg Model ############################################################
+# Globals.TEST_ITERMODE = TestIterMode.ITER_MEM
 # from nnf.test.dl.TestDAERegModel import TestDAERegModel
 # TestDAERegModel().Test()
-
-# # 3.1: DAEReg Model (pre-loaded database)
+#
+# # 2.1: DAE Model (without pre-training)
+# Globals.TEST_ITERMODE = TestIterMode.ITER_DSK
+# from nnf.test.dl.TestDAERegModel import TestDAERegModel
+# TestDAERegModel().Test(pretrain=False)
+#
+# # 3.2: DAEReg Model (pre-loaded database)
+# Globals.TEST_ITERMODE = TestIterMode.ITER_NO
 # from nnf.test.dl.TestDAERegModel import TestDAERegModel
 # TestDAERegModel().Test_preloaded_db()
-
+#
 # # 4: CNN Model ###############################################################
-# # Run in CPU
-# import tensorflow as tf
-# with tf.device('/cpu:0'):
-#     from nnf.test.dl.TestCNNModel import TestCNNModel
-#     TestCNNModel().Test()
-
-# # Run in GPU
+# Globals.TEST_ITERMODE = TestIterMode.ITER_DSK
 # from nnf.test.dl.TestCNNModel import TestCNNModel
 # TestCNNModel().Test()
-
+#
 # # 4.1: CNN Model (pre-loaded database)
+# Globals.TEST_ITERMODE = TestIterMode.ITER_NO
 # from nnf.test.dl.TestCNNModel import TestCNNModel
 # TestCNNModel().Test_preloaded_db()
-
-# # 5: VGG16 Model #############################################################
+#
+# # 5: CNN2DReg Model ##########################################################
+# Globals.TEST_ITERMODE = TestIterMode.ITER_DSK
+# from nnf.test.dl.TestCNN2DRegModel import TestCNN2DRegModel
+# TestCNN2DRegModel().Test()
+#
+# # 6: VGG16 Model #############################################################
+# Globals.TEST_ITERMODE = TestIterMode.ITER_MEM
 # from nnf.test.dl.TestVGG16Model import TestVGG16Model
 # TestVGG16Model().Test()
-
-# # 5.1: VGG16 Model (pre-loaded database)
+#
+# # 6.1: VGG16 Model (pre-loaded database)
+# Globals.TEST_ITERMODE = TestIterMode.ITER_NO
 # from nnf.test.dl.TestVGG16Model import TestVGG16Model
 # TestVGG16Model().Test_preloaded_db()
+#
+# # 7: CNN2DParallel Model #####################################################
+# Globals.TEST_ITERMODE = TestIterMode.ITER_DSK
+# from nnf.test.dl.TestCNN2DParallelModel import TestCNN2DParallelModel
+# TestCNN2DParallelModel().Test()

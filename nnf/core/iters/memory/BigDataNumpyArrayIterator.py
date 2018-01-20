@@ -8,10 +8,10 @@
 """
 
 # Global Imports
-import numpy as np
 
 # Local Imports
 from nnf.core.iters.memory.NumpyArrayIterator import NumpyArrayIterator
+
 
 class BigDataNumpyArrayIterator(NumpyArrayIterator):
     """BigDataNumpyArrayIterator iterates the raw data in the memory for :obj:`NNModel'."""
@@ -38,7 +38,7 @@ class BigDataNumpyArrayIterator(NumpyArrayIterator):
         """
         super().__init__(X, y, nb_class, imdata_pp, params)
 
-    def _get_data(self, X, j):
+    def _get_data(self, X, y, j):
         """Load raw data item from in memory database, pre-process and return.
 
         Parameters
@@ -47,12 +47,6 @@ class BigDataNumpyArrayIterator(NumpyArrayIterator):
             Data matrix. Format Samples x ...
 
         j : int
-            Index of the data item to be featched. 
+            Index of the data item to be fetched.
         """
-        x = self.X[j]
-
-        # TODO: Apply necessary transofmraiton
-        # imdata_pp set to imdata_pp in the constructor
-        #x = self.imdata_pp.random_transform(x)
-        x = self.imdata_pp.standardize(x)
-        return x
+        return super()._get_data(X, y, j)

@@ -36,7 +36,7 @@ class DskDataIterator(DataIterator):
             Dataset enumeration key.
 
         frecords : :obj:`list`
-            List of file records. frecord = [fpath, fpos, cls_lbl].
+            List of file records. frecord = [fpath or class_path, fpos or filename, cls_lbl]
 
         nb_class : int
             Number of classes.
@@ -49,10 +49,11 @@ class DskDataIterator(DataIterator):
             Factory method to create the core iterator.
             (Default value = None).
         """
-        super().__init__(pp_params, fn_gen_coreiter, edataset, nb_class)        
+        super().__init__(pp_params, fn_gen_coreiter, edataset)
         self.frecords = frecords
+        self.nb_class = nb_class
 
-    def init_ex(self, params=None):
+    def init_ex(self, params=None, setting=None):
         """Initialize the instance.
 
         Parameters
@@ -60,44 +61,44 @@ class DskDataIterator(DataIterator):
         params : :obj:`dict`
             Core iterator parameters.
 
+        setting : :obj:`dict` (YET TO IMPLEMENT)
+            Pre-process setting (ImageDataPreProcessor.setting) to apply.
+
         Note
         ----
-        `params` may have different set of fields depending on the 
-        custom extensions to the class DskDataIterator.
-        i.e params.binary_data is unique and only used in
-            BigDataDirectoryIterator(DskDataIterator)
+        `DataIterator` class implements an init() method that accepts different params.
+        Hence PEP8 warns in overriding init() method but not for init_ex() method.
         """
-        gen_next = self._imdata_pp.flow_from_directory_ex(self.frecords,
-                                                          self._nb_class,
-                                                          params)
+        params = {} if (params is None) else params
+        params['_edataset'] = self.edataset  # For debugging purpose
+
+        # Release the core iterator if already exists
+        super()._release_core_iter()
+
+        # Create a core-iterator object
+        gen_next = self._imdata_pp.flow_from_directory_ex(self.frecords, self.nb_class, params)
+
+        # Invoke super class init
         super().init(gen_next, params)
 
     def clone(self):
-        """Create a copy of this NNdb object."""
+        """Create a copy of this DskDataIterator object."""
         new_obj = DskDataIterator(self.edataset, self.frecords,
-                    self._nb_class, self._pp_params, self._fn_gen_coreiter)
-        new_obj.init_ex(params=self._params)
-        new_obj.sync(self._sync_gen_next)
+                    self.nb_class, self._pp_params, self._fn_gen_coreiter)
+
+        # IMPORTANT: init_ex() is costly since it fits the data again (fitting data yet to be implemented)
+        # new_obj.init_ex(self._params)
+
+        # Instead apply the settings which is already calculated
+        new_obj._imdata_pp.apply(self._imdata_pp.setting)
+
+        # Clone the core-iterator object along with input|output_generators
+        new_gen_next = self.core_iter.clone()
+
+        # Invoke super class init
+        new_obj.init(new_gen_next, self.params)
+
         return new_obj
-
-    def sync_generator(self, iter):
-        """Sync the secondary iterator with this iterator.
-
-        Sync the secondary core iterator with this core itarator internally.
-        Used when data needs to be generated with its matching target.
-
-        Parameters
-        ----------
-        iter : :obj:`DskDataIterator`
-            Iterator that needs to be synced with this iterator.
-
-        Note
-        ----
-        Current supports only 1 iterator to be synced.
-        """
-        if (iter is None): return False
-        self.sync(iter._gen_next)
-        return True
 
     ##########################################################################
     # Protected Interface
@@ -106,8 +107,3 @@ class DskDataIterator(DataIterator):
         """Release internal resources used by the iterator."""
         super().release()
         del self.frecords
-        del self._nb_class
-        del self._pp_params
-        del self._params
-        del self._fn_gen_coreiter
-        del self._sync_iter

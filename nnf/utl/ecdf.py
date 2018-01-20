@@ -12,6 +12,7 @@ import numpy as np
 
 # Local Imports
 
+
 def ecdf(x):
     """Compute the empirical CDF of an image.
 

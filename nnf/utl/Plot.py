@@ -6,6 +6,7 @@
 
 .. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
 """
+
 # Global Imports
 import matplotlib.pyplot as plt
 from scipy import stats

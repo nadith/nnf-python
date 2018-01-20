@@ -8,18 +8,24 @@
 """
 
 # Global Imports
-from keras.preprocessing.image import array_to_img
-import numpy as np
-import pickle
-import pprint
 import os
+import pickle
+from enum import Enum
 
 # Local Imports
-from nnf.core.iters.disk.DskmanDskDataIterator import DskmanDskDataIterator
-from nnf.core.iters.memory.DskmanMemDataIterator import DskmanMemDataIterator
 from nnf.db.Dataset import Dataset
 from nnf.db.DbSlice import DbSlice
+from nnf.utl.internals import array_to_img
+from nnf.core.iters.disk.DskmanDskDataIterator import DskmanDskDataIterator
+from nnf.core.iters.memory.DskmanMemDataIterator import DskmanMemDataIterator
 
+
+class NNDiskManMode(Enum):
+    """NNDiskManMode enumeration describes ....."""
+    INVALID = -1,
+    UNSUPPORTED = 0,
+    MEM_TO_DSK = 1,     # Reads data in the memory, process it, write it on the disk
+    DSK = 2,            # Reads data in the disk, process it, write it on the disk
 
 class NNDiskMan(object):
     """Manage database in disk.
@@ -29,7 +35,7 @@ class NNDiskMan(object):
     sel : :obj:`Selection`
         Information to split the dataset.
 
-    _dskman_param : :obj:`dict`, optional
+    _dskdb_param : :obj:`dict`, optional
         Iterator parameters and Pre-processing parameters (keras) for iterators.
         Iterator parameters are used in :obj:`NNBigDataDiskMan`
         to handle binary files. (Default value = None).
@@ -71,44 +77,40 @@ class NNDiskMan(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, sel, dskman_param, nndb=None, save_dir=None):
+    def __init__(self, sel, dskdb_param, memdb_param=None, save_dir=None):
         """Constructs :obj:`NNDiskMan` instance.
 
-        Must call init_ex() to initialize the instance.
+        Must call init() to initialize the instance.
 
         Parameters
         ----------
         sel : :obj:`Selection`
             Information to split the dataset.
 
-        dskman_param : :obj:`dict`, optional
-            Iterator parameters and Pre-processing parameters (keras) for iterators.
-            Iterator parameters are used in :obj:`NNBigDataDiskMan`
-            to handle binary files. (Default value = None).
-            See also :obj:`ImageDataPreProcessor`.
+        dskdb_param : :obj:`dict`
+            Disk database related parameters.
 
-        nndb : :obj:`NNdb`, optional
-            Database to be processed against `sel` and `_dskman_param['pp']`.
-            Either `nndb` or `dskman_param['db_dir']` must be provided. (Default value = None).
+        memdb_param : :obj:`dict`, optional
+            Memory database related parameters. (Default value = None).
 
         save_dir : str, optional
             Path to save the processed data. (Default value = None).
-
-        dskman_param : :obj:`dict`, optional
-            Describe the disk database. Currently used in :obj:`NNBigDataDiskMan`
-            to handle binary files. (Default value = None).
         """
         self.sel = sel
-        self.save_dir_abspath = os.path.join(dskman_param['db_dir'], save_dir)
-        self._dskman_param = dskman_param
-        self._nndb = nndb
+        self.save_dir_abspath = os.path.join(dskdb_param['db_dir'], save_dir)
+        self._dskdb_param = dskdb_param
+        self._memdb_param = memdb_param
         self._save_dir = save_dir
+
+        # Set defaults for configurations that will be utilized in `NNDiskMan`
+        memdb_param.setdefault('pp', None)
+        dskdb_param.setdefault('pp', None)
 
         # Create the save_dir_abspath if does not exist
         if not os.path.exists(self.save_dir_abspath):
             os.makedirs(self.save_dir_abspath)
 
-        # Track the files for each patch and each dataset
+        # Track the files for each dataset of each patch
         # Keyed by the patch_id, and [Dataset.TR|Dataset.VAL|Dataset.TE|...]
         # value = [file_path, fpos, cls_lbl] <= frecord
         self._dict_fregistry = {}
@@ -123,6 +125,18 @@ class NNDiskMan(object):
         # value = <int> - counter for the class label
         self._dict_cls_lbl = {}
 
+        # PERF: Required for `_dict_fpath_ref`
+        # Image count for each dataset of each patch
+        # Keyed by the patch_id, and [Dataset.TR|Dataset.VAL|Dataset.TE|...]
+        # value = <int> - image count
+        self._dict_imcount = {}
+
+        # PERF: File path is saved only in first record of each class
+        # Reference image index to fetch filepath for each class of each dataset of each patch
+        # Keyed by the patch_id, and [Dataset.TR|Dataset.VAL|Dataset.TE|...], and class label
+        # value = <int> - image index that contains the filepath for each class label
+        self._dict_fpath_ref = {}
+
         # PERF: Whether to save the images that are processed via nndiskman
         self._save_images = True
 
@@ -135,6 +149,10 @@ class NNDiskMan(object):
 
         # Diskman data iterator
         self.dskman_dataiter = None
+
+        # Datasets currently in use across all patches of this `nndiskman`
+        # Used by NNFramework.
+        self.datasets_in_use = set()
 
     def init(self):
         """Initialize the :obj:`NNDiskMan` instance."""
@@ -156,9 +174,9 @@ class NNDiskMan(object):
         # DEPENDENCY -The order must be preserved as per the enum Dataset
         # REF_ORDER: [TR=0, VAL=1, TE=2, TR_OUT=3, VAL_OUT=4], Refer Dataset enum
         cls_ranges = [self.sel.class_range, self.sel.val_class_range, self.sel.te_class_range,
-                      self.sel.class_range, self.sel.val_class_range]
+                      self.sel.class_range, self.sel.val_class_range, self.sel.te_class_range]
         col_ranges = [self.sel.tr_col_indices, self.sel.val_col_indices, self.sel.te_col_indices,
-                      self.sel.tr_out_col_indices, self.sel.val_out_col_indices]
+                      self.sel.tr_out_col_indices, self.sel.val_out_col_indices, self.sel.te_out_col_indices]
 
         # Set the default range if not specified
         # noinspection PyProtectedMember
@@ -188,13 +206,16 @@ class NNDiskMan(object):
             # cls_ranges, col_ranges defined above and may not consist of continuous
             # indices. i.e cls_lbl=[0 4 6 3]
 
-            # For histogram equalization operation (canonical image)
-            cann_cimg = None                
-            if self.sel.histmatch_col_index is not None:
-                cann_cimg, _ = self.dskman_dataiter.get_cimg_frecord(cls_idx, self.sel.histmatch_col_index)
-                    
-            # Perform image pre-processing
-            cimg = DbSlice.preprocess_im_with_sel(cimg, cann_cimg, self.sel, self.dskman_dataiter.get_im_ch_axis())
+            # Perform image operations only if cimg is a image
+            if cimg is not None and cimg.ndim >= 3:
+
+                # For histogram equalization operation (canonical image)
+                cann_cimg = None
+                if self.sel.histmatch_col_index is not None:
+                    cann_cimg, _ = self.dskman_dataiter.get_cimg_frecord(cls_idx, self.sel.histmatch_col_index)
+
+                # Perform image pre-processing
+                cimg = DbSlice.preprocess_im_with_sel(cimg, cann_cimg, self.sel, self.dskman_dataiter.get_im_ch_axis())
 
             # Update the class counts for each dataset  
             for edataset, is_new_class in dataset_tup:
@@ -227,12 +248,18 @@ class NNDiskMan(object):
             Path to the folder that contains the `diskman.pkl` file.
         """
         pkl_fpath = os.path.join(destination_dir, 'diskman.pkl')
-        pkl_file = open(pkl_fpath, 'wb')
 
-        # Pickle the self object using the highest protocol available.
-        pickle.dump(self, pkl_file, -1)
+        # IMPORTANT: This will serialize this object including `sel` object with sel.nnpatches.
+        # If extended `NNPatch` object contains a non-serializable attribute, this method will fail.
+        try:
+            # Pickle the self object using the highest protocol available.
+            with open(pkl_fpath, "wb") as f:
+                pickle.dump(self, f, -1)
 
-        pkl_file.close()
+        except Exception as e:
+            # Unpickling failed
+            print("Pickle failed. Possibly due to a non-serializable attribute in extended `NNPath` object.")
+            raise pickle.PickleError(repr(e))
 
     def get_frecords(self, patch_id, ekey):
         """Get the file record (frecord) by <patch_id> and <dataset_key>.
@@ -273,6 +300,25 @@ class NNDiskMan(object):
         return nb_class
 
     @staticmethod
+    def mode(dskdb_param, memdb_param):
+
+        if not dskdb_param['force_load_db']:
+
+            # Currently it only support `nndb` data traversal
+            if memdb_param['nndb'] is not None:
+                return NNDiskManMode.MEM_TO_DSK
+
+            # FUTURE: Add support to handle `nndbs_tup` in `NNDiskMan`.
+            elif memdb_param['nndbs_tup'] is not None:
+                return NNDiskManMode.UNSUPPORTED
+
+        if dskdb_param['db_dir'] is not None:
+            return NNDiskManMode.DSK
+
+        else:
+            return NNDiskManMode.INVALID
+
+    @staticmethod
     def load_nndiskman(destination_dir):
         """Load diskman from the disk.
 
@@ -291,9 +337,16 @@ class NNDiskMan(object):
         if not os.path.isfile(pkl_fpath):
             return None
 
-        pkl_file = open(pkl_fpath, 'rb')
-        nndskman = pickle.load(pkl_file)
-        pkl_file.close()
+        try:
+            with open(pkl_fpath, "rb") as f:
+                nndskman = pickle.load(f)
+
+        except pickle.UnpicklingError:
+            raise
+
+        except Exception as e:
+            # Unpickling failed
+            raise pickle.UnpicklingError(repr(e))
 
         return nndskman
 
@@ -386,27 +439,52 @@ class NNDiskMan(object):
         col_idx : int
             Column index. Belongs to `union_col_range`.
         """
-        # PERF: Save the images if needed
+        # PERF: Save the images only if needed
         if self._save_images:
-            fpath, fpos = self._save_data(pimg, patch_id, cls_idx, col_idx)
-            frecord[0] = fpath
-            frecord[1] = fpos
+            fpath_to_class, filename = self._save_data(pimg, patch_id, cls_idx, col_idx)
+            frecord[0] = fpath_to_class
+            frecord[1] = filename
+
+        # Save the original
+        frecord_ori = frecord
 
         # Update the fregistry and auto assign class label
         for edataset, is_new_class in dataset_tup:
 
+            # Take a copy
+            frecord = frecord_ori.copy()
+
             # Calculate the new class label (continuous)
-            tmp_dataset = self._dict_cls_lbl.setdefault(patch_id, {})
-            cls_lbl = tmp_dataset.setdefault(edataset, -1)
+            tmp_datasets = self._dict_cls_lbl.setdefault(patch_id, {})
+            cls_lbl = tmp_datasets.setdefault(edataset, -1)
+
             if is_new_class:
                 cls_lbl += 1
-                tmp_dataset[edataset] = cls_lbl
+                tmp_datasets[edataset] = cls_lbl
+
+            # Calculate image count
+            tmp_datasets = self._dict_imcount.setdefault(patch_id, {})
+            imcount = tmp_datasets.setdefault(edataset, 0)
+            tmp_datasets[edataset] = imcount + 1
+
+            # Update file path reference by using `imcount` as an index
+            # PERF: Memory efficient implementation (only first frecord of the file has the path to the file)
+            tmp_datasets = self._dict_fpath_ref.setdefault(patch_id, {})
+            fpath_ref_by_cls = tmp_datasets.setdefault(edataset, {})
+
+            if is_new_class:
+                fpath_ref_by_cls[cls_lbl] = imcount  # index to start of the class
+            else:
+                frecord[0] = fpath_ref_by_cls[cls_lbl]
 
             # Update frecord for new class label
             frecord[2] = cls_lbl
 
             # Add to file record to fregistry
             self._add_to_fregistry(patch_id, edataset, frecord)
+
+            # Update
+            self.datasets_in_use.add(edataset)
 
     # noinspection PyMethodMayBeStatic
     def _extract_impatch(self, cimg, nnpatch):
@@ -423,7 +501,7 @@ class NNDiskMan(object):
         if nnpatch.is_holistic:
             return cimg
         
-        # TODO: extract the patch from cimg to pimg
+        # BUG: extract the patch from cimg to pimg
         pimg = cimg
         return pimg
 
@@ -457,10 +535,10 @@ class NNDiskMan(object):
         Returns
         -------
         str :
-            File save path.
+            File path the class directory.
 
-        int :
-            File position where the data is written.
+        str | int :
+            File name or file position where the data is written.
         """
         fname = '{cls_idx}_{col_idx}_{patch_id}.{format}'.format(
                                                     cls_idx=cls_idx,
@@ -474,7 +552,7 @@ class NNDiskMan(object):
         fpath = os.path.join(cls_dir, fname)
         img = array_to_img(pimg, data_format='channels_last', scale=scale)
         img.save(fpath)
-        return fpath, np.uint8(0)
+        return cls_dir, fname
 
     ##########################################################################
     # Special Interface
@@ -495,23 +573,25 @@ class NNDiskMan(object):
 
         Notes
         -----
-        This is used to compare the important fields of `NNDiskman` 
+        This is used to compare the mandatory fields of `NNDiskman`
         after deserializing the object from the disk.
         """
         # noinspection PyProtectedMember
         return (self.sel == nndiskman.sel) and\
-               (self._dskman_param['pp'] == nndiskman._dskman_param['pp'])
+               (self._dskdb_param['pp'] == nndiskman._dskdb_param['pp']) and\
+               (self._memdb_param['pp'] == nndiskman._memdb_param['pp'])
 
     def __getstate__(self):
         """Serialization call back with Pickle. 
 
-        Used to Remove the following fields from serialization.
+        Used to remove the following fields from serialization.
         """
         odict = self.__dict__.copy()  # copy the dict since we change it
-        del odict['dskman_dataiter']        
-        del odict['_nndb']
-        tmp = odict['_dskman_param']
-        odict['_dskman_param'] = {'pp': tmp['pp']}
+        del odict['dskman_dataiter']
+        tmp = odict['_dskdb_param']
+        odict['_dskdb_param'] = {'pp': tmp['pp'], 'force_load_db': tmp['force_load_db']}
+        tmp = odict['_memdb_param']
+        odict['_memdb_param'] = {'pp': tmp['pp']}
         del odict['_save_dir']
         del odict['_save_images']
         del odict['_force_save_images']
@@ -539,17 +619,17 @@ class NNDiskMan(object):
             dskman = self.load_nndiskman(self.save_dir_abspath)
 
         if dskman is not None and self == dskman:  # will invoke __eq__()
-            
             # PERF: Disable saving of images
             self._save_images = False
 
             # Set the data from the loaded nndiskman
             self._dict_fregistry = dskman._dict_fregistry
             self._dict_nb_class = dskman._dict_nb_class
+            self.datasets_in_use = dskman.datasets_in_use
 
             # PERF: Stop updating dictionaries if paths are the same
-            if (self.save_dir_abspath == dskman._save_to_dir) or\
-                    (cur_directory == dskman._save_to_dir):
+            if (self.save_dir_abspath == dskman.save_dir_abspath) or\
+                    (cur_directory == dskman.save_dir_abspath):
                 self._update_dicts = False
                 create_data_generator = False
 
@@ -557,16 +637,20 @@ class NNDiskMan(object):
             # PERF: Forcefully save the images
             self._force_save_images = True
 
-        # Instantiate an diskman data iterator object
-        if self._nndb is not None:
-            if create_data_generator:
-                self.dskman_dataiter = self._create_dskman_memdataiter(self._dskman_param['pp'])
-                self.dskman_dataiter.init_params(self._nndb, self.save_dir_abspath)
+        # Instantiate an diskman data iterator object depending on the operating mode
+        mode = NNDiskMan.mode(self._dskdb_param, self._memdb_param)
 
-        elif self._dskman_param['db_dir'] is not None:
+        # nndb -> process sel -> write to disk
+        if  mode == NNDiskManMode.MEM_TO_DSK:
             if create_data_generator:
-                self.dskman_dataiter = self._create_dskman_dskdataiter(self._dskman_param['pp'])
-                self.dskman_dataiter.init_params(self._dskman_param['db_dir'], self._save_dir)
+                self.dskman_dataiter = self._create_dskman_memdataiter(self._memdb_param['pp'])
+                self.dskman_dataiter.init_params(self._memdb_param['nndb'], self.save_dir_abspath)
+
+        # db_dir -> process sel -> write to disk
+        elif mode == NNDiskManMode.DSK:
+            if create_data_generator:
+                self.dskman_dataiter = self._create_dskman_dskdataiter(self._dskdb_param['pp'])
+                self.dskman_dataiter.init_params(self._dskdb_param['db_dir'], self._save_dir)
 
         else:
-            raise Exception("ARG_ERR: Database is not mentioned")
+            raise Exception("Invalid internal `NNDiskMan` mode")

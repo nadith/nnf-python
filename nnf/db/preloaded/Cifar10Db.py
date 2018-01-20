@@ -8,9 +8,9 @@
 """
 
 # Global Imports
-from abc import ABCMeta, abstractmethod
 import os
 import scipy
+import scipy.misc
 import numpy as np
 from keras import backend as K
 from keras.utils import np_utils
@@ -19,12 +19,13 @@ from keras.utils.data_utils import get_file
 
 
 # Local Imports
-from nnf.db.preloaded.PreLoadedDb import PreLoadedDb
-from nnf.core.models.Autoencoder import Autoencoder
-from nnf.core.models.VGG16Model import VGG16Model
 from nnf.core.models.CNNModel import CNNModel
 from nnf.core.models.DAEModel import DAEModel
+from nnf.core.models.VGG16Model import VGG16Model
 from nnf.core.models.DAERegModel import DAERegModel
+from nnf.core.models.Autoencoder import Autoencoder
+from nnf.db.preloaded.PreLoadedDb import PreLoadedDb
+from nnf.core.models.CNN2DParallelModel import CNN2DParallelModel
 
 class Cifar10Db(PreLoadedDb):
     """Cifar10Db represents CIFAR10 object database with 10 classes."""
@@ -94,14 +95,19 @@ class Cifar10Db(PreLoadedDb):
             self.X_lbl = self.X_lbl[0:10]
             self.Xte_lbl = self.Xte_lbl[0:10]
 
-    def get_input_shape(self, nnmodel):
-        """Fetch the size of a single image/data sample.
-    
+    def get_input_shapes(self, nnmodel):
+        """Fetch the size of a single image/data sample
+
+        Parameters
+        ----------
+        nnmodel : :obj:`NNModel`
+            The `NNModel` that invokes this method.
+
         Returns
         -------
-        :obj:`tuple` :
-            Indicates (height, width, ch) or (height, width, ch)
-            depending on the `self.data_format` property.
+        :obj:`list` :
+            Entry for each input and each entry indicates (height, width, ch) or
+            (height, width, ch) depending on the `self.data_format` property.
         """
 
         if (isinstance(nnmodel, VGG16Model)):
@@ -115,10 +121,18 @@ class Cifar10Db(PreLoadedDb):
         else:
             input_shape = (3,) + target_shape
 
-        return input_shape
+        return [input_shape]
 
-    def get_nb_class(self):
-        return 10        
+    def get_output_shapes(self):
+        """Fetch the number of classes or output for the database.
+
+        Returns
+        -------
+        :obj:`list` :
+            Entry for each output and each entry indicates the number of classes or
+            output for the network.
+        """
+        return [10]
 
     def LoadPreTrDb(self, nnmodel):
         """Load the pre-training dataset.
@@ -232,14 +246,31 @@ class Cifar10Db(PreLoadedDb):
 
         # Child model should be checked first before parent model
         elif (isinstance(nnmodel, VGG16Model)):
-            # Original VGG expects 1000 class database
-            assert(False)  
+
+            # Fix categorical labels for VGG16
+            output_shapes = self.get_output_shapes()
+            newX = self._resize(X)
+            X_L = (self.__process(newX), np_utils.to_categorical(
+                                                        X_lbl,
+                                                        output_shapes[0])
+                                                        .astype('float32'))
+
+            newXval = self._resize(Xval)
+            X_L_val = (self.__process(newXval), np_utils.to_categorical(
+                                                        Xval_lbl,
+                                                        output_shapes[0])
+                                                        .astype('float32'))
+            # Model expects no target information
+            return X_L, None, X_L_val, None
+
+        elif (isinstance(nnmodel, CNN2DParallelModel)):
+            raise Exception("Currently not implemented.")
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
-            nb_class = self.get_nb_class()
-            X_L = (self.__process(X), np_utils.to_categorical(X_lbl, nb_class).astype('float32'))
-            X_L_val = (self.__process(Xval), np_utils.to_categorical(Xval_lbl, nb_class).astype('float32'))
+            output_shapes = self.get_output_shapes()
+            X_L = (self.__process(X), np_utils.to_categorical(X_lbl, output_shapes[0]).astype('float32'))
+            X_L_val = (self.__process(Xval), np_utils.to_categorical(Xval_lbl, output_shapes[0]).astype('float32'))
 
             # Model expects no target information
             return X_L, None, X_L_val, None
@@ -294,15 +325,26 @@ class Cifar10Db(PreLoadedDb):
 
         # Child model should be checked first before parent model
         elif (isinstance(nnmodel, VGG16Model)):
-            # Original VGG expects 1000 class database
-            assert(False)
+
+            # Fix categorical labels for VGG16
+            output_shapes = self.get_output_shapes()
+            newXte = self._resize(Xte)
+            X_L_te = (self.__process(newXte), np_utils.to_categorical(
+                                                        Xte_lbl,
+                                                        output_shapes[0])
+                                                        .astype('float32'))
+            # Model expects no target information
+            return X_L_te, None
+
+        elif (isinstance(nnmodel, CNN2DParallelModel)):
+            raise Exception("Currently not implemented.")
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
-            nb_class = self.get_nb_class()
+            output_shapes = self.get_output_shapes()
             X_L_te = (self.__process(Xte), np_utils.to_categorical(
                                                         Xte_lbl,
-                                                        nb_class)
+                                                        output_shapes[0])
                                                         .astype('float32'))
 
             # Model expects no target information
@@ -361,39 +403,25 @@ class Cifar10Db(PreLoadedDb):
         # Child model should be checked first before parent model
         elif (isinstance(nnmodel, VGG16Model)):
 
-            if (self.data_format == 'channels_last'):
-                im_count, h, w, ch = Xte.shape
-            else:
-                im_count, ch, h, w = Xte.shape
-
-            scale = (224, 224)
-            if (np.isscalar(scale)):
-                newXte = np.zeros((im_count, ch, h*scale, w*scale), Xte.dtype)
-            else:
-                newXte = np.zeros((im_count, ch, scale[0], scale[1]), Xte.dtype)               
-
-            for i in range(im_count):
-                # Scale the image (low dimension/resolution)
-                cimg = np.transpose(Xte[i], (1, 2, 0))  # scipy db_format
-                cimg = scipy.misc.imresize(cimg, scale)
-                newXte[i] = np.rollaxis(cimg, 2, 0)  # VGG16 db_format
-
-                # Fix categorical labels for VGG16
-                nb_class = self.get_nb_class()
-                X_L_te = (self.__process(newXte), np_utils.to_categorical(
-                                                            Xte_lbl,
-                                                            nb_class)
-                                                            .astype('float32'))
-
+            # Fix categorical labels for VGG16
+            output_shapes = self.get_output_shapes()
+            newXte = self._resize(Xte)
+            X_L_te = (self.__process(newXte), np_utils.to_categorical(
+                                                        Xte_lbl,
+                                                        output_shapes[0])
+                                                        .astype('float32'))
             # Model expects no target information
             return X_L_te, None
 
+        elif (isinstance(nnmodel, CNN2DParallelModel)):
+            raise Exception("Currently not implemented.")
+
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
-            nb_class = self.get_nb_class()
+            output_shapes = self.get_output_shapes()
             X_L_te = (self.__process(Xte), np_utils.to_categorical(
                                                             Xte_lbl,
-                                                            nb_class)
+                                                            output_shapes[0])
                                                             .astype('float32'))
 
             # Model expects no target information

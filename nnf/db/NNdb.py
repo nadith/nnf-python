@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 .. module:: NNdb
    :platform: Unix, Windows
@@ -6,7 +7,6 @@
 .. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
 """
 
-# -*- coding: utf-8 -*-
 # Global Imports
 import os
 import scipy.misc
@@ -88,11 +88,13 @@ class NNdb(object):
     >>> nndb = NNdb('any_name', imdb, [4 3], False, [1 1 1 1 2 2 2])
     """
 
+    DEFAULT_BUFFER_SIZE = 30000
+
     ##########################################################################
     # Public Interface
     ##########################################################################
     def __init__(self, name, db: np.ndarray=None, n_per_class=None, build_cls_lbl=False, cls_lbl=None,
-                 db_format: object=Format.H_W_CH_N):
+                 db_format: object=Format.H_W_CH_N, buffer_size=None):
         """Construct a nndb object.
 
         Parameters
@@ -116,9 +118,10 @@ class NNdb(object):
         db_format : nnf.db.Format, optional
             Format of the database. (Default value = Format.H_W_CH_N, refer `nnf.db.Format`).
         """
-
         self.name = name
-        print('Constructor::NNdb ', name)
+        self.__db_sample_idx = 0  # Internal database sample index
+        self.BUFFER_SIZE = NNdb.DEFAULT_BUFFER_SIZE if buffer_size is None else buffer_size
+        print('Constructor::NNdb ' + name)
 
         # Error handling for arguments
         if np.isscalar(cls_lbl):
@@ -141,19 +144,22 @@ class NNdb(object):
 
     def merge(self, nndb):
         """Merge `nndb` instance with `self` instance.
-            Note: Merge can be done with a empty nndb as well.
 
         Parameters
         ----------
         nndb : :obj:`NNdb`
             NNdb object that represents the data set.
+
+        Notes
+        -----
+        Merge can be merge nndbs to a empty nndb as well.
         """
 
         if self.db is not None and nndb.db is not None:
             assert(self.h == nndb.h and self.w == nndb.w and self.ch == nndb.ch)
             assert(self.cls_n == nndb.cls_n)
             assert(self.db.dtype == nndb.db.dtype)
-            assert(self.db_format == nndb.format)
+            assert(self.db_format == nndb.db_format)
 
         nndb_merged = None
         db_format = self.db_format
@@ -162,8 +168,6 @@ class NNdb(object):
         if self.db is not None:
             if nndb.db is None:
                 nndb_merged = self.clone('merged')
-            else:
-                cls_n = 10
 
         if nndb.db is not None:
             if self.db is None:
@@ -190,6 +194,7 @@ class NNdb(object):
                 # Update related parameters after adding data in the above step
                 nndb_merged.update_attr(True, self.n_per_class[i] + nndb.n_per_class[i])
 
+            nndb_merged.finalize()
         return nndb_merged
         
     def concat_features(self, nndb):
@@ -225,6 +230,7 @@ class NNdb(object):
         dtype = self.db.dtype
         features = self.features
         self.db = None
+        self.__db_sample_idx = 0  # this let self.db to be allocated a new buffer
 
         for i in range(self.cls_n):
             cls_st = self.cls_st[i]
@@ -236,6 +242,7 @@ class NNdb(object):
             # Add data according to the db_format (dynamic allocation)
             self.add_data(self.features_to_data(tmp, self.h, self.w, self.ch, dtype))
 
+        self.finalize()
         return self
            
     def convert_format(self, db_format, h, w, ch):
@@ -306,56 +313,6 @@ class NNdb(object):
 
         return self
 
-    def update_attr(self, is_new_class, sample_n=1):
-        """Update self attributes. Used when building the nndb dynamically.
-
-        Can invoke this method for every item added (default sample_n=1) or 
-        batch of items added for a given class (sample_n > 1).
-
-        Parameters
-        ----------
-        is_new_class : bool
-            Recently added data item/batch belongs to a new class.
-
-        sample_n : int
-            Recently added data batch size. (Default value = 1).
-
-        Examples
-        --------
-        Using this method to update the attributes of nndb dynamically.
-
-        >>> nndb = NNdb("EMPTY_NNDB", db_format=Format.H_W_CH_N)
-        >>> data = np.random.rand(30, 30, 1, 100)   # data tensor for each class
-        >>> nndb.add_data(data)
-        >>> nndb.update_attr(True, 100)
-        """
-
-        # Initialize db related fields
-        self.init_db_fields__()
-
-        # Set class start, and class counts of nndb
-        if is_new_class:
-            # Set class start(s) of self, dynamic expansion
-            cls_st = self.n - sample_n  # start of the most recent item addition
-            self.cls_st = np.array([], dtype='uint32') if (self.cls_st is None) else self.cls_st
-            self.cls_st = np.concatenate((self.cls_st, np.array([cls_st], dtype='uint32')))
-
-            # Set class count
-            self.cls_n += 1
-
-            # Set n_per_class(s) of self, dynamic expansion
-            n_per_class = 0
-            self.n_per_class = np.array([], dtype='uint16') if (self.n_per_class is None) else self.n_per_class
-            self.n_per_class = np.concatenate((self.n_per_class, np.array([n_per_class], dtype='uint16')))
-
-        # Increment the n_per_class current class
-        self.n_per_class[-1] = self.n_per_class[-1] + sample_n
-
-        # Set class label of self, dynamic expansion
-        cls_lbl = self.cls_n - 1 
-        self.cls_lbl = np.array([], dtype='uint16') if (self.cls_lbl is None) else self.cls_lbl
-        self.cls_lbl = np.concatenate((self.cls_lbl, np.array([cls_lbl], dtype='uint16')))
-
     def get_data_at(self, si: np.ndarray):
         """Get data from database at i.
 
@@ -388,28 +345,122 @@ class NNdb(object):
         Parameters
         ----------
         data : ndarray
-            Data to be added.
+            Data to be added. May or may not contain the dimension for samples.
 
         Notes
         -----
         Dynamic allocation for the data tensor.
         """
+
         # Add data according to the db_format (dynamic allocation)
         if self.db_format == Format.H_W_CH_N:
             data = data[:, :, :, None] if (data.ndim == 3) else data
-            self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=3)
+            st, en = self.__process_add_data(data, 3)   # Allocate, expand `self.db` if required
+            self.db[:, :, :, st:en] = data              # Assign the data to `self.db`
+            self.__db_sample_idx = en                   # Update the current db_sample_idx
 
         elif self.db_format == Format.H_N:
             data = data[:, None] if (data.ndim == 1) else data
-            self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=1)
+            st, en = self.__process_add_data(data, 1)   # Allocate, expand `self.db` if required
+            self.db[:, st:en] = data                    # Assign the data to `self.db`
+            self.__db_sample_idx = en                   # Update the current db_sample_idx
 
         elif self.db_format == Format.N_H_W_CH:
             data = data[None, :, :, :] if (data.ndim == 3) else data
-            self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=0)
+            st, en = self.__process_add_data(data, 0)   # Allocate, expand `self.db` if required
+            self.db[st:en, :, :, :] = data              # Assign the data to `self.db`
+            self.__db_sample_idx = en                   # Update the current db_sample_idx
             
         elif self.db_format == Format.N_H:
             data = data[None, :] if (data.ndim == 1) else data
-            self.db = data if (self.db is None) else np.concatenate((self.db, data), axis=0)
+            st, en = self.__process_add_data(data, 0)   # Allocate, expand `self.db` if required
+            self.db[st:en, :] = data                    # Assign the data to `self.db`
+            self.__db_sample_idx = en                   # Update the current db_sample_idx
+
+    def update_attr(self, is_new_class, sample_n=1):
+        """Update self attributes. Used when building the nndb dynamically.
+
+        Can invoke this method for every item added (default sample_n=1) or
+        batch of items added for a given class (sample_n > 1).
+
+        Parameters
+        ----------
+        is_new_class : bool
+            Recently added data item/batch belongs to a new class.
+
+        sample_n : int
+            Recently added data batch size. (Default value = 1).
+
+        Examples
+        --------
+        Using this method to update the attributes of nndb dynamically.
+
+        >>> nndb = NNdb("EMPTY_NNDB", db_format=Format.H_W_CH_N)
+        >>> data = np.random.rand(30, 30, 1, 100)   # data tensor for each class
+        >>> nndb.add_data(data)
+        >>> nndb.update_attr(True, 100)
+        >>> nndb.finalize()
+        """
+
+        # Set class start, and class counts of nndb
+        if is_new_class:
+            # Set class start(s) of self, dynamic expansion
+            cls_st = self.__db_sample_idx - sample_n  # start of the most recent item addition
+            self.cls_st = np.array([], dtype='uint32') if (self.cls_st is None) else self.cls_st
+            self.cls_st = np.concatenate((self.cls_st, np.array([cls_st], dtype='uint32')))
+
+            # Set class count
+            self.cls_n += 1
+
+            # Set n_per_class(s) of self, dynamic expansion
+            n_per_class = 0
+            self.n_per_class = np.array([], dtype='uint16') if (self.n_per_class is None) else self.n_per_class
+            self.n_per_class = np.concatenate((self.n_per_class, np.array([n_per_class], dtype='uint16')))
+
+        # Increment the n_per_class current class
+        self.n_per_class[-1] = self.n_per_class[-1] + sample_n
+
+        # Set class label of self, dynamic expansion
+        cls_lbl = self.cls_n - 1
+        self.cls_lbl = np.array([], dtype='uint16') if (self.cls_lbl is None) else self.cls_lbl
+        self.cls_lbl = np.concatenate((self.cls_lbl, np.tile(np.array([cls_lbl], dtype='uint16'), sample_n)))
+
+    def finalize(self):
+        """Initialize nndb db related fields and delete the unused pre-allocated memory.
+
+        Examples
+        --------
+        Using this method clean up the pre-allocated unused memory.
+
+        >>> nndb = NNdb("EMPTY_NNDB", db_format=Format.H_W_CH_N)
+        >>> data = np.random.rand(30, 30, 1, 100)   # data tensor for each class
+        >>> nndb.add_data(data)
+        >>> nndb.update_attr(True, 100)
+        >>> nndb.finalize()
+        """
+
+        smpl_axis = None
+        if self.db_format == Format.H_W_CH_N:
+            smpl_axis = 3
+
+        elif self.db_format == Format.H_N:
+            smpl_axis = 1
+
+        elif self.db_format == Format.N_H_W_CH:
+            smpl_axis = 0
+
+        elif self.db_format == Format.N_H:
+            smpl_axis = 0
+
+        count = self.db.shape[smpl_axis]
+        if (count > self.__db_sample_idx):
+            # DEBUG: Buffer allocation (PERF HIT).
+            # Avoid by allocating the correct size required beforehand.
+            print(self.name + ' FINALIZE: delete {0}-{1}'.format(self.__db_sample_idx, count))
+            self.db = np.delete(self.db, np.arange(self.__db_sample_idx, count), smpl_axis)
+
+        # Initialize db related fields
+        self.__init_db_fields()
 
     def features_to_data(self, features, h=None, w=None, ch=None, dtype=None):
         """Converts the feature matrix to `self` compatible data db_format and type.
@@ -551,10 +602,11 @@ class NNdb(object):
 
         # Data belong to same class need to be placed in consecutive blocks
         if (cls_lbl is not None):
-            _, idc = np.unique(cls_lbl, return_index=True)
+            _, iusd = np.unique(cls_lbl, return_index=True)
 
-            if (not np.array_equal(np.sort(idc), idc)):
-                raise Exception('Data belong to same class need to be placed in consecutive blocks')
+            if (not np.array_equal(np.sort(iusd), iusd)):
+                raise Exception('Data belong to same class need to be placed in consecutive blocks. '
+                                    'Hence the class labels should be sorted order.')
 
         # Set defaults for n_per_class
         if n_per_class is None and cls_lbl is None:
@@ -736,7 +788,15 @@ class NNdb(object):
         filepath : string
             Path to the file.
         """
-        imdb_obj = {'db': self.db_matlab, 'class': self.cls_lbl, 'im_per_class': self.n_per_class}
+        if self.cls_lbl is None:
+            warning("Class labels are not available for the saved nndb.")
+            cls_lbl = np.array([])
+        else:
+            cls_lbl = self.cls_lbl
+
+        imdb_obj = {'db': self.db_matlab,
+                    'cls_lbl': cls_lbl,
+                    'im_per_class': self.n_per_class}
         scipy.io.savemat(filepath, {'imdb_obj': imdb_obj})
  
     def save_to_dir(self, dirpath=None, create_cls_dir=True):
@@ -845,10 +905,40 @@ class NNdb(object):
 
             # hold off
             plt.show()
-   
+
+    @staticmethod
+    def load(filepath, db_name='DB'):
+        """Load images from a matfile.
+
+        Parameters
+        ----------
+        filepath : string
+            Path to the file.
+
+        Notes
+        -----
+        db_format of the datafile loaded must be Matlab default db_format = Format.H_W_CH_N
+        """
+        # squeeze_me=False => grayscale database compatibility
+        matStruct = scipy.io.loadmat(filepath, struct_as_record=False, squeeze_me=False)
+        imdb_obj = matStruct['imdb_obj'][0][0]
+
+        # Defaults to matlab formats
+        if imdb_obj.db.ndim == 2:
+            db_format = Format.H_N
+        else:
+            db_format = Format.H_W_CH_N
+
+        if imdb_obj.cls_lbl is not None:
+            nndb = NNdb(db_name, imdb_obj.db, cls_lbl=imdb_obj.cls_lbl.squeeze(), db_format=db_format)
+        else:
+            nndb = NNdb(db_name, imdb_obj.db, imdb_obj.n_per_class, True, db_format=db_format)
+
+        return nndb
+
     @staticmethod
     def load_from_dir(dirpath, db_name='DB'):
-        """Load images from a directory. 
+        """Load images from a directory.
 
         Parameters
         ----------
@@ -880,14 +970,15 @@ class NNdb(object):
                 # Update NNdb
                 nndb.add_data(img)
                 nndb.update_attr(is_new_class)
-                is_new_class = False        
+                is_new_class = False
 
+        nndb.finalize()
         return nndb
 
     ##########################################################################
     # Private Interface
     ##########################################################################
-    def init_db_fields__(self):
+    def __init_db_fields(self):
         if self.db_format == Format.H_W_CH_N:
             self.h, self.w, self.ch, self.n = self.db.shape
             
@@ -903,6 +994,55 @@ class NNdb(object):
             self.w = 1
             self.ch = 1
             self.n, self.h = self.db.shape
+
+    def __allocate_buf(self, data):
+        """Allocate/Expand buffer for `self.db`.
+
+        Note: Perf hit for frequent buffer expansions.
+        """
+
+        if self.db_format == Format.H_W_CH_N:
+            assert data.ndim == 4
+            n_samples = data.shape[3]
+            assert (self.BUFFER_SIZE > n_samples)
+            db = np.zeros(data.shape[0:3] + (self.BUFFER_SIZE,), dtype=data.dtype)
+            self.db = db if self.db is None else np.append(self.db, db, axis=3)
+
+        elif self.db_format == Format.H_N:
+            assert data.ndim == 2
+            n_samples = data.shape[1]
+            assert (self.BUFFER_SIZE > n_samples)
+            db = np.zeros(data.shape[0:1] + (self.BUFFER_SIZE,), dtype=data.dtype)
+            self.db = db if self.db is None else np.append(self.db, db, axis=1)
+
+        elif self.db_format == Format.N_H_W_CH:
+            assert data.ndim == 4
+            n_samples = data.shape[0]
+            assert (self.BUFFER_SIZE > n_samples)
+            db = np.zeros((self.BUFFER_SIZE,) + data.shape[1:4], dtype=data.dtype)
+            self.db = db if self.db is None else np.append(self.db, db, axis=0)
+
+        elif self.db_format == Format.N_H:
+            assert data.ndim == 2
+            n_samples = data.shape[0]
+            assert (self.BUFFER_SIZE > n_samples)
+            db = np.zeros((self.BUFFER_SIZE,) + data.shape[1:2], dtype=data.dtype)
+            self.db = db if self.db is None else np.append(self.db, db, axis=0)
+
+    def __process_add_data(self, data, sample_axis):
+        n_samples = data.shape[sample_axis]
+
+        st_smpl_idx = self.__db_sample_idx
+        en_sample_idx = self.__db_sample_idx + n_samples
+
+        # For
+        # Adding samples to a non-existing self.db
+        # Adding samples to already existing self.db
+        # Expanding self.db
+        if (self.db is None) or self.__db_sample_idx == 0 or (en_sample_idx > self.db.shape[sample_axis]):
+            self.__allocate_buf(data)
+
+        return st_smpl_idx, en_sample_idx
 
     ##########################################################################
     # Dependant Properties
@@ -930,7 +1070,7 @@ class NNdb(object):
         if self.db_format == Format.N_H_W_CH or self.db_format == Format.H_W_CH_N:
             return self.db_scipy
 
-        # N x H
+        # N x H x 1 x 1
         elif self.db_format == Format.N_H or self.db_format == Format.H_N:
             return self.db_scipy[:, :, np.newaxis, np.newaxis]
 
@@ -990,7 +1130,7 @@ class NNdb(object):
         """db converted to 0-1 range. database data type will be converted to double."""                
 
         # Construct a new object
-        return NNdb(self.name + ' (0-1)', self.db.astype(np.float64) / 255, self.n_per_class, False,
+        return NNdb(self.name + ' (0-1)', self.db.astype(np.float32) / 255, self.n_per_class, False,
                     self.cls_lbl, self.db_format)
 
     @property

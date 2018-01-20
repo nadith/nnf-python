@@ -9,12 +9,10 @@
 
 # Global Imports
 from warnings import warn as warning
-from keras.layers import Input, Dense
-from keras.models import Model
-import numpy as np
+from nnf.keras.layers import Input, Dense
+from nnf.keras.models import Model
 
 # Local Imports
-from nnf.db.Dataset import Dataset
 from nnf.core.models.NNModel import NNModel
 from nnf.core.models.NNModelPhase import NNModelPhase
 
@@ -52,9 +50,9 @@ class Autoencoder(NNModel):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, uid=None, X_L=None, Xt=None, X_L_val=None, Xt_val=None,
-                                                            callbacks=None):
-        super().__init__(uid, callbacks)
+    def __init__(self, uid=None, X_L=None, Xt=None, X_L_val=None, Xt_val=None, callbacks=None,
+                 iter_params=None, iter_pp_params=None, nncfgs=None, managed=True):
+        super().__init__(uid, callbacks, iter_params, iter_pp_params, nncfgs)
 
         # Initialize variables
         self.__encoder = None
@@ -65,6 +63,10 @@ class Autoencoder(NNModel):
         self.Xt = Xt            # X target
         self.X_L_val = X_L_val  # (X_val, labels_val)
         self.Xt_val = Xt_val    # X_val target
+
+        # Whether `Autoencoder` itself manages the resources for itself.
+        # i.e When `Autoencoder` is created in DAE, self.managed=False
+        self.managed = managed
 
     def pre_train(self, precfgs, cfg, patch_idx=None):
         """Pre-train the :obj:`Autoencoder`.
@@ -104,7 +106,7 @@ class Autoencoder(NNModel):
     # Protected: NNModel Overrides
     ##########################################################################
     def _model_prefix(self):
-        """Fetch the prefix for the file to be saved/loaded."""
+        """Fetch the _prefix for the file to be saved/loaded."""
         return "AE"
 
     def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
@@ -128,19 +130,18 @@ class Autoencoder(NNModel):
 
         dict_iterstore : :obj:`dict`
             Dictionary of iterstores for :obj:`DataIterator`.
-        """    
+        """
+
         # Initialize data generators
-        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN,
-                                                        list_iterstore,
-                                                        dict_iterstore)
+        X_gen, X_val_gen = (None, None)
+        if cfg.preloaded_db is None and self.X_L is None:
+            X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN, list_iterstore, dict_iterstore)
+            assert X_gen is not None
 
-        # Pre-condition asserts
-        assert((cfg.preloaded_db is None and X_gen is not None) or 
-                (cfg.preloaded_db is not None) or
-                (self.X_L is not None))
-
-        # Build the Autoencoder
-        self._build(cfg)
+        # Model _prefix
+        prefix = self._model_prefix()
+        self._init_net(cfg, patch_idx, prefix, None)
+        assert (self.net is not None)
 
         # Preloaded databases for quick deployment
         if ((cfg.preloaded_db is not None) and
@@ -157,11 +158,12 @@ class Autoencoder(NNModel):
             ret = (self.X_L, self.Xt, self.X_L_val, self.Xt_val)
 
         # Training with generators
-        else: 
-            super()._start_train(cfg, X_gen=X_gen, X_val_gen=X_val_gen)
+        else:
+            # DAE is constructed using this model, hence managed=False in that case.
+            super()._start_train(cfg, X_gen=X_gen, X_val_gen=X_val_gen, managed=self.managed)
             ret = (None, None, None, None)
 
-        # Model prefix
+        # Model _prefix
         prefix = self._model_prefix()
 
         # Save the trained model
@@ -191,29 +193,23 @@ class Autoencoder(NNModel):
             Dictionary of iterstores for :obj:`DataIterator`.
         """  
         # Initialize data generators
-        X_te_gen, Xt_te_gen = self._init_data_generators(
-                                                    NNModelPhase.TEST,
-                                                    list_iterstore,
-                                                    dict_iterstore)
-        # Pre-condition asserts
-        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
-                (cfg.preloaded_db is not None))
+        X_te_gen, Xt_te_gen = (None, None)
+        if cfg.preloaded_db is None:
+            X_te_gen, Xt_te_gen = self._init_data_generators(NNModelPhase.TEST, list_iterstore, dict_iterstore)
+            assert X_te_gen is not None
 
         if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
             assert(X_te_gen.nb_sample == Xt_te_gen.nb_sample)
 
-        # Model prefix
+        # Model _prefix
         prefix = self._model_prefix()
 
-        # Checks whether keras net should be pre-built to
-        # load weights or the net itself
-        if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self._build(cfg)
+        # Build the Autoencoder if not already built during training
+        if self.net is None:
+            self._init_net(cfg, patch_idx, prefix, None)
 
-        # Try to load the saved model or weights
-        self._try_load(cfg, patch_idx, prefix)
-        assert(self.net is not None)
+        assert (self.net is not None)
 
         # Preloaded databases for quick deployment
         if (cfg.preloaded_db is not None):
@@ -225,9 +221,7 @@ class Autoencoder(NNModel):
             return
 
         # Test with generators
-        super()._start_test(patch_idx,
-                            X_te_gen=X_te_gen,
-                            Xt_te_gen=Xt_te_gen)
+        super()._start_test(patch_idx, X_te_gen=X_te_gen)
 
     def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
@@ -252,29 +246,23 @@ class Autoencoder(NNModel):
             Dictionary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        X_te_gen, Xt_te_gen = self._init_data_generators(
-                                                    NNModelPhase.PREDICT,
-                                                    list_iterstore,
-                                                    dict_iterstore)
-        # Pre-condition asserts
-        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
-                (cfg.preloaded_db is not None))
+        X_te_gen, Xt_te_gen = (None, None)
+        if cfg.preloaded_db is None:
+            X_te_gen, Xt_te_gen = self._init_data_generators(NNModelPhase.PREDICT, list_iterstore, dict_iterstore)
+            assert X_te_gen is not None
 
         if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
             assert(X_te_gen.nb_sample == Xt_te_gen.nb_sample)
 
-        # Model prefix
+        # Model _prefix
         prefix = self._model_prefix()
 
-        # Checks whether keras net should be pre-built to
-        # load weights
-        if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self._build(cfg)
+        # Build the Autoencoder if not already built during training
+        if self.net is None:
+            self._init_net(cfg, patch_idx, prefix, None)
 
-        # Try to load the saved model or weights
-        self._try_load(cfg, patch_idx, prefix)
-        assert(self.net is not None)
+        assert (self.net is not None)
 
         # After self.net configure, for predict functionality, 
         # initialize theano sub functions
@@ -290,11 +278,12 @@ class Autoencoder(NNModel):
             return
 
         # Predict with generators
-        super()._start_predict(patch_idx,
-                                X_te_gen=X_te_gen, 
-                                Xt_te_gen=Xt_te_gen)
+        super()._start_predict(patch_idx, X_te_gen=X_te_gen)
 
-    def _build(self, cfg):
+    ##########################################################################
+    # Protected Private: NNModel Overrides (Build Related)
+    ##########################################################################
+    def _internal__build(self, cfg, X_gen):
         """Build the keras Autoencoder."""
         # this is our input placeholder
         input_img = Input(shape=(cfg.arch[0],))
@@ -323,10 +312,36 @@ class Autoencoder(NNModel):
         ## hence decoder_layer.output cannot be used.
         ## Ref: NNModel._init_predict_feature_fns()
         ## self.decoder = Model(input=encoded_input, output=decoder_layer(encoded_input))
-        print(self.net.summary())
+
+        # TODO: Validate X_gen.input_shapes, X_gen.output_shapes against the cfg.arch[0], cfg.arch[end]
+
+    def _internal__pre_compile(self, cfg, X_gen):
+        pass
+
+    def _internal__compile(self, cfg):
+        """Compile the keras DAE."""
         self.net.compile(optimizer=cfg.optimizer,
                             loss=cfg.loss_fn,
                             metrics=cfg.metrics)
+        print(self.net.summary())
+
+    ##########################################################################
+    # Private Interface
+    ##########################################################################
+    # def __init_net(self, cfg, patch_idx, prefix):
+    #     # Checks whether keras net is already prebuilt
+    #     if not self._is_prebuilt(cfg, patch_idx, prefix):
+    #         self._build(cfg)
+    #
+    #     # Try to load the saved model or weights
+    #     self._try_load(cfg, patch_idx, prefix)
+    #
+    #     # PERF: Avoid compiling before loading saved weights/model
+    #     # Pre-compile callback
+    #     self._pre_compile(cfg)
+    #
+    #     # PERF: Avoid compiling before the callback
+    #     self.__compile(cfg)
 
     ##########################################################################
     # Dependant Properties

@@ -8,12 +8,12 @@
 """
 
 # Global Imports
-from warnings import warn as warning
 import numpy as np
-import os
+from warnings import warn as warning
 
 # Local Imports
 from nnf.core.iters.DskmanDataIterator import DskmanDataIterator
+
 
 class DskmanMemDataIterator(DskmanDataIterator):
     """DskmanMemDataIterator represents the diskman iterator for in memory databases.
@@ -60,7 +60,7 @@ class DskmanMemDataIterator(DskmanDataIterator):
         self._save_to_dir = save_dir
 
     def clone(self):
-        """Create a copy of this object."""
+        """Create a copy of this DskmanMemDataIterator object."""
         assert(False) # Currently not implemented
 
     def get_im_ch_axis(self):
@@ -122,18 +122,18 @@ class DskmanMemDataIterator(DskmanDataIterator):
         if (col_idx >= self.nndb.n_per_class[cls_idx]):
             raise Exception('Class:'+ str(cls_idx) + ' ImageIdx:' + str(col_idx) + ' is missing in the database.')
 
-        # Calulate the image index for the database
+        # Calculate the image index for the database
         im_idx = self.nndb.cls_st[cls_idx] + col_idx
 
         cimg = None
         if (self._read_data):
             cimg = self.nndb.get_data_at(im_idx)
 
-        fpath_to_save = None
+        filename = None
         if (self._save_to_dir is not None):
-            fpath_to_save = os.path.join(self._save_to_dir, "image_" + str(im_idx) + ".jpg")
+            filename = "image_" + str(im_idx) + ".jpg"
 
-        return cimg, [fpath_to_save, None, np.uint16(cls_idx)]  # [fpath, fpos, cls_lbl]
+        return cimg, [self._save_to_dir, filename, np.uint16(cls_idx)]  # [fpath_to_base, fpos/filename, cls_lbl]
 
     def _is_valid_cls_idx(self, cls_idx, show_warning=True):
         """Check the validity of class index.

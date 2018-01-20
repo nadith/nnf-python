@@ -6,10 +6,12 @@
 
 .. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
 """
+
 # Global Imports
 from timeit import default_timer as timer
 
 # Local Imports
+
 
 class Benchmark(object):
     """Latency benchmark.
@@ -21,9 +23,10 @@ class Benchmark(object):
             statment_2
             statment_3
     """
-    def __init__(self, msg, fmt="%0.3g"):
+    def __init__(self, msg, fmt="%0.3g", threshold=None):
         self.msg = msg
         self.fmt = fmt
+        self.threshold = threshold
 
     def __enter__(self):
         self.start = timer()
@@ -31,7 +34,12 @@ class Benchmark(object):
 
     def __exit__(self, *args):
         t = timer() - self.start
-        print(("%s : " + self.fmt + " seconds") % (self.msg, t))
+
+        if self.threshold is None:
+            print(("%s : " + self.fmt + " seconds") % (self.msg, t))
+        elif self.threshold is not None and t > self.threshold:
+            print(("%s : " + self.fmt + " seconds") % (self.msg, t))
+
         self.time = t
 
 

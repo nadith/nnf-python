@@ -8,23 +8,35 @@
 """
 
 # Global Imports
-
+from nnf.core.Metric import Metric
 
 # Local Imports
 
 
-class BaseCfg(object):
-    """BaseCfg describes the pre-training configuration for neural network."""
+class NNCfg(object):
+    """NNCfg describes base model configuration for neural network."""
 
-    def __init__(self):
+    def __init__(self, optimizer=None, metrics=None):
+        """Constructor for NNCfg.
+
+        Parameters
+        ----------
+        optimizer: str | :obj:
+
+        metrics: :obj:`list`
+            List of metrics to be evaluated against outputs.
+            i.e
+            For single output:      ['accuracy']
+            For multiple outputs:   [['accuracy'], [Metric.r]]
+        """
         self.loss_fn = 'mean_squared_error'
-        self.optimizer = 'adadelta'
+        self.optimizer = 'adadelta' if optimizer is None else optimizer
 
         # Only for pre-loaded dbs when no data generators are used.
         # When data generators are used, batch_size, shuffle is expressed in
         # `iter_param`.
-        self.batch_size = 1
-        self.shuffle = True
+        self.pdb_batch_size = 1
+        self.pdb_shuffle = True
         
         # Only when data generators are used in training.
         self.steps_per_epoch = 5
@@ -34,17 +46,20 @@ class BaseCfg(object):
         self.numepochs = 2
         self.callbacks = None
         # self.callbacks = EarlyStopping(monitor='val_loss', patience=0, verbose=0, mode='auto')
-        self.metrics = None
+        self.metrics = metrics
 
         self.preloaded_db = None        # `PreLoadedDb` instance
-        self.feature_layers = [-1, -2]  # Used to predict features
+        self.feature_layers = -1        # [-1, -2]  # Used to predict features
         
         # PERF:
-        self.model_dir = None   # Location to save/load compiled models
-        self.weights_dir = None  # Model is not saved, but weights
+        self.load_models_dir = None     # Location to save/load compiled models
+        self.load_weights_dir = None    # Model is not saved, but weights
+
+        self.save_models_dir = None     # Location to save/load compiled models with weights
+        self.save_weights_dir = None    # Model is not saved, but weights
 
 
-class CNNCfg(BaseCfg):
+class CNNCfg(NNCfg):
     """Training configuration for convolutional neural network."""
 
     def __init__(self):
@@ -63,7 +78,7 @@ class VGG16Cfg(CNNCfg):
         super().__init__()
 
 
-class DAEPreCfg(BaseCfg):
+class DAEPreCfg(NNCfg):
     """Pre-training configuration for each layer of the deep autoencoder network.
 
     Attributes
@@ -85,13 +100,16 @@ class DAEPreCfg(BaseCfg):
                  arch=(1089, 784, 1089),
                  act_fns=('input', 'sigmoid', 'sigmoid'),
                  preloaded_db=None,
-                 batch_size=1,
+                 batch_size=32,
                  shuffle=True,
                  steps_per_epoch=1,
                  validation_steps=1,
                  numepochs=1,
-                 callbacks=None):
-        super().__init__()
+                 callbacks=None,
+                 optimizer=None,
+                 metrics=None
+                 ):
+        super().__init__(optimizer, metrics)
         self.arch = arch
         self.act_fns = act_fns
         self.preloaded_db = preloaded_db

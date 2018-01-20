@@ -6,6 +6,7 @@
 
 .. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
 """
+
 # Global Imports
 import scipy.io
 import scipy.misc
@@ -14,6 +15,7 @@ import matplotlib.cm
 import matplotlib.pyplot as plt
 
 # Local Imports
+
 
 def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
     """Visualize image data tensor in a grid.
@@ -92,7 +94,7 @@ def immap(X, rows=None, cols=None, scale=None, offset=0, ws=None, title=None):
     >> %matplotlib inline - when you want an inline plot
     """
     # Error handling for arguments
-    if (len(X.shape) != 4): raise Exception('ARG_ERR: X: 4D tensor in the db_format H x W x CH x N')  # noqa: E701, E501
+    if len(X.shape) != 4: raise Exception('ARG_ERR: X: 4D tensor in the db_format H x W x CH x N')  # noqa: E701, E501
 
     # Set defaults
     if (rows is None): rows = 1

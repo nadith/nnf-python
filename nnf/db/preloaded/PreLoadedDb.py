@@ -8,10 +8,13 @@
 """
 
 # Global Imports
-from abc import ABCMeta, abstractmethod
+import scipy.misc
+import numpy as np
 from keras import backend as K
+from abc import ABCMeta, abstractmethod
 
 # Local Imports
+
 
 class PreLoadedDb (object):
     """PreLoadedDb represents base class for preloaded databases.
@@ -62,7 +65,7 @@ class PreLoadedDb (object):
         return False
 
     @abstractmethod
-    def get_input_shape(self, nnmodel):
+    def get_input_shapes(self, nnmodel):
         """Fetch the size of a single image/data sample
 
         Parameters
@@ -72,20 +75,21 @@ class PreLoadedDb (object):
 
         Returns
         -------
-        :obj:`tuple` :
-            Indicates (height, width, ch) or (height, width, ch)
-            depending on the `self.data_format` property.            
+        :obj:`list` :
+            Entry for each input and each entry indicates (height, width, ch) or
+            (height, width, ch) depending on the `self.data_format` property.
         """
         pass
 
     @abstractmethod
-    def get_nb_class(self):
-        """Fetch the number of classes for the database.
+    def get_output_shapes(self):
+        """Fetch the number of classes or output for the database.
     
         Returns
         -------
-        int :
-            Number of classes.
+        :obj:`list` :
+            Entry for each output and each entry indicates the number of classes or
+            output for the network.
         """
         pass
 
@@ -232,3 +236,31 @@ class PreLoadedDb (object):
         arrangement.
         """
         pass
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    def _resize(self, X):
+        if (self.data_format == 'channels_last'):
+            im_count, h, w, ch = X.shape
+        else:
+            im_count, ch, h, w = X.shape
+
+        scale = (224, 224)
+        if (np.isscalar(scale)):
+            if K.image_data_format() == 'channels_last':
+                newX = np.zeros((im_count, h * scale, w * scale, ch), X.dtype)
+            else:
+                newX = np.zeros((im_count, ch, h*scale, w*scale), X.dtype)
+        else:
+            if K.image_data_format() == 'channels_last':
+                newX = np.zeros((im_count, scale[0], scale[1], ch), X.dtype)
+            else:
+                newX = np.zeros((im_count, ch, scale[0], scale[1]), X.dtype)
+
+        for i in range(im_count):
+            # Scale the image (low dimension/resolution)
+            cimg = X[i] if K.image_data_format() == 'channels_last' else np.transpose(X[i], (1, 2, 0))  # scipy db_format
+            newX[i] = scipy.misc.imresize(cimg, scale)
+
+        return newX

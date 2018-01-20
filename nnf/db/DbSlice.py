@@ -8,11 +8,14 @@
 """
 
 # Global Imports
+import os
 import math
 import scipy.misc
+import scipy.ndimage.interpolation
 import numpy as np
 from numpy.random import rand
 from numpy.random import permutation
+from warnings import warn as warning
 
 # Local Imports
 from nnf.db.NNdb import NNdb
@@ -26,6 +29,8 @@ from nnf.pp.im_pre_process import im_pre_process
 from nnf.core.generators.NNPatchGenerator import NNPatchGenerator
 from nnf.core.iters.memory.DskmanMemDataIterator import DskmanMemDataIterator
 
+
+from nnf.utl.Benchmark import Benchmark
 
 class DbSlice(object):
     """Perform slicing of nndb with the help of a selection structure.
@@ -69,7 +74,7 @@ class DbSlice(object):
     # Public Interface
     ##########################################################################
     @staticmethod
-    def slice(nndb, sel=None, data_generator=None, pp_param=None):
+    def slice(nndb, sel=None, data_generator=None, pp_param=None, savepath=None, buffer_sizes=None):
         """Slice the database according to the selection structure.
 
         Parameters
@@ -122,15 +127,6 @@ class DbSlice(object):
         # Set defaults for arguments
         if sel is None:
             sel = Selection()
-            unq_n_per_cls = int(np.unique(nndb.n_per_class))
-
-            if np.isscalar(unq_n_per_cls):
-                sel.tr_col_indices = np.arange(unq_n_per_cls)
-
-            else:
-                raise Exception('Selection is not provided.' +
-                                ' tr_col_indices = nndb.n_per_class' +
-                                ' must be same for all classes')
 
         # Error handling for arguments
         if ((sel.tr_col_indices is None) and
@@ -139,22 +135,26 @@ class DbSlice(object):
                 (sel.val_out_col_indices is None) and
                 (sel.te_col_indices is None) and
                 (sel.te_out_col_indices is None)):
-            raise Exception('ARG_ERR: [tr|tr_out|val|val_out|te]_col_indices: mandatory field')  # noqa E501
 
-        if ((sel.use_rgb is not None and sel.use_rgb) and
-           sel.color_indices is not None):
+            unq_n_per_cls = int(np.unique(nndb.n_per_class))
+            if np.isscalar(unq_n_per_cls):
+                sel.tr_col_indices = np.arange(unq_n_per_cls)
+            else:
+                raise Exception('Selection is not provided.' +
+                                ' tr_col_indices = nndb.n_per_class' +
+                                ' must be same for all classes')
+
+        if sel.use_rgb is not None and sel.color_indices is not None:
             raise Exception('ARG_CONFLICT: sel.use_rgb, sel.color_indices')
+
+        if sel.tr_occlusion_rate is not None and sel.tr_occlusion_filter is not None:
+            warning(['`sel.tr_occlusion_filter` will be applied over all sel.tr_occlusion_xxx configurations'])
 
         # Set defaults for data generator 
         if data_generator is None:
             data_generator = DskmanMemDataIterator(pp_param)
         data_generator.init_params(nndb)
 
-        # Set default for sel.use_rgb
-        if sel.use_rgb is None:
-            sel.use_rgb = True
-            print('[DEFAULT] selection.use_rgb (None): True')
-    
         # Set default for sel.class range
         sel.class_range = np.arange(nndb.cls_n) if (sel.class_range is None) else sel.class_range
 
@@ -207,12 +207,13 @@ class DbSlice(object):
         # PERF: Iterate through the chosen subset of the nndb database
         for cimg, _, cls_idx, col_idx, datasets in data_generator:
 
-            # cimg: array_like data (maybe an image or raw data item) 
+            #with Benchmark("DbSlice_"+str(col_idx)):
+            # cimg: array_like data (maybe an image or raw data item)
             # frecord: [fpath, fpos, cls_lbl], assert(cls_lbl == cls_idx)
             # cls_idx, col_idx: int
             # datasets: list of tuples
             #       [(Dataset.TR, True), (Dataset.TR, False), (Dataset.VAL, True), ...]
-    
+
             # SPECIAL NOTE:  cls_lbl, cls_idx, col_idx are expressed with respect to the
             # cls_ranges, col_ranges defined above and may not consist of continuous
             # indices. i.e cls_lbl=[0 4 6 3]
@@ -220,18 +221,19 @@ class DbSlice(object):
             # Perform pre-processing before patch division
             # Perform image operations only if db_format comply them
             if (nndb.db_format == Format.H_W_CH_N) or (nndb.db_format == Format.N_H_W_CH):
-                    
+
                 # For histogram equalization operation (canonical image)
-                cann_cimg = None                
+                cann_cimg = None
                 if sel.histmatch_col_index is not None:
                     cann_cimg, _ = data_generator.get_cimg_frecord(cls_idx, sel.histmatch_col_index)
                     # Alternative:
                     # cls_st = nndb.cls_st[sel.histmatch_col_index]
-                    # cann_cimg = nndb.get_data_at(cls_st)    
-                    
+                    # cann_cimg = nndb.get_data_at(cls_st)
+
                 # Perform image pre-processing
                 cimg = DbSlice.preprocess_im_with_sel(cimg, cann_cimg, sel, data_generator.get_im_ch_axis())
 
+            # with Benchmark("DbSlice_" + str(col_idx)):
             # Iterate through image nnpatches
             for pi in range(patch_loop_max_n):
 
@@ -245,7 +247,7 @@ class DbSlice(object):
                     y = nnpatch.offset[0]
                     w = nnpatch.w
                     h = nnpatch.h
-                        
+
                     # Extract the patch
                     if (nndb.db_format == Format.H_W_CH_N) or (nndb.db_format == Format.N_H_W_CH):
                         pimg = cimg[y:y+h, x:x+w, :]
@@ -257,7 +259,7 @@ class DbSlice(object):
                 # The offset/index for the col_index in the tr_col_indices vector
                 tci_offsets = None
 
-                # Iterate through datasets                
+                # Iterate through datasets
                 for dsi, tup_dataset in enumerate(datasets):
                     edataset = tup_dataset[0]
                     is_new_class = tup_dataset[1]
@@ -268,7 +270,8 @@ class DbSlice(object):
 
                         # Add an empty NNdb for all `nnpatch` on first edataset entry
                         for pi_tmp in range(patch_loop_max_n):
-                            nndbs.append(NNdb(str(edataset) + "_p" + str(pi_tmp), db_format=nndb.db_format))
+                            buff_size = buffer_sizes[edataset] if buffer_sizes is not None and edataset in buffer_sizes else None
+                            nndbs.append(NNdb(str(edataset) + "_p" + str(pi_tmp), db_format=nndb.db_format, buffer_size=buff_size))
 
                     # Build Training DB
                     if edataset == Dataset.TR:
@@ -279,14 +282,14 @@ class DbSlice(object):
                                 and (tci_offsets is None)):
                             tci_offsets = np.where(sel.tr_col_indices == col_idx)[0]
 
-                        # Check whether col_idx is a noise required index 
+                        # Check whether col_idx is a noise required index
                         noise_rate = None
                         if ((sel.tr_noise_rate is not None) and
                                 (tci_offsets[dsi] < sel.tr_noise_rate.size) and
                                 (0 != sel.tr_noise_rate[tci_offsets[dsi]])):
                             noise_rate = sel.tr_noise_rate[tci_offsets[dsi]]
-              
-                        # Check whether col_idx is a occlusion required index 
+
+                        # Check whether col_idx is a occlusion required index
                         occl_rate = None
                         occl_type = None
                         occl_offset = None
@@ -301,17 +304,19 @@ class DbSlice(object):
                             if sel.tr_occlusion_offset is not None:
                                 occl_offset = sel.tr_occlusion_offset[tci_offsets[dsi]]
 
-                        DbSlice._build_nndb_tr(nndbs, pi, is_new_class, pimg, noise_rate, occl_rate, occl_type, occl_offset)  # noqa E501
+                        #with Benchmark("DbSlice_" + str(col_idx)):
+                        DbSlice._build_nndb_tr(nndbs, pi, is_new_class, pimg, noise_rate, occl_rate,
+                                               occl_type, occl_offset, sel.tr_occlusion_filter)  # noqa E501
 
                     # Build Training Output DB
                     elif edataset == Dataset.TR_OUT:
                         DbSlice._build_nndb_tr_out(nndbs, pi, is_new_class, pimg)  # noqa E501
 
-                    # Build Valdiation DB
+                    # Build Validation DB
                     elif edataset == Dataset.VAL:
                         DbSlice._build_nndb_val(nndbs, pi, is_new_class, pimg)  # noqa E501
 
-                    # Build Valdiation Target DB
+                    # Build Validation Target DB
                     elif edataset == Dataset.VAL_OUT:
                         DbSlice._build_nndb_val_out(nndbs, pi, is_new_class, pimg)  # noqa E501
 
@@ -323,12 +328,21 @@ class DbSlice(object):
                     elif edataset == Dataset.TE_OUT:
                         DbSlice._build_nndb_te_out(nndbs, pi, is_new_class, pimg)  # noqa E501
 
-        # Returns NNdb instance instead of a list 
+        # Returns NNdb instance instead of a list
         # (when no nnpatches are mentioned in selection structure)
         if sel.nnpatches is None:
     
             def p0_nndbs(dictionary, ekey):
                 return None if (dictionary[ekey] is None) else dictionary[ekey][0]
+
+            # Finalize the nndbs(PERF) and save the splits in the disk
+            for dataset in Dataset.get_enum_list():
+                tmp_nndb = p0_nndbs(dict_nndbs, dataset)
+                if tmp_nndb is not None:
+                    # with Benchmark("DbSlice"):
+                    tmp_nndb.finalize()
+                    if savepath is not None:
+                        tmp_nndb.save(os.path.splitext(savepath)[0] + "_" + str.upper(str(dataset)) + ".mat")
 
             return (p0_nndbs(dict_nndbs, Dataset.TR),
                     p0_nndbs(dict_nndbs, Dataset.VAL),
@@ -337,6 +351,15 @@ class DbSlice(object):
                     p0_nndbs(dict_nndbs, Dataset.VAL_OUT),
                     p0_nndbs(dict_nndbs, Dataset.TE_OUT),
                     [Dataset.TR, Dataset.VAL, Dataset.TE, Dataset.TR_OUT, Dataset.VAL_OUT, Dataset.TE_OUT])
+
+        # Finalize the nndbs(PERF) and save the splits in the disk
+        for dataset in Dataset.get_enum_list():
+            tmp_nndbs = None if (dict_nndbs[dataset] is None) else dict_nndbs[dataset]
+            if tmp_nndbs is not None:
+                for pi, tmp_nndb in enumerate(tmp_nndbs):
+                    tmp_nndb.finalize()
+                    if savepath is not None:
+                        tmp_nndb.save(os.path.splitext(savepath)[0] + "_" + str.upper(str(dataset)) + "_" + str(pi) + ".mat")
 
         return (dict_nndbs[Dataset.TR],
                 dict_nndbs[Dataset.VAL],
@@ -576,6 +599,20 @@ class DbSlice(object):
         nndb_tr.show(10, 3)
 
         #
+        # Select 1st 2nd 4th images of each identity for training +
+        #              use custom occlusion filter for 66x66 images.
+        occl_filter = np.ones(66, 66)
+        for i in range(0, 33):
+            for j in range(0,33-i):
+                occl_filter[i, j] = 0
+        nndb = NNdb('original', imdb, im_per_class, True)
+        sel = Selection()
+        sel.tr_col_indices = np.array([0, 1, 3])
+        sel.tr_occlusion_filter = occl_filter
+        [nndb_tr, _, _, _, _, _, _] = DbSlice.slice(nndb, sel)
+        nndb_tr.show(10, 3)
+
+        #
         # To prepare regression datasets, training dataset and training target dataset # noqa E501
         # Select 1st 2nd 4th images of each identity for training.
         # Select 1st 1st 1st image of each identity for corresponding training target # noqa E501
@@ -783,7 +820,14 @@ class DbSlice(object):
                 cimg = scipy.misc.imresize(cimg[:, :, 0], scale)
                 cimg = np.expand_dims(cimg, axis=2)
             else:
-                cimg = scipy.misc.imresize(cimg, scale)
+                # cimg = scipy.misc.imresize(cimg, scale, mode='F')
+                if isinstance(scale, list) or isinstance(scale, tuple):
+                    factor_x = scale[0] / cimg.shape[0]
+                    factor_y = scale[1] / cimg.shape[1]
+                    cimg = scipy.ndimage.interpolation.zoom(cimg, (factor_x, factor_y, 1.0))
+
+                else:
+                    cimg = scipy.ndimage.interpolation.zoom(cimg, (scale, scale, 1.0))
 
         return cimg
 
@@ -807,20 +851,25 @@ class DbSlice(object):
         if img is None: return  # noqa E701
         _, _, ch = img.shape
 
-        # Color / Gray Scale Conversion (if required)
-        if not sel.use_rgb:
+        if sel.use_rgb is None:
+            if sel.color_indices is not None:
+                img = img[:, :, sel.color_indices]
 
-            # if image has more than 3 channels
-            if ch >= 3:
-                if sel.color_indices is not None:
-                    img = img[:, :, sel.color_indices]
-                else:                    
-                    img = rgb2gray(img, img.dtype, keepDims=True)
+        elif sel.use_rgb == False:
+            if ch == 3:
+                img = rgb2gray(img, img.dtype, keepDims=True)
+
+            elif not ch == 1:
+                raise Exception("nndb does not support grayscale conversion via `sel.use_rgb`.")
+
+        elif sel.use_rgb == True:
+            if ch == 1:
+                raise Exception("nndb does not support color processing via `sel.use_rgb`. Reset sel.use_rgb=False")
 
         return img
 
     @staticmethod
-    def _build_nndb_tr(nndbs, pi, is_new_class, img, noise_rate, occl_rate, occl_type, occl_offset):
+    def _build_nndb_tr(nndbs, pi, is_new_class, img, noise_rate, occl_rate, occl_type, occl_offset, occl_filter):
         """Build the nndb training database.
 
         Parameters
@@ -835,7 +884,7 @@ class DbSlice(object):
             Whether it's a new class or not.
 
         img : ndarray -uint8
-            3D Data tensor. (format = H x W x CH)
+            3D or 1D Data tensor. (format = H x W x CH or H)
 
         noise_rate : double
             Noise ratio.
@@ -849,6 +898,9 @@ class DbSlice(object):
         occl_offset : double
             Occlusion start offset (as a ratio) from top/bottom/left/right corner depending on `occl_type`.
 
+        occl_filter : ndarray
+            Occlusion filter for custom occlusion patterns. Format: H X W
+
         Returns
         -------
         :obj:`list` of :obj:`NNdb`
@@ -857,56 +909,65 @@ class DbSlice(object):
         if nndbs is None: return nndbs  # noqa E701
         nndb = nndbs[pi]
 
-        if (occl_rate is not None) or (noise_rate is not None):
+        # Adding user-defined occlusion filter or different occlusions depending on the percentage
+        if occl_filter is not None or occl_rate is not None:
 
+            # Information about image (img must be a 3D data tensor)
             h, w, ch = img.shape
 
-            # Adding different occlusions depending on the percentage
-            if occl_rate is not None:
-                oc_filter = DbSlice.get_occlusion_patch(h, w, img.dtype, occl_type, occl_rate, occl_offset)
-                oc_filter = np.expand_dims(oc_filter, 2)
+            if (occl_filter is None):
+                occl_filter = DbSlice.get_occlusion_patch(h, w, img.dtype, occl_type, occl_rate, occl_offset)
 
-                # For grey scale
-                if ch == 1:
-                    img = oc_filter * img
-                else:
-                    # For colored
-                    img = np.tile(oc_filter, (1, 1, ch)) * img
+            occl_filter = np.expand_dims(occl_filter, 2)
 
-            # Add different noise depending on the type
-            # (ref. Enums/Noise)
-            elif (noise_rate is not None) and (noise_rate == Noise.G):
-                pass
-                # img = imnoise(img, 'gaussian')
-                # #img = imnoise(img, 'gaussian')
-                # #img = imnoise(img, 'gaussian')
-                # #img = imnoise(img, 'gaussian')
+            # For grey scale
+            if ch == 1:
+                img = occl_filter.astype(np.uint8) * img
+            else:
+                # For colored
+                img = np.tile(occl_filter.astype(np.uint8), (1, 1, ch)) * img
 
-            # Perform random corruption with the rate
-            elif noise_rate is not None:
-                img = np.copy(img)
+        # Add different noise depending on the type
+        # (ref. Enums/Noise)
+        elif (noise_rate is not None) and (noise_rate == Noise.G):
+            # Information about image (img must be a 3D data tensor)
+            h, w, ch = img.shape
+            pass
+            # img = imnoise(img, 'gaussian')
+            # #img = imnoise(img, 'gaussian')
+            # #img = imnoise(img, 'gaussian')
+            # #img = imnoise(img, 'gaussian')
 
-                # Corruption Size (H x W)
-                cs = [np.uint16(h*noise_rate), np.uint16(w*noise_rate)]
+        # Perform random corruption with the rate
+        elif noise_rate is not None:
+            # Information about image (img must be a 3D data tensor)
+            h, w, ch = img.shape
 
-                # Random location choice
-                # Start of H, W (location)
-                sh = np.uint8(1 + rand()*(h-cs[0]-1))
-                sw = np.uint8(1 + rand()*(w-cs[1]-1))
+            img = np.copy(img)
 
-                # Set the corruption
-                corrupt_patch = np.uint8(DbSlice._rand_corrupt(cs[0], cs[1])).astype('uint8')  # noqa E501
+            # Corruption Size (H x W)
+            cs = [np.uint16(h*noise_rate), np.uint16(w*noise_rate)]
 
-                if ch == 1:
-                    img[sh:sh+cs[1], sw:sw+cs[2]] = corrupt_patch
-                else:
-                    for ich in range(ch):
-                        img[sh:sh+cs[0], sw:sw+cs[1], ich] = corrupt_patch
+            # Random location choice
+            # Start of H, W (location)
+            sh = np.uint8(1 + rand()*(h-cs[0]-1))
+            sw = np.uint8(1 + rand()*(w-cs[1]-1))
 
+            # Set the corruption
+            corrupt_patch = np.uint8(DbSlice._rand_corrupt(cs[0], cs[1])).astype('uint8')  # noqa E501
+
+            if ch == 1:
+                img[sh:sh+cs[1], sw:sw+cs[2]] = corrupt_patch
+            else:
+                for ich in range(ch):
+                    img[sh:sh+cs[0], sw:sw+cs[1], ich] = corrupt_patch
+
+        # with Benchmark("DbSlice"):
         # Add data to nndb
         nndb.add_data(img)
     
         # Update the properties of nndb
+        # with Benchmark("DbSlice"):
         nndb.update_attr(is_new_class)
         return nndbs
 

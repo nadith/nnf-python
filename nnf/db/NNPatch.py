@@ -55,7 +55,7 @@ class NNPatch(object):
             Patch height.
 
         width : int
-            Image width.
+            Patch width.
 
         offset : (int, int)
             Position of the patch. (Y, X).
@@ -70,7 +70,7 @@ class NNPatch(object):
         self.nnmodels = []
         self.is_holistic = is_holistic  # Covers the whole image
 
-    def add_model(self, nnmodels):
+    def add_nnmodels(self, nnmodels):
         """Add `nnmodels` for this nnmodel.
 
         Parameters
@@ -111,8 +111,8 @@ class NNPatch(object):
             self.w = 1
             self.h = pimg.shape[0]
 
-    def init_models(self, dict_iterstore, list_iterstore, dbparam_save_dirs):
-        """Generate, initialize and register `nnmodels` for this patch.
+    def init_nnmodels(self, dict_iterstore, list_iterstore, dbparam_save_dirs):
+        """Initialize `nnmodels` of this patch.
 
         Parameters
         ----------
@@ -134,11 +134,13 @@ class NNPatch(object):
         ----
         Used only in Patch Based Framework.
         """
-        self.add_model(self._generate_nnmodels())
-
-        # Assign this patch and iterstores to each model
+        # Register this `nnpatch` and iterstores to each `nnmodel`
         for model in self.nnmodels:
-            model.add_nnpatches(self)
+
+            # Register `nnpatches` to this `nnmodel`
+            # Refer: NNFramework._init_model_params(...)
+
+            # model.add_nnpatches(self)
             model.add_iterstores(list_iterstore, dict_iterstore)
             model.add_save_dirs(dbparam_save_dirs)
 
@@ -209,8 +211,13 @@ class NNPatch(object):
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def _generate_nnmodels(self):
+    def _generate_nnmodels(self, nnpatch):
         """Generate list of :obj:`NNModel` for Neural Network Patch Based Framework.
+
+        Parameters
+        ----------
+        nnpatch : :obj:`NNPatch`
+            :obj:`NNPatch` instance that generated `nnmodels` are registered.
 
         Returns
         -------
@@ -219,6 +226,7 @@ class NNPatch(object):
 
         Notes
         -----
+        Used only in Patch Based Framework.
         Invoked by :obj:`NNPatchMan`.
 
         Note
@@ -227,7 +235,6 @@ class NNPatch(object):
         custom generation of `nnmodels`.
         """
         assert False
-
 
     ##########################################################################
     # Dependant Properties

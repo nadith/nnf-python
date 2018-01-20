@@ -14,12 +14,14 @@ from keras.utils import np_utils
 import numpy as np
 
 # Local Imports
-from nnf.db.preloaded.PreLoadedDb import PreLoadedDb
-from nnf.core.models.Autoencoder import Autoencoder
 from nnf.core.models.CNNModel import CNNModel
 from nnf.core.models.DAEModel import DAEModel
 from nnf.core.models.VGG16Model import VGG16Model
 from nnf.core.models.DAERegModel import DAERegModel
+from nnf.core.models.Autoencoder import Autoencoder
+from nnf.db.preloaded.PreLoadedDb import PreLoadedDb
+from nnf.core.models.CNN2DParallelModel import CNN2DParallelModel
+
 
 class MnistDb(PreLoadedDb):
     """MnistDb represents MNIST handwritten digit database."""
@@ -89,25 +91,49 @@ class MnistDb(PreLoadedDb):
             self.X_lbl = self.X_lbl[0:10]
             self.Xte_lbl = self.Xte_lbl[0:10]
 
-    def get_input_shape(self, nnmodel):
+    def get_input_shapes(self, nnmodel):
         """Fetch the size of a single image/data sample
-    
+
+        Parameters
+        ----------
+        nnmodel : :obj:`NNModel`
+            The `NNModel` that invokes this method.
+
         Returns
         -------
-        :obj:`tuple` :
-            Indicates (height, width, ch) or (height, width, ch)
-            depending on the `self.data_format` property.            
+        :obj:`list` :
+            Entry for each input and each entry indicates (height, width, ch) or
+            (height, width, ch) depending on the `self.data_format` property.
         """
-        target_shape = (28, 28)
-        if self.data_format == 'channels_last':
-            input_shape =  target_shape + (1,)
+        if (isinstance(nnmodel, VGG16Model)):
+            # Original VGG16 model is compatible with:
+            target_shape = (224, 224)
         else:
-            input_shape = (1,) + target_shape
+            target_shape = (28, 28)
 
-        return input_shape
+        if self.data_format == 'channels_last':
+            if isinstance(nnmodel, VGG16Model):
+                input_shape = target_shape + (3,)
+            else:
+                input_shape =  target_shape + (1,)
+        else:
+            if isinstance(nnmodel, VGG16Model):
+                input_shape = (3,) + target_shape
+            else:
+                input_shape = (1,) + target_shape
 
-    def get_nb_class(self):
-        return 10        
+        return [input_shape]
+
+    def get_output_shapes(self):
+        """Fetch the number of classes or output for the database.
+
+        Returns
+        -------
+        :obj:`list` :
+            Entry for each output and each entry indicates the number of classes or
+            output for the network.
+        """
+        return [10]
 
     def LoadPreTrDb(self, nnmodel):
         """Load the pre-training dataset.
@@ -221,8 +247,25 @@ class MnistDb(PreLoadedDb):
 
         # Child model should be checked first before parent model
         elif (isinstance(nnmodel, VGG16Model)):
-            # Original VGG expects 1000 class, color (ch=3) database
-            assert(False)  
+
+            # Fix categorical labels for VGG16
+            nb_class = self.get_nb_class()
+            newX = self._resize(self.__process(X))
+            X_L = (self.__process(newX), np_utils.to_categorical(
+                                                        X_lbl,
+                                                        nb_class)
+                                                        .astype('float32'))
+
+            newXval = self._resize(Xval)
+            X_L_val = (self.__process(newXval), np_utils.to_categorical(
+                                                        Xval_lbl,
+                                                        nb_class)
+                                                        .astype('float32'))
+            # Model expects no target information
+            return X_L, None, X_L_val, None
+
+        elif (isinstance(nnmodel, CNN2DParallelModel)):
+            raise Exception("Currently not implemented.")
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
@@ -280,8 +323,19 @@ class MnistDb(PreLoadedDb):
 
         # Child model should be checked first before parent model
         elif (isinstance(nnmodel, VGG16Model)):
-            # Original VGG expects 1000 class, color (ch=3) database
-            assert(False)  
+
+            # Fix categorical labels for VGG16
+            nb_class = self.get_nb_class()
+            newXte = self._resize(Xte)
+            X_L_te = (self.__process(newXte), np_utils.to_categorical(
+                                                        Xte_lbl,
+                                                        nb_class)
+                                                        .astype('float32'))
+            # Model expects no target information
+            return X_L_te, None
+
+        elif (isinstance(nnmodel, CNN2DParallelModel)):
+            raise Exception("Currently not implemented.")
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN
@@ -340,13 +394,19 @@ class MnistDb(PreLoadedDb):
 
         # Child model should be checked first before parent model
         elif (isinstance(nnmodel, VGG16Model)):
-            # Original VGG expects 1000 class, color (ch=3) database
-            assert(False)  
 
-        # Child model should be checked first before parent model
-        elif (isinstance(nnmodel, VGG16Model)):
-            # Original VGG expects 1000 class, color (ch=3) database
-            assert(False)  
+            # Fix categorical labels for VGG16
+            nb_class = self.get_nb_class()
+            newXte = self._resize(Xte)
+            X_L_te = (self.__process(newXte), np_utils.to_categorical(
+                                                        Xte_lbl,
+                                                        nb_class)
+                                                        .astype('float32'))
+            # Model expects no target information
+            return X_L_te, None
+
+        elif (isinstance(nnmodel, CNN2DParallelModel)):
+            raise Exception("Currently not implemented.")
 
         elif (isinstance(nnmodel, CNNModel)):
             # Fix categorical labels for CNN

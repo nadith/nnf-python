@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # Global Imports
+import warnings
 import numpy as np
+from scipy import linalg
 from keras import backend as K
 from keras.preprocessing.image import transform_matrix_offset_center
 from keras.preprocessing.image import apply_transform
@@ -50,7 +52,6 @@ class ImageDataGenerator(object):
             If you never set it, then it will be "channels_last".
     '''
     def __init__(self, params):
-
         if (params is None):
             self.featurewise_center = False
             self.samplewise_center = False
@@ -85,7 +86,7 @@ class ImageDataGenerator(object):
             self.samplewise_center = params['samplewise_center'] if ('samplewise_center' in params) else False
             self.featurewise_std_normalization = params['featurewise_std_normalization'] if ('featurewise_std_normalization' in params) else False
             self.samplewise_std_normalization = params['featurewise_center'] if ('featurewise_center' in params) else False
-            self.zca_whitening = params['featurewise_center'] if ('featurewise_center' in params) else False
+            self.zca_whitening = params['zca_whitening'] if ('zca_whitening' in params) else False
             self.rotation_range = params['rotation_range'] if ('rotation_range' in params) else 0.
             self.width_shift_range = params['width_shift_range'] if ('width_shift_range' in params) else 0.
             self.height_shift_range = params['height_shift_range'] if ('height_shift_range' in params) else 0.
@@ -111,6 +112,7 @@ class ImageDataGenerator(object):
           
         if data_format is None:
             data_format = K.image_data_format()
+
         #self.__dict__.update(locals())
         self.mean = None
         self.std = None
@@ -142,29 +144,6 @@ class ImageDataGenerator(object):
             raise ValueError('zoom_range should be a float or '
                              'a tuple or list of two floats. '
                              'Received arg: ', zoom_range)
-
-    def flow(self, X, y=None, batch_size=32, shuffle=True, seed=None,
-             save_to_dir=None, save_prefix='', save_format='jpeg'):
-        return NumpyArrayIterator(
-            X, y, self,
-            batch_size=batch_size, shuffle=shuffle, seed=seed,
-            data_format=self.data_format,
-            save_to_dir=save_to_dir, save_prefix=save_prefix, save_format=save_format)
-
-    def flow_from_directory(self, directory,
-                            target_size=(256, 256), color_mode='rgb',
-                            classes=None, class_mode='categorical',
-                            batch_size=32, shuffle=True, seed=None,
-                            save_to_dir=None, save_prefix='', save_format='jpeg',
-                            follow_links=False):
-        return DirectoryIterator(
-            directory, self,
-            target_size=target_size, color_mode=color_mode,
-            classes=classes, class_mode=class_mode,
-            data_format=self.data_format,
-            batch_size=batch_size, shuffle=shuffle, seed=seed,
-            save_to_dir=save_to_dir, save_prefix=save_prefix, save_format=save_format,
-            follow_links=follow_links)
 
     def standardize(self, x):
         if self.preprocessing_function:
@@ -336,18 +315,18 @@ class ImageDataGenerator(object):
             X = aX
 
         if self.featurewise_center:
-            self.mean = np.mean(X, axis=(0, self.row_index, self.col_index))
+            self.mean = np.mean(X, axis=(0, self.row_index, self.col_index), dtype=K.floatx())
             broadcast_shape = [1, 1, 1]
             broadcast_shape[self.channel_index - 1] = X.shape[self.channel_index]
             self.mean = np.reshape(self.mean, broadcast_shape)
-            X -= self.mean
+            X = X.astype(K.floatx()) - self.mean
 
         if self.featurewise_std_normalization:
-            self.std = np.std(X, axis=(0, self.row_index, self.col_index))
+            self.std = np.std(X, axis=(0, self.row_index, self.col_index), dtype=K.floatx())
             broadcast_shape = [1, 1, 1]
             broadcast_shape[self.channel_index - 1] = X.shape[self.channel_index]
             self.std = np.reshape(self.std, broadcast_shape)
-            X /= (self.std + K.epsilon())
+            X = X.astype(K.floatx()) / (self.std + K.epsilon())
 
         if self.zca_whitening:
             flatX = np.reshape(X, (X.shape[0], X.shape[1] * X.shape[2] * X.shape[3]))

@@ -13,7 +13,7 @@ import numpy as np
 import types
 
 # Local Imports
-from nnf.core.iters.ImageDataPreProcessor import ImageDataPreProcessor
+from nnf.core.iters.ImageDataPreProcessor import *
 
 class DataIterator(object):
     """DataIterator represents the base class for all iterators in the
@@ -29,10 +29,6 @@ class DataIterator(object):
     _gen_next : `function`
         Core iterator for non DskmanIterator(s) / Generator for DskmanIterator(s), that provide data.
 
-    _sync_gen_next : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator`
-        Core iterator that needs to be synced with `_gen_next`.
-        (Default value = None)
-
     _params : :obj:`dict`
         Core iterator/generator parameters. (Default value = None)
 
@@ -46,9 +42,6 @@ class DataIterator(object):
     edataset : :obj:`Dataset`
         Dataset enumeration key.
 
-    _nb_class : int
-        Number of classes.
-
     Notes
     -----
     Diskman data iterators are utilizing a generator function in _gen_next
@@ -59,8 +52,7 @@ class DataIterator(object):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, pp_params=None, fn_gen_coreiter=None, edataset=None, 
-                                                                nb_class=None):
+    def __init__(self, pp_params=None, fn_gen_coreiter=None, edataset=None):
         """Constructor of the abstract class :obj:`DataIterator`.
 
         Parameters
@@ -80,10 +72,6 @@ class DataIterator(object):
         # while the `nnmodel` data iterators are utilizing an core iterator.
         self._gen_next = None
 
-        # :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator`
-        # Core iterator that needs to be synced with `_gen_next`.
-        self._sync_gen_next = None
-
         # Iterator params
         # Used by `nnmodel` data iterators only.
         # Can utilize in Diskman data iterators safely in the future.
@@ -96,7 +84,6 @@ class DataIterator(object):
 
         # Used by `nnmodel` data iterators only.
         self.edataset = edataset
-        self._nb_class = nb_class
 
     def init(self, gen_next=None, params=None):
         """Initialize the instance.
@@ -115,12 +102,20 @@ class DataIterator(object):
     ##########################################################################
     # Public: Core Iterator Only Operations/Dependant Properties
     ##########################################################################
+    def initiate_parallel_operations(self):
+        # This property is only supported by the core iterator
+        if not self.__is_core_iter: return False
+        self._gen_next.initiate_parallel_operations()
+
+    def terminate_parallel_operations(self):
+        # This property is only supported by the core iterator
+        if not self.__is_core_iter: return False
+        self._gen_next.terminate_parallel_operations()
+
     def set_shuffle(self, shuffle):
         """Set shuffle property."""
-        # This property is only supported by the core iterator
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return False
+        # This method is only supported by the core iterator
+        if not self.__is_core_iter: return False
 
         if (self._gen_next.batch_index != 0 and 
             self._gen_next.shuffle != shuffle):
@@ -133,10 +128,18 @@ class DataIterator(object):
         self._gen_next.shuffle = shuffle
         return True
 
-    def sync(self, gen_next):
+    def set_target_duplicator(self, duplicator):
+        """Set target duplicator property."""
+        # This method is only supported by the core iterator
+        if not self.__is_core_iter: return False
+
+        self._gen_next.target_duplicator = duplicator
+        return True
+
+    def sync_generator(self, gen_next):
         """Sync the secondary iterator with this iterator.
 
-        Sync the secondary core iterator with this core itarator internally.
+        Sync the secondary core iterator with this core iterator internally.
         Used when data needs to be generated with its matching target.
 
         Parameters
@@ -144,63 +147,78 @@ class DataIterator(object):
         gen : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator` 
             Core iterator that needs to be synced with this core iterator
             `_gen_next`.
-
-        Note
-        ----
-        Current supports only 1 iterator to be synced.
         """
         # This method is only supported by the core iterator      
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return False       
+        if not self.__is_core_iter: return False
 
         if (gen_next is None or
             isinstance(gen_next , types.GeneratorType)): 
             return False
 
-        self._gen_next.sync(gen_next)
-        self._sync_gen_next = gen_next
-        return True    
+        self._gen_next.sync_generator(gen_next._gen_next)
+        return True
+
+    def sync_tgt_generator(self, tgt_gen_next):
+        """Sync the target iterator with this iterator.
+
+        Sync the secondary core iterator with this core iterator internally.
+        Used when data needs to be generated with its matching target.
+
+        Parameters
+        ----------
+        gen : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator`
+            Core iterator that needs to be synced with this core iterator
+            `_gen_next`.
+        """
+        # This method is only supported by the core iterator
+        if not self.__is_core_iter: return False
+
+        if (tgt_gen_next is None or
+            isinstance(tgt_gen_next , types.GeneratorType)):
+            return False
+
+        self._gen_next.sync_tgt_generator(tgt_gen_next._gen_next)
+        return True
 
     def reset(self, gen_next):
         """Reset the iterator to the beginning."""
         # This method is only supported by the core iterator      
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return False
-
+        if not self.__is_core_iter: return False
         self._gen_next.reset()
         return True
 
     def set_batch_size(self, batch_size):
         """Set the batch size."""
         # This method is only supported by the core iterator
-        if (self._gen_next is None or
-                isinstance(self._gen_next , types.GeneratorType) or
-                batch_size is None):
-            return False
-
+        if not self.__is_core_iter: return False
         self._gen_next.batch_size = batch_size
         return True
 
-    @abstractmethod
-    def clone(self):
-        """Create a copy of this object."""
-        pass
+    def release(self):
+        """Release internal resources used by the iterator."""
+        self._imdata_pp = None
+        self._release_core_iter()
+        del self._params
+        del self._pp_params
+        self._fn_gen_coreiter = None
+        self.edataset = None
+
+    def new_target_container(self):
+        """Get an empty container to collect the targets. Used in NNModel.Predict"""
+        return self._gen_next.new_target_container() if self.__is_core_iter else None
 
     ##########################################################################
     # Protected Interface
     ##########################################################################
-    def release(self):
-        """Release internal resources used by the iterator."""
-        self._imdata_pp = None
+    @abstractmethod
+    def clone(self):
+        """Create a copy of this DataIterator object."""
+        pass
+
+    def _release_core_iter(self):
+        if self.__is_core_iter:
+            self._gen_next.release()
         self._gen_next = None
-        self._sync_gen_next = None
-        self._params = None
-        del self._pp_params
-        self._fn_gen_coreiter = None
-        self.edataset = None
-        self._nb_class = None
 
     ##########################################################################
     # Special Interface
@@ -214,75 +232,57 @@ class DataIterator(object):
         return next(self._gen_next)
 
     ##########################################################################
-    # Dependant Properties
+    # Dependant Properties (public)
     ##########################################################################
     @property
-    def is_synced(self):
-        """bool : whether this generator is synced with another generator."""
-        return (self._sync_gen_next is not None)
+    def has_multiple_inputs(self):
+        """bool: whether this iterator provides multiple inputs."""
+        return len(self._input_generators) > 1 if self.__is_core_iter else None
+
+    @property
+    def has_multiple_targets(self):
+        """bool: whether this iterator provides multiple targets."""
+        return len(self._target_generators) > 1 if self.__is_core_iter else None
 
     @property
     def input_vectorized(self):
         """bool: whether the input needs to be vectorized via the core iterator."""
-        # This property is only supported by the core iterator
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return None     
-        return self._gen_next.input_vectorized
+        return self._gen_next.input_vectorized if self.__is_core_iter else None
 
     @property
     def batch_size(self):
         """int: batch size to be read by the core iterator."""
-        # This property is only supported by the core iterator
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return None     
-        return self._gen_next.batch_size
+        return self._gen_next.batch_size if self.__is_core_iter else None
 
     @property
     def class_mode(self):
         """str: class mode at core iterator."""
-        # This property is only supported by the core iterator
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return None     
-        return self._gen_next.class_mode
+        return self._gen_next.class_mode if self.__is_core_iter else None
 
     @property
     def nb_sample(self):
         """int: number of samples registered at core iterator/generator."""
-        # This property is only supported by the core iterator
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return None
-        return self._gen_next.nb_sample
+        return self._gen_next.nb_sample if self.__is_core_iter else None
+
+    # @property
+    # def nb_class(self):
+    #     """int: number of classes registered at core iterator/generator."""
+    #     return self._gen_next.nb_class if self.__is_core_iter else None
 
     @property
-    def nb_class(self):
-        """int: number of classes registered at core iterator/generator."""
-        # This property is only supported by the core iterator
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return None     
-        return self._gen_next.nb_class
+    def input_shapes(self):
+        """:obj:`tuple` : shape of the image that is requested by the user. (Default = input_shape)."""
+        return self._gen_next.input_shapes if self.__is_core_iter else None
 
     @property
-    def image_shape(self):
-        """:obj:`tuple` : shape of the image that is natively producted by this iterator."""
-        # This property is only supported by the core iterator      
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return None  
-        return self._gen_next.image_shape
+    def output_shapes(self):
+        """List: shapes of the outputs expected."""
+        return self._gen_next.output_shapes if self.__is_core_iter else None
 
     @property
     def data_format(self):
         """:obj:`tuple` : shape of the image that is natively producted by this iterator."""
-        # This property is only supported by the core iterator      
-        if (self._gen_next is None or
-            isinstance(self._gen_next , types.GeneratorType)):
-            return None  
-        return self._gen_next.data_format
+        return self._gen_next.data_format if self.__is_core_iter else None
 
     @property
     def params(self):
@@ -290,3 +290,34 @@ class DataIterator(object):
         if (self._params is None):
             return {}
         return self._params
+
+    @property
+    def core_iter(self):
+        """:obj:`Iterator` : core iterator object."""
+        if self.__is_core_iter:
+            assert self._gen_next == self._input_generators[0]
+            return self._gen_next
+        else:
+            return None
+
+    ##########################################################################
+    # Dependant Properties (protected)
+    ##########################################################################
+    @property
+    def _input_generators(self):
+        return self._gen_next.input_generators if self.__is_core_iter else None
+
+    @property
+    def _target_generators(self):
+        return self._gen_next.target_generators if self.__is_core_iter else None
+
+    ##########################################################################
+    # Dependant Properties (private)
+    ##########################################################################
+    @property
+    def __is_core_iter(self):
+        # Whether this is a core iterator or not.
+        if (self._gen_next is None or
+            isinstance(self._gen_next , types.GeneratorType)):
+            return False
+        return True

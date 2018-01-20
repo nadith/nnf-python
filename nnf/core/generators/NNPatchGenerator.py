@@ -8,12 +8,13 @@
 """
 
 # Global Imports
+from warnings import warn as warning
 
 # Local Imports
 from nnf.db.NNPatch import NNPatch
 
 class NNPatchGenerator:
-    """Generator describes the generator for nnpatches and nnmodels.
+    """Generator describes the generator for nnpatches.
 
     Attributes
     ----------
@@ -40,6 +41,7 @@ class NNPatchGenerator:
     # Public Interface
     ##########################################################################
     def __init__(self, im_h=None, im_w=None, pat_h=None, pat_w=None, 
+
                                                     xstride=None, ystride=None):
         """Constructs :obj:`NNPatchGenerator` instance.
 
@@ -69,7 +71,9 @@ class NNPatchGenerator:
         self.w = pat_w
         self.xstride = xstride
         self.ystride = ystride
-
+    ##########################################################################
+    # NNF Required
+    ##########################################################################
     def generate_nnpatches(self):
         """Generate the `nnpatches` for the nndb database.
 
@@ -85,7 +89,7 @@ class NNPatchGenerator:
             self.xstride == None or
             self.ystride == None):
                 
-            nnpatch = self.new_nnpatch(self.h, self.w, (0, 0))
+            nnpatch = self._new_nnpatch(self.h, self.w, (0, 0))
             assert(nnpatch.is_holistic)  # Must contain the whole image
             return [nnpatch]  # Must be a list
 
@@ -121,8 +125,11 @@ class NNPatchGenerator:
             offset[1] = 0
 
         return nnpatches
-        
-    def new_nnpatch(self, h, w, offset):
+
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
+    def _new_nnpatch(self, h, w, offset):
         """Constructs a new `nnpatch`.
 
         Parameters
@@ -134,7 +141,9 @@ class NNPatchGenerator:
             Patch width.
 
         offset : (int, int)
-            Position of the patch. (Y, X).
+            Position of the patch (top-left corner).
+            Coordinates are in (Y, X) format relative to the top-left (0, 0)
+            corner of the image.
 
         Returns
         -------

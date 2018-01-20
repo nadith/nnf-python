@@ -2,17 +2,39 @@
 """
 .. module:: Selection
    :platform: Unix, Windows
-   :synopsis: Represent Selection class and Select enumeration.
+   :synopsis: Represent Selection classes for static and real-time data definition.
 
 .. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
 """
 
 # Global Imports
-from enum import Enum
 import numpy as np
+from enum import Enum
 
 # Local Imports
 
+
+class Select(Enum):
+    """Select Enumeration describes the special constants for Selection structure.
+
+    Attributes
+    ----------
+    Select.ALL : int
+        -999
+    """
+    ALL = -999
+    PERCENT_20 = -20
+    PERCENT_40 = -40
+    PERCENT_60 = -60
+    PERCENT_80 = -80
+    PERCENT_100 = -100
+
+    ##########################################################################
+    # Public Interface
+    ##########################################################################
+    def int(self):
+        """Evaluate the enumeration value to its representative integer."""
+        return self.value
 
 # noinspection PyPep8
 class Selection:
@@ -35,6 +57,9 @@ class Selection:
     tr_occlusion_offset : ndarray -int
         Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`. (Default value = None).
 
+    tr_occlusion_filter : ndarray -int
+        Occlusion filter for custom occlusion patterns. Format: H X W
+
     tr_out_col_indices : ndarray -int
         Training target column indices. (Default value = None).
 
@@ -53,8 +78,8 @@ class Selection:
     nnpatches : ndarray -`nnf.db.NNPatch`
         NNPatch object array. (Default value = None).
 
-    use_rgb : bool
-        Use rgb or convert to grayscale. (Default value = None).
+    use_rgb : bool or None
+        Use rgb or convert to grayscale or if None, determine the value automatically. (Default value = None).
 
     color_indices : ndarray -int
         Specific color indices (set use_rgb = false). (Default value = None).
@@ -102,14 +127,15 @@ class Selection:
         self.tr_occlusion_rate   = None    # Occlusion rate for column index
         self.tr_occlusion_type   = None    # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
         self.tr_occlusion_offset = None    # Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
+        self.tr_occlusion_filter = None    # Occlusion filter for custom occlusion patterns
         self.tr_out_col_indices  = None    # Training target column indices
         self.val_col_indices     = None    # Validation column indices
         self.val_out_col_indices = None    # Validation target column indices
         self.te_col_indices      = None    # Testing column indices
         self.te_out_col_indices  = None    # Testing target column indices
         self.nnpatches           = None    # NNPatch object array
-        self.use_rgb             = None    # Use rgb or convert to grayscale
-        self.color_indices       = None    # Specific color indices (set .use_rgb = false)
+        self.use_rgb             = None    # Use rgb or convert to grayscale or if None, determine the value automatically
+        self.color_indices       = None    # Specific color indices (when .use_rgb = None)
         self.use_real            = False   # Use real valued database TODO: (if .normalize = true, Operations ends in real values)  # noqa E501
         self.scale               = None    # Scaling factor (resize factor)
         self.normalize           = False   # Normalize (0 mean, std = 1)
@@ -150,7 +176,8 @@ class Selection:
         sel.tr_noise_rate       = self.tr_noise_rate         # Rate or noise types for the above field
         sel.tr_occlusion_rate   = self.tr_occlusion_rate     # Occlusion rate for column index
         sel.tr_occlusion_type   = self.tr_occlusion_type     # Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
-        sel.tr_occlusion_offset = self.tr_occlusion_offset
+        sel.tr_occlusion_offset = self.tr_occlusion_offset   # Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
+        sel.tr_occlusion_filter = self.tr_occlusion_filter   # Occlusion filter for custom occlusion patterns
         sel.tr_out_col_indices  = self.tr_out_col_indices    # Training target column indices
         sel.val_col_indices     = self.val_col_indices       # Validation column indices
         sel.val_out_col_indices = self.val_out_col_indices   # Validation target column indices
@@ -193,6 +220,7 @@ class Selection:
             np.array_equal(self.tr_occlusion_rate, sel.tr_occlusion_rate) and
             np.array_equal(self.tr_occlusion_type, sel.tr_occlusion_type) and
             np.array_equal(self.tr_occlusion_offset, sel.tr_occlusion_offset) and
+            np.array_equal(self.tr_occlusion_filter, sel.tr_occlusion_filter) and
             np.array_equal(self.tr_out_col_indices, sel.tr_out_col_indices) and
             np.array_equal(self.val_col_indices, sel.val_col_indices) and
             np.array_equal(self.val_out_col_indices, sel.val_out_col_indices) and
@@ -224,21 +252,21 @@ class Selection:
         return iseq
 
 
-class Select(Enum):
-    """Select Enumeration describes the special constants for Selection structure.
+class RTStream(object):
+    """RTStream denotes the selection parameters for a real-time data stream."""
+    def __init__(self, **kwds):
+        """Constructs :obj:`RTStream` instance."""
+        super().__init__()
+        self.tr_col_indices      = None    # Training column indices
+        self.val_col_indices     = None    # Validation column indices
+        self.te_col_indices      = None    # Testing column indices
 
-    Attributes
-    ----------
-    Select.ALL : int
-        -999
-    """
-    ALL = -999
-    PERCENT_40 = -40
-    PERCENT_60 = -60
+    # Abstract Property
+    @property
+    def nb_class(self):
+        assert(False)  # must override
 
-    ##########################################################################
-    # Public Interface
-    ##########################################################################
-    def int(self):
-        """Evaluate the enumeration value to its representative integer."""
-        return self.value
+    # Abstract Property
+    @property
+    def nb_sample(self):
+        assert(False)  # must override

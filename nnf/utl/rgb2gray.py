@@ -1,5 +1,13 @@
-"""RGB2GRAY Module to represent rgb2gray function."""
-# Global Imports
+# -*- coding: utf-8 -*-
+"""
+.. module:: rgb2gray
+   :platform: Unix, Windows
+   :synopsis: Represent rgb2gray function.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
+
+#  Global Imports
 import numpy as np
 
 # Local Imports

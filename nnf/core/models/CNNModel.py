@@ -9,23 +9,13 @@
 
 # Global Imports
 from warnings import warn as warning
-import numpy as np
-from keras.models import Model, Sequential
-from keras.layers import Input
-from keras.layers.core import Dense, Dropout, Activation, Flatten
-from keras.layers.convolutional import Conv2D, MaxPooling2D,ZeroPadding2D
-#from keras.layers.normalization import BatchNormalization
-from keras.optimizers import SGD,RMSprop,adam
+from nnf.keras.models import Sequential
+from nnf.keras.layers import Dense, Dropout, Activation, Flatten
+from nnf.keras.layers.convolutional import Conv2D, MaxPooling2D
 
 # Local Imports
-from nnf.db.NNdb import NNdb
-from nnf.db.Format import Format
-from nnf.db.Dataset import Dataset
 from nnf.core.models.NNModel import NNModel
 from nnf.core.models.NNModelPhase import NNModelPhase
-from nnf.core.iters.DataIterator import DataIterator
-from nnf.core.iters.memory.MemDataIterator import MemDataIterator
-from nnf.core.iters.disk.DskDataIterator import DskDataIterator
 
 class CNNModel(NNModel):
     """Generic Convolutional Neural Network Model.
@@ -58,10 +48,13 @@ class CNNModel(NNModel):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, X_L=None, Xt=None, X_L_val=None, Xt_val=None,
-                                                            callbacks=None):
+    def __init__(self, X_L=None, Xt=None, X_L_val=None, Xt_val=None, callbacks=None,
+                 iter_params=None, iter_pp_params=None, nncfgs=None):
         """Constructs :obj:`CNNModel` instance."""
-        super().__init__(callbacks=callbacks)
+        super().__init__(callbacks=callbacks,
+                         iter_params=iter_params,
+                         iter_pp_params=iter_pp_params,
+                         nncfgs=nncfgs)
 
         # Used when data is fetched from no iterators
         self.X_L = X_L          # (X, labels)
@@ -91,7 +84,7 @@ class CNNModel(NNModel):
     ##########################################################################
     # Protected: NNModel Overrides
     ##########################################################################
-    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
+    def _train(self, cfg, patch_idx=None, dbparam_save_dirs=None,
                                     list_iterstore=None, dict_iterstore=None):
         """Train the :obj:`CNNModel`.
 
@@ -111,26 +104,18 @@ class CNNModel(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN,
-                                                        list_iterstore,
-                                                        dict_iterstore)
+        X_gen, X_val_gen = (None, None)
+        if cfg.preloaded_db is None:
+            X_gen, X_val_gen = self._init_data_generators(NNModelPhase.TRAIN, list_iterstore, dict_iterstore)
+            assert X_gen is not None
 
-        # Pre-condition asserts
-        assert((cfg.preloaded_db is None and X_gen is not None) or 
-                (cfg.preloaded_db is not None))
-
-        if (X_val_gen is not None):
-            # No. of training and validation classes must be equal
-            assert(X_gen.nb_class == X_val_gen.nb_class)
-
-            # Should be labeled samples
-            assert(not (X_gen.nb_class is None or X_val_gen.nb_class is None))
-
-        # Build the CNN
-        self.__build(cfg, X_gen)
+        # Model _prefix
+        prefix = self._model_prefix()
+        self._init_net(cfg, patch_idx, prefix, X_gen)
+        assert (self.net is not None)
 
         # Preloaded databases for quick deployment
         if ((cfg.preloaded_db is not None) and
@@ -172,32 +157,24 @@ class CNNModel(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """    
         # Initialize data generators
-        X_te_gen, Xt_te_gen = self._init_data_generators(
-                                                    NNModelPhase.TEST,
-                                                    list_iterstore,
-                                                    dict_iterstore)
-
-        # Pre-condition asserts
-        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
-                (cfg.preloaded_db is not None))
+        X_te_gen, Xt_te_gen = (None, None)
+        if cfg.preloaded_db is None:
+            X_te_gen, Xt_te_gen = self._init_data_generators(NNModelPhase.TEST, list_iterstore, dict_iterstore)
+            assert X_te_gen is not None
 
         if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
             assert(X_te_gen.nb_sample == Xt_te_gen.nb_sample)
 
-        # Model prefix
+        # Model _prefix
         prefix = self._model_prefix()
 
-        # Checks whether keras net should be pre-built to
-        # load weights or the net itself
-        if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self.__build(cfg, X_te_gen)
-
-        # Try to load the saved model or weights
-        self._try_load(cfg, patch_idx, prefix)
+        # Build the DAE if not already built during training
+        if self.net is None:
+            self._init_net(cfg, patch_idx, prefix, X_te_gen)
 
         assert(self.net is not None)
 
@@ -206,15 +183,12 @@ class CNNModel(NNModel):
             cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadTeDb(self)
 
-        # Test without generators
-        if (cfg.preloaded_db is not None):
+            # Test without generators
             super()._start_test(patch_idx, X_L_te, Xt_te)
             return
 
         # Test with generators
-        super()._start_test(patch_idx,
-                            X_te_gen=X_te_gen,
-                            Xt_te_gen=Xt_te_gen)
+        super()._start_test(patch_idx, X_te_gen=X_te_gen)
 
     def _predict(self, cfg, patch_idx=None, dbparam_save_dirs=None, 
                                     list_iterstore=None, dict_iterstore=None):
@@ -236,32 +210,26 @@ class CNNModel(NNModel):
             List of iterstores for :obj:`DataIterator`.
 
         dict_iterstore : :obj:`dict`
-            Dictonary of iterstores for :obj:`DataIterator`.
+            Dictionary of iterstores for :obj:`DataIterator`.
         """
         # Initialize data generators
-        X_te_gen, Xt_te_gen = self._init_data_generators(
-                                                NNModelPhase.PREDICT, 
-                                                list_iterstore, 
-                                                dict_iterstore)
-        # Pre-condition asserts
-        assert((cfg.preloaded_db is None and X_te_gen is not None) or 
-                (cfg.preloaded_db is not None))
+        X_te_gen, Xt_te_gen = (None, None)
+        if cfg.preloaded_db is None:
+            X_te_gen, Xt_te_gen = self._init_data_generators(NNModelPhase.PREDICT, list_iterstore, dict_iterstore)
+            assert X_te_gen is not None
 
         if (Xt_te_gen is not None):
             # No. of testing and testing target samples must be equal
-            assert(Xte_gen.nb_sample == Xt_te_gen.nb_sample)
+            assert(X_te_gen.nb_sample == Xt_te_gen.nb_sample)
 
-        # Model prefix
+        # Model _prefix
         prefix = self._model_prefix()
 
-        # Checks whether keras net should be pre-built to
-        # load weights or the net itself
-        if (self._need_prebuild(cfg, patch_idx, prefix)):
-            self.__build(cfg, X_te_gen)
+        # Build the DAE if not already built during training
+        if self.net is None:
+            self._init_net(cfg, patch_idx, prefix, X_te_gen)
 
-        # Try to load the saved model or weights
-        self._try_load(cfg, patch_idx, prefix)
-        assert(self.net is not None)
+        assert (self.net is not None)
 
         # After self.net configure, for predict functionality, 
         # initialize theano sub functions
@@ -272,29 +240,26 @@ class CNNModel(NNModel):
             cfg.preloaded_db.reinit()
             X_L_te, Xt_te = cfg.preloaded_db.LoadPredDb(self)    
 
-        # Predict without generators
-        if (cfg.preloaded_db is not None):
+            # Predict without generators
             super()._start_predict(patch_idx, X_L_te, Xt_te)
             return
 
         # Predict with generators
-        super()._start_predict(patch_idx, 
-                                X_te_gen=X_te_gen, 
-                                Xt_te_gen=Xt_te_gen)
+        super()._start_predict(patch_idx, X_te_gen=X_te_gen)
 
     ##########################################################################
     # Protected Interface
     ##########################################################################
     def _model_prefix(self):
-        """Fetch the prefix for the file to be saved/loaded.
+        """Fetch the _prefix for the file to be saved/loaded.
 
         Note
         ----
-        Override this method for custom prefix.
+        Override this method for custom _prefix.
         """
         return "CNN"
 
-    def _build(self, input_shape, nb_class, data_format):
+    def _build(self, input_shapes, output_shapes, data_format):
         """Build the keras CNN.
 
         Note
@@ -304,46 +269,83 @@ class CNNModel(NNModel):
         # input: 150x150 images with 3 channels -> (3, 100, 100) tensors.
 
         self.net = Sequential()
-        self.net.add(Conv2D(32, (3, 3), input_shape=input_shape))
+        self.net.add(Conv2D(32, (3, 1), input_shape=input_shapes[0]))
         self.net.add(Activation('relu'))
-        self.net.add(MaxPooling2D(pool_size=(2, 2)))
+        self.net.add(MaxPooling2D(pool_size=(2, 1)))
 
-        self.net.add(Conv2D(32, (3, 3)))
+        self.net.add(Conv2D(32, (3, 1)))
         self.net.add(Activation('relu'))
-        self.net.add(MaxPooling2D(pool_size=(2, 2)))
+        self.net.add(MaxPooling2D(pool_size=(2, 1)))
 
-        self.net.add(Conv2D(64, (3, 3)))
+        self.net.add(Conv2D(64, (3, 1)))
         self.net.add(Activation('relu'))
-        self.net.add(MaxPooling2D(pool_size=(2, 2)))
+        self.net.add(MaxPooling2D(pool_size=(2, 1)))
 
         self.net.add(Flatten())
         #self.net.add(Dense(64))
         self.net.add(Dense(256))
         self.net.add(Activation('relu'))
         self.net.add(Dropout(0.5))
-        self.net.add(Dense(nb_class))
+        self.net.add(Dense(output_shapes[0]))
         self.net.add(Activation('softmax'))
 
+    def _pre_compile(self, cfg, input_shapes, output_shapes, data_format):
+        pass
+
     ##########################################################################
-    # Private Interface
+    # Protected Private: NNModel Overrides (Build Related)
     ##########################################################################
-    def __build(self, cfg, X_gen):
+    # def __init_net(self, cfg, patch_idx, prefix, X_gen):
+    #     # Checks whether keras net is already prebuilt
+    #     if not self._is_prebuilt(cfg, patch_idx, prefix):
+    #         self.__build(cfg, X_gen)
+    #
+    #     # Try to load the saved model or weights
+    #     self._try_load(cfg, patch_idx, prefix)
+    #
+    #     # PERF: Avoid compiling before loading saved weights/model
+    #     # Pre-compile callback
+    #     self.__pre_compile(cfg, X_gen)
+    #
+    #     # PERF: Avoid compiling before the callback
+    #     self.__compile(cfg)
+
+    def _internal__build(self, cfg, X_gen):
         """Build the keras CNN."""
         if (cfg.preloaded_db is not None):
             cfg.preloaded_db.reinit()
-            input_shape = cfg.preloaded_db.get_input_shape(self)
-            nb_class = cfg.preloaded_db.get_nb_class()
+            input_shapes = cfg.preloaded_db.get_input_shapes(self)
+            output_shapes = cfg.preloaded_db.get_output_shapes()
             data_format = cfg.preloaded_db.data_format
 
         else:
-            input_shape = X_gen.image_shape # <- 'tf' format (default)
-            nb_class = X_gen.nb_class
+            input_shapes = X_gen.input_shapes
+            output_shapes = X_gen.output_shapes
             data_format = X_gen.data_format
 
-        self._build(input_shape, nb_class, data_format)
-        print(self.net.summary())
-        self.net.compile(loss=cfg.loss_fn,
-                            optimizer=cfg.optimizer,
-                            metrics=cfg.metrics)
+        self._build(input_shapes, output_shapes, data_format)
+
+    def _internal__pre_compile(self, cfg, X_gen):
+            """Callbacks before compiling the keras CNN."""
+            if (cfg.preloaded_db is not None):
+                cfg.preloaded_db.reinit()
+                input_shapes = cfg.preloaded_db.get_input_shapes(self)
+                output_shapes = cfg.preloaded_db.get_output_shapes()
+                data_format = cfg.preloaded_db.data_format
+
+            else:
+                input_shapes = X_gen.input_shapes
+                output_shapes = X_gen.output_shapes
+                data_format = X_gen.data_format
+
+            self._pre_compile(cfg, input_shapes, output_shapes, data_format)
+
+    def _internal__compile(self, cfg):
+            """Compile the keras CNN."""
+            self.net.compile(loss=cfg.loss_fn,
+                             optimizer=cfg.optimizer,
+                             metrics=cfg.metrics)
+            print(self.net.summary())
+
 
 

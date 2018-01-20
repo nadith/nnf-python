@@ -1,13 +1,9 @@
 # -*- coding: utf-8 -*-
 # Global Imports
-import numpy as np
-from keras.models import Model
-from keras.datasets import mnist
-from keras.layers import Input, Dense
+from nnf.keras.layers import Input, Dense
 
 # Local Imports
 from nnf.db.Dataset import Dataset
-from nnf.core.models.NNModel import NNModel
 from nnf.core.models.DAEModel import DAEModel
 from nnf.core.models.NNModelPhase import NNModelPhase
 
@@ -32,26 +28,26 @@ class DAERegModel(DAEModel):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, callbacks=None):
+    def __init__(self, callbacks=None,
+                 iter_params=None, iter_pp_params=None, nncfgs=None):
         """Constructs :obj:`DAERegModel` instance."""
-        super().__init__(callbacks)
+        super().__init__(callbacks=callbacks,
+                         iter_params=iter_params,
+                         iter_pp_params=iter_pp_params,
+                         nncfgs=nncfgs)
         self.Xt_gen = self.Xt_val_gen = None
 
         # Set defaults for arguments
-        get_target_dat_gen = self.callbacks.setdefault('get_target_data_generators', None)
-        if (get_target_dat_gen is None):
-            self.callbacks['get_target_data_generators'] =\
-                                            self._get_target_data_generators
+        tmp = self.callbacks.setdefault('get_target_data_generators', None)
+        if (tmp is None):
+            self.callbacks['get_target_data_generators'] = self._get_target_data_generators
      
     ##########################################################################
     # Protected Interface
     ##########################################################################
     def _get_target_data_generators(self, ephase, 
                                             list_iterstore, dict_iterstore):
-        """Get target data generators for pre-training, training only.
-
-        .. warning:: Only invoked in PRE_TRAIN and TRAIN phases. For other phases,
-                    refer `get_data_generators()` function.
+        """Get target data generators for training, testing, prediction.
 
         Parameters
         ----------
@@ -67,22 +63,32 @@ class DAERegModel(DAEModel):
         Returns
         -------
         :obj:`tuple`
-            When ephase == NNModelPhase.PRE_TRAIN or NNModelPhase.TRAIN
-            then 
-                Generators for training and validation.
-                Refer https://keras.io/preprocessing/image/
+            When ephase == NNModelPhase.TRAIN
+            then
+                Generators for training (X1_gen) and validation (X2_gen).
 
-        Note
-        ----
             When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
-            then this method will not be invoked.
+            then
+                Generators for testing target (X1_gen) and (X2_gen) is unused.
         """
         X1_gen = None
         X2_gen = None
-        if (ephase == NNModelPhase.PRE_TRAIN or ephase == NNModelPhase.TRAIN):
+        if (ephase == NNModelPhase.PRE_TRAIN):
             # Iterstore for dbparam1, TR_OUT and VAL_OUT
+            self.Xt_gen = list_iterstore[0].setdefault(Dataset.TR_OUT, None)
+            self.Xt_val_gen = list_iterstore[0].setdefault(Dataset.VAL_OUT, None)
+
+            # IMPORTANT: Do not return `self.Xt_gen`, `self.Xt_val_gen`
+            # since those iterators must be utilized depending on the layer purpose (daecfg.lp) configuration later
+            # in the method _pre_train_preprocess()
+
+        elif (ephase == NNModelPhase.TRAIN):
             X1_gen = list_iterstore[0].setdefault(Dataset.TR_OUT, None)
             X2_gen = list_iterstore[0].setdefault(Dataset.VAL_OUT, None)
+
+        elif (ephase == NNModelPhase.PREDICT or ephase == NNModelPhase.TEST):
+            # Iterstore for dbparam1, TE_OUT
+            X1_gen = list_iterstore[0].setdefault(Dataset.TE_OUT, None)
 
         return X1_gen, X2_gen
 
@@ -90,7 +96,7 @@ class DAERegModel(DAEModel):
     # Protected: DAEModel Overrides
     ##########################################################################
     def _model_prefix(self):
-        """Fetch the prefix for the file to be saved/loaded."""
+        """Fetch the _prefix for the file to be saved/loaded."""
         return "DAEReg"
 
     def _validate_cfg(self, ephase, cfg):
@@ -103,65 +109,6 @@ class DAERegModel(DAEModel):
             raise Exception('Layer purpose string for each layers is not' + 
             ' specified. (length of `cfg.arch` != length of `cfg.lp`).')
 
-    def _init_data_generators(self, ephase, list_iterstore, dict_iterstore):
-        """Initialize data generators for pre-training, training, testing,
-            prediction.
-
-        Parameters
-        ----------
-        ephase : :obj:`NNModelPhase`
-            Phase of which the data generators are required.
-
-        list_iterstore : :obj:`list`
-            List of iterstores for :obj:`DataIterator`.
-
-        dict_iterstore : :obj:`dict`
-            Dictionary of iterstores for :obj:`DataIterator`.
-
-        Returns
-        -------
-        :obj:`tuple`
-            When ephase == NNModelPhase.PRE_TRAIN
-            then 
-                Generators for pre-training and validation. 
-                But cloned before use.
-
-            When ephase == NNModelPhase.TRAIN
-            then 
-                Generators for training and validation.
-
-            When ephase == NNModelPhase.TEST or NNModelPhase.PREDICT
-            then
-                Generators for testing and testing target.
-        """
-        # Fetch generators from parent
-        X_gen, X_val_gen =\
-            super()._init_data_generators(ephase, 
-                                            list_iterstore,
-                                            dict_iterstore)
-
-        # PERF: No need to make a copy of the following generators since 
-        # they are used as secondary generators to X_gen, X_val_gen with
-        # sync_generator(...)
-        if (ephase == NNModelPhase.PRE_TRAIN):
-            if (list_iterstore is not None):
-                # Refer _pre_train_preprocess() for syncing these 
-                # data generators
-                self.Xt_gen, self.Xt_val_gen =\
-                        self.callbacks['get_target_data_generators'](ephase, list_iterstore, dict_iterstore)
-        
-        elif (ephase == NNModelPhase.TRAIN):
-            if (list_iterstore is not None):
-                Xt_gen, Xt_val_gen =\
-                        self.callbacks['get_target_data_generators'](ephase, list_iterstore, dict_iterstore)
-
-                # Sync the data generators
-                X_gen.sync_generator(Xt_gen)        
-                if (X_val_gen is not None):
-                    X_val_gen.sync_generator(Xt_val_gen)       
-
-        return X_gen, X_val_gen
-
     def _pre_train_preprocess(self, layer_idx, daeprecfgs, daecfg, 
                                                             X_gen, X_val_gen):
         """describe"""
@@ -171,10 +118,10 @@ class DAERegModel(DAEModel):
 
         # If this is a regression learning layer
         if (lp == 'rg'):
-            X_gen.sync_generator(self.Xt_gen)
+            X_gen.sync_tgt_generator(self.Xt_gen)
 
             if (X_val_gen is not None):
-                X_val_gen.sync_generator(self.Xt_val_gen)  
+                X_val_gen.sync_tgt_generator(self.Xt_val_gen)
 
         return X_gen, X_val_gen
 

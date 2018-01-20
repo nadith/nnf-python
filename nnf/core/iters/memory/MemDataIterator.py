@@ -8,11 +8,11 @@
 """
 
 # Global Imports
-from keras import backend as K
+from warnings import warn as warning
 
 # Local Imports
 from nnf.core.iters.DataIterator import DataIterator
-from nnf.db.Dataset import Dataset
+
 
 class MemDataIterator(DataIterator):
     """MemDataIterator iterates the data in memory for :obj:`NNModel'.
@@ -25,7 +25,7 @@ class MemDataIterator(DataIterator):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, edataset, nndb, nb_class, pp_params=None, fn_gen_coreiter=None):
+    def __init__(self, edataset, nndb, pp_params=None, fn_gen_coreiter=None):
         """Construct a MemDataIterator instance.
 
         Parameters
@@ -47,42 +47,29 @@ class MemDataIterator(DataIterator):
             Factory method to create the core iterator.
             (Default value = None).
         """
-        super().__init__(pp_params, fn_gen_coreiter, edataset, nb_class)
+        super().__init__(pp_params, fn_gen_coreiter, edataset)
 
         # NNdb database to create the iterator
         self.nndb = nndb
 
-    def init_ex(self, params=None, y=None, setting=None):
+    def init_ex(self, params=None, setting=None):
         """Initialize the instance.
 
         Parameters
         ----------
         params : :obj:`dict`
             Core iterator parameters.
+
+        setting : :obj:`dict`
+            Pre-process setting (ImageDataPreProcessor.setting) to apply.
+
+        Note
+        ----
+        `DataIterator` class implements an init() method that accepts different params.
+        Hence PEP8 warns in overriding init() method but not for init_ex() method.
         """
         params = {} if (params is None) else params
-
-        # Set db and _image_shape (important for convolutional nets, and fit() method below)
-        data_format = params['data_format'] if ('data_format' in params) else None
-        data_format = K.image_data_format() if (data_format is None) else data_format
-        target_size = (self.nndb.h, self.nndb.w)
-
-        db = None
-        if (self.nndb.ch == 3):  # 'rgb'
-            if data_format == 'channels_last':
-                params['_image_shape'] = target_size + (3,)
-                db = self.nndb.db_convo_tf
-            else:
-                params['_image_shape'] = (3,) + target_size
-                db = self.nndb.db_convo_th
-
-        else:
-            if data_format == 'channels_last':
-                params['_image_shape'] = target_size + (1,)
-                db = self.nndb.db_convo_tf
-            else:
-                params['_image_shape'] = (1,) + target_size
-                db = self.nndb.db_convo_th
+        params['_edataset'] = self.edataset  # Useful for RTNumpyIterator
 
         # Required for featurewise_center, featurewise_std_normalization and 
         # zca_whitening. Currently supported only for in memory datasets.
@@ -90,45 +77,60 @@ class MemDataIterator(DataIterator):
             self._imdata_pp.featurewise_std_normalization or
             self._imdata_pp.zca_whitening or 
             (self._pp_params is not None and 'mapminmax' in self._pp_params)):
-            self._imdata_pp.fit(db, 
+
+            # Issue a warning if the given setting is not utilized
+            if setting is not None:
+                warning('Pre-process setting is provided but ignored in ' +
+                        str(self.edataset).upper() + ' dataset fit() processing.')
+
+            # Fit the dataset to calculate the general pre-process setting
+            self._imdata_pp.fit(self.nndb,
                                 self._imdata_pp.augment, 
                                 self._imdata_pp.rounds,
                                 self._imdata_pp.seed)
         else:
             self._imdata_pp.apply(setting)
 
-        gen_next = self._imdata_pp.flow_ex(db, self.nndb.cls_lbl,
-                                           self._nb_class, params=params)
-        settings = self._imdata_pp.setting
+        # Release the core iterator if already exists
+        super()._release_core_iter()
+
+        # Create a core-iterator object
+        gen_next = self._imdata_pp.flow_ex(self.nndb, params=params)
+
+        # Window max normalization for window iterator
+        if (self._imdata_pp.wnd_max_normalize):
+
+            # Issue a warning if the given setting is not utilized
+            if setting is not None:
+                warning('Pre-process setting is provided but ignored in ' +
+                        str(self.edataset).upper() + ' dataset fit_window() processing.')
+
+            # Fit the dataset to calculate the pre-process settings related to window_iter
+            self._imdata_pp.fit_window(gen_next.window_iter)
+
+        # Invoke super class init
         super().init(gen_next, params)
-        return settings
+
+        # Returns pre-process setting
+        return self._imdata_pp.setting
 
     def clone(self):
         """Create a copy of this object."""
-        new_obj = MemDataIterator(self.edataset, self.nndb, self._nb_class,
-                                    self._pp_params, self._fn_gen_coreiter)
-        new_obj.init_ex(self._params)
-        new_obj.sync(self._sync_gen_next)
+        new_obj = MemDataIterator(self.edataset, self.nndb, self._pp_params, self._fn_gen_coreiter)
+
+        # IMPORTANT: init_ex() is costly since it fits the data again
+        # new_obj.init_ex(self._params)
+
+        # Instead apply the settings which is already calculated
+        new_obj._imdata_pp.apply(self._imdata_pp.setting)
+
+        # Clone the core-iterator object along with input|output_generators
+        new_gen_next = self.core_iter.clone()
+
+        # Invoke super class init
+        new_obj.init(new_gen_next, self.params)
+
         return new_obj
-
-    def sync_generator(self, iter):
-        """Sync the secondary iterator with this iterator.
-
-        Sync the secondary core iterator with this core iterator internally.
-        Used when data needs to be generated with its matching target.
-
-        Parameters
-        ----------
-        iter : :obj:`MemDataIterator`
-            Iterator that needs to be synced with this iterator.
-
-        Note
-        ----
-        Current supports only 1 iterator to be synced.
-        """
-        if (iter is None): return False
-        self.sync(iter._gen_next)
-        return True
 
     ##########################################################################
     # Protected Interface
@@ -137,3 +139,4 @@ class MemDataIterator(DataIterator):
         """Release internal resources used by the iterator."""
         super().release()
         del self.nndb
+        self.nndb = None

@@ -19,6 +19,7 @@ from nnf.core.iters.DataIterator import DataIterator
 from nnf.db.Selection import Select
 from nnf.db.Dataset import Dataset
 
+
 class DskmanDataIterator(DataIterator):
     """DskmanDataIterator base class for :obj:`NNDiskMan' related iterators.
 
@@ -110,6 +111,11 @@ class DskmanDataIterator(DataIterator):
 
         read_data : bool
             Whether to read the actual data.
+
+        Notes
+        -----
+        `DataIterator` class implements an init() method that accepts different params.
+        Hence PEP8 warns in overriding init() method but not for init_ex() method.
         """
         # gen_next is ignored since using a custom 'self._gen_next' below
         # iter_param is ignored since it's not applicable in this context
@@ -124,7 +130,7 @@ class DskmanDataIterator(DataIterator):
 
         # Build ranges max array
         def _ranges_max(ranges):
-            ranges_max = np.zeros(len(ranges), dtype='uint8')
+            ranges_max = np.zeros(len(ranges), dtype='uint16')
 
             for ri, range in enumerate(ranges):
                 if (not isinstance(range, list)):
@@ -140,7 +146,7 @@ class DskmanDataIterator(DataIterator):
                     for range_vec in range:
                         if ((range_vec is not None) and 
                             (isinstance(range_vec, np.ndarray) and len(range_vec) != 0)):
-                            ranges_max[ri] = np.max(np.concatenate((np.array([ranges_max[ri]], dtype='uint8'), range_vec)))
+                            ranges_max[ri] = np.max(np.concatenate((np.array([ranges_max[ri]], dtype='uint16'), range_vec)))
                         else:
                             ranges_max[ri] = 0
 
@@ -153,7 +159,8 @@ class DskmanDataIterator(DataIterator):
         # Build union of ranges
         def _union_range(ranges, name):            
             union = np.array([])
-            for range in ranges:
+
+            for ri, range in enumerate(ranges):
                 # range can be None or enum-Select.ALL|... or numpy.array([])
                 if (range is None):
                     continue
@@ -166,7 +173,7 @@ class DskmanDataIterator(DataIterator):
                     # Issue a warning if user-required order is going to be altered
                     tmp = np.sort(range)
                     if (not np.array_equal(tmp, range)):
-                        warnings.warn('%s %s is is not in sorted order.' % Dataset.str(Dataset.enum(ri)), name)
+                        warnings.warn('{0} {1} is not in sorted order.'.format(str(Dataset.enum(ri)), name))
 
                     union = np.uint16(np.union1d(union, range))
 
@@ -178,9 +185,9 @@ class DskmanDataIterator(DataIterator):
                             return union
 
                         # Issue a warning if user-required order is going to be altered
-                        tmp = sort(range_vec)
+                        tmp = np.sort(range_vec)
                         if (not np.array_equal(tmp, range_vec)):
-                            warnings.warn('%s %s is is not in sorted order.' % Dataset.str(Dataset.enum(ri)), name)
+                            warnings.warn('{0} {1} is not in sorted order.'.format(str(Dataset.enum(ri)), name))
 
                         union = np.uint16(np.union1d(union, range_vec))
 
@@ -193,9 +200,6 @@ class DskmanDataIterator(DataIterator):
         # INHERITED: Used in __next__() to utilize the generator with yield
         self._gen_next = self.__next()
 
-    ##########################################################################
-    # Protected Interface
-    ##########################################################################
     def release(self):
         """Release internal resources used by the iterator."""
         super().release()
@@ -206,6 +210,9 @@ class DskmanDataIterator(DataIterator):
         del self.union_cls_range
         del self.union_col_range
 
+    ##########################################################################
+    # Protected Interface
+    ##########################################################################
     @abstractmethod
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
         """Get image and file record (frecord) at cls_idx, col_idx.
@@ -391,7 +398,7 @@ class DskmanDataIterator(DataIterator):
         (col_idx=0, [(Dataset.TR, True)]): => [(Dataset.TR, True)]
 
         cls_idx=1 iteration,
-        (col_idx=1, [(Dataset.TR, False), (Dataset.VAL, True)]): 
+        (col_idx=1, [(Dataset.TR, False), (Dataset.VAL, True)]):
                     => [(Dataset.TR, False), (Dataset.TR, False), (Dataset.VAL, True), (Dataset.VAL, False)]
         """
         filtered_entries = []
@@ -436,9 +443,13 @@ class DskmanDataIterator(DataIterator):
                     # Or, Add the entry while adding duplicates for repeated columns
                     else:
                         is_first = True
-                        for ci in np.sort(col_range):  # PERF
-                            if (ci == col_idx):                                
 
+                        sorted_col_range = np.sort(col_range) # PERF
+                        cidx = np.searchsorted(sorted_col_range, col_idx)
+
+                        while (cidx < col_range.size):
+                            ci = sorted_col_range[cidx]
+                            if (ci == col_idx):
                                 cls_not_visited = False
                                 if (is_first):
                                     cls_not_visited = self.__update_clses_visited(clses_visited, edataset, cls_idx)
@@ -448,6 +459,19 @@ class DskmanDataIterator(DataIterator):
                                 filtered_entries.append(dataset_tup)
 
                             if (ci > col_idx): break  # PERF
+                            cidx += 1
+
+                        # for ci in sorted_col_range:
+                        #     if (ci == col_idx):
+                        #         cls_not_visited = False
+                        #         if (is_first):
+                        #             cls_not_visited = self.__update_clses_visited(clses_visited, edataset, cls_idx)
+                        #             is_first = False
+                        #
+                        #         dataset_tup = (edataset, cls_not_visited)  # Entry
+                        #         filtered_entries.append(dataset_tup)
+                        #
+                        #     if (ci > col_idx): break  # PERF
 
         return filtered_entries  #[(Dataset.TR, is_new_class), (Dataset.VAL, True), (Dataset.VAL, False), ...]
 
@@ -487,7 +511,7 @@ class DskmanDataIterator(DataIterator):
                     Reason: since the effect gets void due to the union operation
                     TODO:   Copy and append sel.xx_col_indices to itself when there is a class repetition.
         """
-        # Itearate the union of the class ranges i.e (tr, val, te, etc)
+        # Iterate the union of the class ranges i.e (tr, val, te, etc)
         i = 0
 
         # Track the classes to decide newly added classes for class ranges
@@ -519,7 +543,7 @@ class DskmanDataIterator(DataIterator):
                 if (not self._is_valid_cls_idx(cls_idx)):
                     continue
 
-            # Itearate the union of the column ranges i.e (tr, val, te, etc)
+            # Iterate the union of the column ranges i.e (tr, val, te, etc)
             j = 0
 
             # Dataset served count 
@@ -551,12 +575,14 @@ class DskmanDataIterator(DataIterator):
                     if (not self._is_valid_col_idx(cls_idx, col_idx)):
                         continue
 
+                # from nnf.utl.Benchmark import Benchmark
+                # with Benchmark("filter_datasets"):
                 # Filter datasets by class index (cls_idx) and coloumn index (col_index).
                 # filtered_entries => [(TR, is_new_class), (VAL, ...), (TE, ...), ...]
                 filtered_entries =\
                     self.__filter_datasets_by_cls_col_idx(
                                                         cls_idx, col_idx, (i-1),
-                                                        clses_visited, 
+                                                        clses_visited,
                                                         dataset_count)
 
                 # Validity of col_idx in the corresponding self.cls_ranges[rng_idx]

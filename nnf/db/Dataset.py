@@ -1,5 +1,12 @@
-"""Dataset Module to represent Dataset class."""
 # -*- coding: utf-8 -*-
+"""
+.. module:: Dataset
+   :platform: Unix, Windows
+   :synopsis: Dataset enumeration.
+
+.. moduleauthor:: Nadith Pathirage <chathurdara@gmail.com>
+"""
+
 # Global Imports
 from enum import Enum
 
@@ -8,6 +15,8 @@ from enum import Enum
 
 class Dataset(Enum):
     """Describe Dateset.
+
+    TODO: Document
     # Do not change the order of the values
     # Refer NNDiskMan.process() for more details
 

@@ -8,36 +8,34 @@
 """
 
 # Global Imports
-from warnings import warn as warning
-from keras.preprocessing.image import load_img
-from keras.preprocessing.image import img_to_array
 import numpy as np
 import os
+import h5py
 
 # Local Imports
 from nnf.core.iters.disk.DskmanDskDataIterator import DskmanDskDataIterator
-import nnf.core.NNDiskMan
+from nnf.core.FileFormat import FileFormat
 
 class DskmanDskBigDataIterator(DskmanDskDataIterator):
     """DskmanDskBigDataIterator iterates the data files in the disk for :obj:`NNDiskMan'.
 
-        This class is capable of reading data (binary/ASCII) onto the disk. 
+        This class is capable of reading data (binary/ASCII) from the disk.
         Many data items are assumed to be stored in each file. No 
         subdirectories are allowed.
 
     Attributes
     ----------
-    cls_n : int
-        Class count.
-
-    n_per_class : int
-        Images per class.
+    fpositions : :obj:`dict`
+        Track the file position for each record in the class.
 
     opened_files : :obj:`dict`
         Track open files for perf.
 
-    binary_data : bool
-        Whether binary data or ASCII data.
+    file_format : bool
+        Whether matlab/binary or ASCII data.
+
+    data_field : bool
+        Name of the data field in the file to read data. (used for files with data fields, like matlab).
 
     target_size : :obj:`tuple`
         Data sample size. Used to load data from binary files.
@@ -46,7 +44,7 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
     ##########################################################################
     # Public Interface
     ##########################################################################
-    def __init__(self, pp_params, binary_data, target_size):
+    def __init__(self, pp_params, file_format, data_field, target_size):
         """Construct a :obj:`DskmanDskBigDataIterator` instance.
 
         Parameters
@@ -54,8 +52,11 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         pp_params : :obj:`dict`
             Pre-processing parameters for :obj:`ImageDataPreProcessor`.
 
-        binary_data : bool
-            Whether binary data or ASCII data.
+        file_format : bool
+            Whether matlab/binary or ASCII data.
+
+        data_field : bool
+            Name of the data field in the file to read data. (used for files with data fields, like matlab).
 
         target_size : :obj:`tuple`, optional
             Data sample size. Used to load data from binary files.
@@ -64,24 +65,32 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         
         # INHERITED: [Parent's Attirbutes] ------------------------
         # Class count, will be updated below
-        self.cls_n = 0 
+        # self.cls_n = 0
         
-        # Keyed: by the cls_idx
-        # Value: frecord [fpath, fpos]
-        # self.paths = {} 
-        
-        # Parent's 'n_per_class' is a dictionary.
-        self.n_per_class = 0
+        # Keyed by the cls_idx
+        # value = [file_path_1, file_path_2, ...] <= list of file paths
+        # self.paths = {}
+
+        # Indexed by cls_idx
+        # value = <int> denoting the images per class
+        # self.n_per_class = np.array([], dtype=np.uint16)
 
         # Whether to read the data
         # self._read_data
         #------------------------------------------------------------
 
+        # Keyed: by the cls_idx
+        # value = <file positions for records in class>
+        self.fpositions = {}
+
         # PERF (To save open file handlers)
         self.opened_files = {}
 
         # Whether the file is in binary format
-        self.binary_data = binary_data
+        self.file_format = file_format
+
+        # Fetch data field name (used for files with data fields, like matlab)
+        self.data_field = data_field
 
         # Data sample size. Used to load data from binary files
         self.target_size = target_size
@@ -110,6 +119,9 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         # Assign explicit class index for internal reference
         cls_idx = 0
 
+        # For matlab files
+        fpos_offset = 0
+
         # Iterate the directory and populate self.paths dictionary
         for root, dirs, files in _recursive_list(db_dir):
 
@@ -119,11 +131,64 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
 
             # Read each file in files
             for fname in files:
-                fpath = os.path.join(root, fname)                
-                                
-                if (not self.binary_data):
+                fpath = os.path.join(root, fname)
+
+                if self.file_format == FileFormat.MATLAB:
+
+                    with h5py.File(fpath, 'r') as file:
+                        cls_lbl = np.squeeze(np.array(file['ulbl']))
+
+                    # Starting index of each unique cls label
+                    _, iusd, counts = np.unique(cls_lbl, return_index=True, return_counts=True)
+                    self.n_per_class = np.append(self.n_per_class, np.uint16(counts))
+
+                    if (not np.array_equal(np.sort(iusd), iusd)):
+                        raise Exception('Data belong to same class need to be placed in consecutive blocks. '
+                                        'Hence the class labels should be in sorted order.')
+
+                    # Fix the end index
+                    iusd = np.append(iusd, np.size(cls_lbl))
+
+                    prev_fpos = iusd[0]
+                    for fpos in iusd[1:]:
+                        self.paths.setdefault(cls_idx, fpath)
+                        fpositions = self.fpositions.setdefault(cls_idx, [])
+
+                        # file position (row index for data accessing)
+                        fpos_list = list(range(prev_fpos, fpos))
+                        fpositions.extend(np.uint16(fpos_list))
+
+                        cls_idx = cls_idx + 1
+                        prev_fpos = fpos
+
+                    continue
+
+                elif self.file_format == FileFormat.BINARY:
+
                     # Open and read the content of the file 'f'
-                    f = self.open_file(fpath)
+                    f = self._open_file(fpath, 'rb')
+                    while (True):
+                        fpos = f.tell()
+                        data = np.fromfile(f, dtype='float32', count=self.target_size[0])
+
+                        # EOF check
+                        if (data.size == 0):
+                            break
+
+                        else:
+                            # Assumption: each record belong to a separate class
+                            self.paths.setdefault(cls_idx, fpath)
+                            fpositions = self.fpositions.setdefault(cls_idx, [])
+                            fpositions.append(np.uint16(fpos))
+                            cls_idx = cls_idx + 1
+
+                            # Assumption: each sample belongs to unique class
+                            self.n_per_class = np.append(self.n_per_class, np.uint16(1))
+
+                elif self.file_format == FileFormat.ASCII:
+
+                    # Open and read the content of the file 'f'
+                    f = self._open_file(fpath)
                     while (True):
                         fpos = f.tell()    
 
@@ -134,47 +199,19 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
                             # we'll assume EOF, because we don't have a choice with the while loop!
                             break
                         else:
-                            # Add frecord
-                            # Assumption: Each sample belongs to unique class
-                            frecord = self.paths.setdefault(cls_idx, [])
-                            cls_idx += 1
-                            frecord.append(fpath)
-                            frecord.append(fpos)
+                            # Assumption: each record belong to a separate class
+                            self.paths.setdefault(cls_idx, fpath)
+                            fpositions = self.fpositions.setdefault(cls_idx, [])
+                            fpositions.append(np.uint16(fpos))
+                            cls_idx = cls_idx + 1
+
+                            # Assumption: each sample belongs to unique class
+                            self.n_per_class = np.append(self.n_per_class, np.uint16(1))
 
                 else:
-                    # Open and read the content of the file 'f'
-                    f = self.open_file(fpath, 'rb')
-                    while (True):
-                        fpos = f.tell()  
-                        data = np.fromfile(f, dtype='float32', count=self.target_size[0])
+                    raise Exception("Unsupported file format")
 
-                        # EOF check
-                        if (data.size == 0):
-                            break
-                        else:
-                            frecord = self.paths.setdefault(cls_idx, [])
-                            cls_idx += 1
-                            frecord.append(fpath)
-                            frecord.append(fpos)
- 
-        # Assumption: Each sample belongs to unique class
-        self.n_per_class = 1
         self.cls_n = cls_idx
-
-    def open_file(self, fpath, mode='r+'):
-        """Open and track the opened file.
-
-        Parameters
-        ----------
-        mode : str, optional
-            File open mode. (Default value = 'r+').
-        """
-        return self.opened_files.setdefault(fpath, open(fpath, mode))
-
-    def close_all_opened_files(self):
-        """Close all tracked files"""
-        for _, fhandle in self.opened_files.items():
-            fhandle.close()        
 
     def get_im_ch_axis(self):
         """Image channel axis.
@@ -184,13 +221,29 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
                 Check hist_eq functionality. What if `None` is used instead of 0 ?
         """
         return 0
-    ##########################################################################
-    # Protected: DskmanDskDataIterator Overrides
-    ##########################################################################
+
     def release(self):
         """Release internal resources used by the iterator."""
         super().release()
-        self.close_all_opened_files()
+        self._close_all_opened_files()
+
+    ##########################################################################
+    # Protected: DskmanDskDataIterator Overrides
+    ##########################################################################
+    def _open_file(self, fpath, mode='r+'):
+        """Open and track the opened file.
+
+        Parameters
+        ----------
+        mode : str, optional
+            File open mode. (Default value = 'r+').
+        """
+        return self.opened_files.setdefault(fpath, open(fpath, mode))
+
+    def _close_all_opened_files(self):
+        """Close all tracked files"""
+        for _, fhandle in self.opened_files.items():
+            fhandle.close()
 
     def _get_cimg_frecord_in_next(self, cls_idx, col_idx):
         """Get image and file record (frecord) at cls_idx, col_idx.
@@ -211,21 +264,36 @@ class DskmanDskBigDataIterator(DskmanDskDataIterator):
         :obj:`list`
             file record. [file_path, file_position, class_label]
         """
-        assert(cls_idx < self.cls_n and col_idx < self.n_per_class)
-        fpath, fpos = self.paths[cls_idx]
+        assert(cls_idx < self.cls_n and col_idx < self.n_per_class[cls_idx])
+
+        fpath = self.paths[cls_idx]
+        fpos = self.fpositions[cls_idx][col_idx]
 
         # Read the actual data only if necessary
         data = None
         if (self._read_data):
 
-            # Open the file and seek to fpos
-            f = self.open_file(fpath)
-            f.seek(fpos, 0)
+            if self.file_format == FileFormat.MATLAB:
+                # TODO: Saving processed matlab data is currently not supported.
+                raise Exception('Saving processed matlab data is currently not supported.')
+                # with h5py.File(fpath, 'r') as file:
+                #     input = np.array(file[self.data_field])
+                #     data = input[fpos, :]
 
-            # Read the content
-            if (not self.binary_data):
-                data = f.readline().strip()
             else:
-                data = np.fromfile(f, dtype='float32', count=self.target_size[0])
+                # For other file formats
+                # Open the file and seek to fpos
+                f = self._open_file(fpath)
+                f.seek(fpos, 0)
 
-        return data, [fpath, np.float32(fpos), np.uint16(cls_idx)]  # [fpath, fpos, cls_lbl]
+                # Read the content
+                if self.file_format == FileFormat.BINARY:
+                    data = np.fromfile(f, dtype='float32', count=self.target_size[0])
+
+                elif self.file_format == FileFormat.ASCII:
+                    data = f.readline().strip()
+
+                else:
+                    raise Exception("Unsupported file format")
+
+        return data, [fpath, np.uint16(fpos), np.uint16(cls_idx)]  # [fpath, fpos, cls_lbl]
