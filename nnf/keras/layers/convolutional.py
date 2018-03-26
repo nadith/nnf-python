@@ -10,18 +10,18 @@ from keras import activations
 from keras import initializers
 from keras import regularizers
 from keras import constraints
-from keras.engine import Layer
-from keras.engine import InputSpec
+from ..engine import Layer
+from ..engine import InputSpec
 from keras.utils import conv_utils
-from keras.legacy import interfaces
+from ..legacy import interfaces
 
 # imports for backwards namespace compatibility
-from keras.layers.pooling import AveragePooling1D
-from keras.layers.pooling import AveragePooling2D
-from keras.layers.pooling import AveragePooling3D
-from keras.layers.pooling import MaxPooling1D
-from keras.layers.pooling import MaxPooling2D
-from keras.layers.pooling import MaxPooling3D
+from .pooling import AveragePooling1D
+from .pooling import AveragePooling2D
+from .pooling import AveragePooling3D
+from .pooling import MaxPooling1D
+from .pooling import MaxPooling2D
+from .pooling import MaxPooling3D
 
 from keras.legacy.layers import AtrousConvolution1D
 from keras.legacy.layers import AtrousConvolution2D
@@ -82,6 +82,10 @@ class _Conv(Layer):
             (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
             (see [constraints](../constraints.md)).
+        W_learning_rate_multiplier: Multiplier (between 0.0 and 1.0) applied to the
+            learning rate of the main weights matrix.
+        b_learning_rate_multiplier: Multiplier (between 0.0 and 1.0) applied to the
+            learning rate of the bias.
     """
 
     def __init__(self, rank,
@@ -147,6 +151,13 @@ class _Conv(Layer):
         # Set input spec.
         self.input_spec = InputSpec(ndim=self.rank + 2,
                                     axes={channel_axis: input_dim})
+
+        self.multipliers = {}
+        if self.W_learning_rate_multiplier is not None:
+            self.multipliers[self.kernel] = self.W_learning_rate_multiplier
+        if (self.bias is not None) and (self.b_learning_rate_multiplier is not None):
+            self.multipliers[self.bias] = self.b_learning_rate_multiplier
+
         self.built = True
 
     def call(self, inputs):
@@ -228,7 +239,9 @@ class _Conv(Layer):
             'bias_regularizer': regularizers.serialize(self.bias_regularizer),
             'activity_regularizer': regularizers.serialize(self.activity_regularizer),
             'kernel_constraint': constraints.serialize(self.kernel_constraint),
-            'bias_constraint': constraints.serialize(self.bias_constraint)
+            'bias_constraint': constraints.serialize(self.bias_constraint),
+            'W_learning_rate_multiplier': self.W_learning_rate_multiplier if self.W_learning_rate_multiplier else None,
+            'b_learning_rate_multiplier': self.b_learning_rate_multiplier if self.b_learning_rate_multiplier else None
         }
         base_config = super(_Conv, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

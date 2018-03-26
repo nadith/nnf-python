@@ -110,9 +110,7 @@ legacy_dense_support = generate_legacy_interface(
                  ('b_regularizer', 'bias_regularizer'),
                  ('W_constraint', 'kernel_constraint'),
                  ('b_constraint', 'bias_constraint'),
-                 ('bias', 'use_bias'),
-                 ('W_learning_rate_multiplier', 'W_learning_rate_multiplier'),
-                 ('b_learning_rate_multiplier', 'b_learning_rate_multiplier')])
+                 ('bias', 'use_bias')])
 
 legacy_dropout_support = generate_legacy_interface(
     allowed_positional_args=['rate', 'noise_shape', 'seed'],
@@ -638,15 +636,23 @@ legacy_add_weight_support = generate_legacy_interface(
 def get_updates_arg_preprocessing(args, kwargs):
     # Old interface: (params, constraints, loss)
     # New interface: (loss, params)
+    # New interface with multipliers: (params, loss, multipliers)
     if len(args) > 4:
         raise TypeError('`get_update` call received more arguments '
                         'than expected.')
     elif len(args) == 4:
-        # Assuming old interface.
-        opt, params, _, loss = args
-        kwargs['loss'] = loss
-        kwargs['params'] = params
+        if isinstance(args[3], dict):
+            opt, params, loss, multipliers = args
+            kwargs['loss'] = loss
+            kwargs['params'] = params
+            kwargs['multipliers'] = multipliers
+        else:
+            # Assuming old interface.
+            opt, params, _, loss = args
+            kwargs['loss'] = loss
+            kwargs['params'] = params
         return [opt], kwargs, []
+
     elif len(args) == 3:
         if isinstance(args[1], (list, tuple)):
             assert isinstance(args[2], dict)

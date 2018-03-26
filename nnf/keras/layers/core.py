@@ -75,6 +75,7 @@ class Masking(Layer):
         return input_shape
 
 
+
 class Dropout(Layer):
     """Applies Dropout to the input.
 
@@ -849,6 +850,13 @@ class Dense(Layer):
         else:
             self.bias = None
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
+
+        self.multipliers = {}
+        if self.W_learning_rate_multiplier is not None:
+            self.multipliers[self.kernel] = self.W_learning_rate_multiplier
+        if (self.bias is not None) and (self.b_learning_rate_multiplier is not None):
+            self.multipliers[self.bias] = self.b_learning_rate_multiplier
+
         self.built = True
 
     def call(self, inputs):
@@ -877,7 +885,9 @@ class Dense(Layer):
             'bias_regularizer': regularizers.serialize(self.bias_regularizer),
             'activity_regularizer': regularizers.serialize(self.activity_regularizer),
             'kernel_constraint': constraints.serialize(self.kernel_constraint),
-            'bias_constraint': constraints.serialize(self.bias_constraint)
+            'bias_constraint': constraints.serialize(self.bias_constraint),
+            'W_learning_rate_multiplier': self.W_learning_rate_multiplier if self.W_learning_rate_multiplier else None,
+            'b_learning_rate_multiplier': self.b_learning_rate_multiplier if self.b_learning_rate_multiplier else None
         }
         base_config = super(Dense, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

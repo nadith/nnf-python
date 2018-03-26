@@ -71,7 +71,7 @@ class Optimizer(object):
         self.weights = []
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         raise NotImplementedError
 
     def get_gradients(self, loss, params):
@@ -169,7 +169,7 @@ class SGD(Optimizer):
         self.nesterov = nesterov
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
@@ -182,11 +182,16 @@ class SGD(Optimizer):
         moments = [K.zeros(shape) for shape in shapes]
         self.weights = [self.iterations] + moments
         for p, g, m in zip(params, grads, moments):
-            v = self.momentum * m - lr * g  # velocity
+            # Apply learning rate multipliers if needed
+            if p in multipliers:
+                lrm = K.variable(multipliers[p])
+            else:
+                lrm = K.variable(1.0)
+            v = self.momentum * m - (lr * lrm) * g  # velocity
             self.updates.append(K.update(m, v))
 
             if self.nesterov:
-                new_p = p + self.momentum * v - lr * g
+                new_p = p + self.momentum * v - (lr*lrm) * g
             else:
                 new_p = p + v
 
@@ -240,7 +245,7 @@ class RMSprop(Optimizer):
         self.initial_decay = decay
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.get_gradients(loss, params)
         accumulators = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
         self.weights = accumulators
@@ -252,10 +257,16 @@ class RMSprop(Optimizer):
                                                   K.dtype(self.decay))))
 
         for p, g, a in zip(params, grads, accumulators):
+            # Apply learning rate multipliers if needed
+            if p in multipliers:
+                lrm = K.variable(multipliers[p])
+            else:
+                lrm = K.variable(1.0)
+
             # update accumulator
             new_a = self.rho * a + (1. - self.rho) * K.square(g)
             self.updates.append(K.update(a, new_a))
-            new_p = p - lr * g / (K.sqrt(new_a) + self.epsilon)
+            new_p = p - (lr*lrm) * g / (K.sqrt(new_a) + self.epsilon)
 
             # Apply constraints.
             if getattr(p, 'constraint', None) is not None:
@@ -300,7 +311,7 @@ class Adagrad(Optimizer):
         self.initial_decay = decay
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.get_gradients(loss, params)
         shapes = [K.int_shape(p) for p in params]
         accumulators = [K.zeros(shape) for shape in shapes]
@@ -313,9 +324,15 @@ class Adagrad(Optimizer):
                                                   K.dtype(self.decay))))
 
         for p, g, a in zip(params, grads, accumulators):
+            # Apply learning rate multipliers if needed
+            if p in multipliers:
+                lrm = K.variable(multipliers[p])
+            else:
+                lrm = K.variable(1.0)
+
             new_a = a + K.square(g)  # update accumulator
             self.updates.append(K.update(a, new_a))
-            new_p = p - lr * g / (K.sqrt(new_a) + self.epsilon)
+            new_p = p - (lr*lrm) * g / (K.sqrt(new_a) + self.epsilon)
 
             # Apply constraints.
             if getattr(p, 'constraint', None) is not None:
@@ -363,7 +380,7 @@ class Adadelta(Optimizer):
         self.initial_decay = decay
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.get_gradients(loss, params)
         shapes = [K.int_shape(p) for p in params]
         accumulators = [K.zeros(shape) for shape in shapes]
@@ -377,13 +394,19 @@ class Adadelta(Optimizer):
                                                   K.dtype(self.decay))))
 
         for p, g, a, d_a in zip(params, grads, accumulators, delta_accumulators):
+            # Apply learning rate multipliers if needed
+            if p in multipliers:
+                lrm = K.variable(multipliers[p])
+            else:
+                lrm = K.variable(1.0)
+
             # update accumulator
             new_a = self.rho * a + (1. - self.rho) * K.square(g)
             self.updates.append(K.update(a, new_a))
 
             # use the new accumulator and the *old* delta_accumulator
             update = g * K.sqrt(d_a + self.epsilon) / K.sqrt(new_a + self.epsilon)
-            new_p = p - lr * update
+            new_p = p - (lr*lrm) * update
 
             # Apply constraints.
             if getattr(p, 'constraint', None) is not None:
@@ -441,7 +464,7 @@ class Adam(Optimizer):
         self.amsgrad = amsgrad
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
@@ -463,14 +486,20 @@ class Adam(Optimizer):
         self.weights = [self.iterations] + ms + vs + vhats
 
         for p, g, m, v, vhat in zip(params, grads, ms, vs, vhats):
+            # Apply learning rate multipliers if needed
+            if p in multipliers:
+                lrm = K.variable(multipliers[p])
+            else:
+                lrm = K.variable(1.0)
+
             m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
             v_t = (self.beta_2 * v) + (1. - self.beta_2) * K.square(g)
             if self.amsgrad:
                 vhat_t = K.maximum(vhat, v_t)
-                p_t = p - lr_t * m_t / (K.sqrt(vhat_t) + self.epsilon)
+                p_t = p - (lr_t*lrm) * m_t / (K.sqrt(vhat_t) + self.epsilon)
                 self.updates.append(K.update(vhat, vhat_t))
             else:
-                p_t = p - lr_t * m_t / (K.sqrt(v_t) + self.epsilon)
+                p_t = p - (lr_t*lrm) * m_t / (K.sqrt(v_t) + self.epsilon)
 
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(v, v_t))
@@ -525,7 +554,7 @@ class Adamax(Optimizer):
         self.initial_decay = decay
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
@@ -545,10 +574,15 @@ class Adamax(Optimizer):
         self.weights = [self.iterations] + ms + us
 
         for p, g, m, u in zip(params, grads, ms, us):
+            # Apply learning rate multipliers if needed
+            if p in multipliers:
+                lrm = K.variable(multipliers[p])
+            else:
+                lrm = K.variable(1.0)
 
             m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
             u_t = K.maximum(self.beta_2 * u, K.abs(g))
-            p_t = p - lr_t * m_t / (u_t + self.epsilon)
+            p_t = p - (lr_t*lrm) * m_t / (u_t + self.epsilon)
 
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(u, u_t))
@@ -606,7 +640,7 @@ class Nadam(Optimizer):
         self.schedule_decay = schedule_decay
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
@@ -628,6 +662,12 @@ class Nadam(Optimizer):
         self.weights = [self.iterations] + ms + vs
 
         for p, g, m, v in zip(params, grads, ms, vs):
+            # Apply learning rate multipliers if needed
+            if p in multipliers:
+                lrm = K.variable(multipliers[p])
+            else:
+                lrm = K.variable(1.0)
+
             # the following equations given in [1]
             g_prime = g / (1. - m_schedule_new)
             m_t = self.beta_1 * m + (1. - self.beta_1) * g
@@ -639,7 +679,7 @@ class Nadam(Optimizer):
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(v, v_t))
 
-            p_t = p - self.lr * m_t_bar / (K.sqrt(v_t_prime) + self.epsilon)
+            p_t = p - (self.lr*lrm) * m_t_bar / (K.sqrt(v_t_prime) + self.epsilon)
             new_p = p_t
 
             # Apply constraints.
@@ -669,7 +709,7 @@ class TFOptimizer(Optimizer):
             self.iterations = K.variable(0, dtype='int64', name='iterations')
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, multipliers):
         grads = self.optimizer.compute_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
         opt_update = self.optimizer.apply_gradients(

@@ -224,6 +224,7 @@ class Layer(object):
         non_trainable_weights: List of variables.
         weights: The concatenation of the lists trainable_weights and
             non_trainable_weights (in this order).
+        multipliers: dict mapping weights to learning rates multipliers.
 
     # Methods
         call(x, mask=None): Where the layer's logic lives.
@@ -270,6 +271,8 @@ class Layer(object):
         self._per_input_updates = {}
         self._built = False
 
+        self.multipliers = {}  # dict {tensor: multiplier value}
+
         # These lists will be filled via successive calls
         # to self._add_inbound_node().
         self._inbound_nodes = []
@@ -287,6 +290,8 @@ class Layer(object):
                           'trainable',
                           'weights',
                           'input_dtype',  # legacy
+                          'W_learning_rate_multiplier',
+                          'b_learning_rate_multiplier',
                           }
         for kwarg in kwargs:
             if kwarg not in allowed_kwargs:
@@ -296,6 +301,10 @@ class Layer(object):
             prefix = self.__class__.__name__
             name = _to_snake_case(prefix) + '_' + str(K.get_uid(prefix))
         self.name = name
+
+        # Applicable configurations when creating a layer, used by child classes (i.e _Conv)
+        self.W_learning_rate_multiplier = kwargs.get('W_learning_rate_multiplier')
+        self.b_learning_rate_multiplier = kwargs.get('b_learning_rate_multiplier')
 
         self.trainable = kwargs.get('trainable', True)
         if 'input_shape' in kwargs or 'batch_input_shape' in kwargs:
@@ -1323,6 +1332,8 @@ class InputLayer(Layer):
         self.built = True
         self.sparse = sparse
 
+        self.multipliers = {}
+
         if input_shape and batch_input_shape:
             raise ValueError('Only provide the input_shape OR '
                              'batch_input_shape argument to '
@@ -1981,6 +1992,22 @@ class Container(Layer):
             if layer.stateful:
                 state_updates += layer.updates
         return state_updates
+
+    @ property
+    def multipliers(self):
+        mults = {}
+        for layer in self.layers:
+
+            if 'multipliers' not in layer.__dict__:
+                warnings.warn("'layer.multipliers' field not found !")
+
+            else:
+                for key, value in layer.multipliers.items():
+                    if key in mults:
+                        raise Exception('Received multiple learning rate multipliers '
+                                + 'for one weight tensor: ' + str(key))
+                    mults[key] = value
+        return mults
 
     @property
     def trainable_weights(self):
