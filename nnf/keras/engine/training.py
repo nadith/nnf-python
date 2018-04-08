@@ -300,8 +300,12 @@ def _collect_metrics(metrics, output_names):
     if not metrics:
         return [[] for _ in output_names]
     if isinstance(metrics, list):
+        in_correct_order = True
+        for metric in metrics:
+            if not isinstance(metric, list):
+                in_correct_order = False
         # we then apply all metrics to all outputs.
-        return [copy.copy(metrics) for _ in output_names]
+        return [copy.copy(metrics) for _ in output_names] if not in_correct_order else metrics
     elif isinstance(metrics, dict):
         nested_metrics = []
         for name in output_names:
@@ -813,7 +817,7 @@ class Model(Container):
         self.metrics_names = ['loss']
         self.metrics_tensors = []
 
-        # Compute total loss.
+        # Compute loss for each output and total loss.
         total_loss = None
         with K.name_scope('loss'):
             for i in range(len(self.outputs)):
@@ -828,7 +832,7 @@ class Model(Container):
                 with K.name_scope(self.output_names[i] + '_loss'):
                     output_loss = weighted_loss(y_true, y_pred,
                                                 sample_weight, mask)
-                if len(self.outputs) > 1:
+                if len(self.outputs) > 1:  # loss for each output, comment if not required
                     self.metrics_tensors.append(output_loss)
                     self.metrics_names.append(self.output_names[i] + '_loss')
                 if total_loss is None:
