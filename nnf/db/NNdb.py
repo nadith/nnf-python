@@ -154,32 +154,27 @@ class NNdb(object):
         -----
         Merge can be merge nndbs to a empty nndb as well.
         """
+        nndb_merged = None
 
-        if self.db is not None and nndb.db is not None:
+        if self.db is not None and nndb.db is None:
+                nndb_merged = self.clone('merged')
+
+        if nndb.db is not None and self.db is None:
+                nndb_merged = nndb.clone('merged')
+
+        if self.db is None and nndb.db is None:
+            nndb_merged = self
+
+        if nndb_merged is None:
+
             assert(self.h == nndb.h and self.w == nndb.w and self.ch == nndb.ch)
             assert(self.cls_n == nndb.cls_n)
             assert(self.db.dtype == nndb.db.dtype)
             assert(self.db_format == nndb.db_format)
 
-        nndb_merged = None
-        db_format = self.db_format
-        cls_n = self.cls_n
+            nndb_merged = NNdb('merged', db_format=self.db_format)
 
-        if self.db is not None:
-            if nndb.db is None:
-                nndb_merged = self.clone('merged')
-
-        if nndb.db is not None:
-            if self.db is None:
-                nndb_merged = nndb.clone('merged')
-
-        if self.db is None and nndb.db is None:
-            nndb_merged = self.clone('merged')
-
-        if nndb_merged is None:
-            nndb_merged = NNdb('merged', db_format=db_format)
-
-            for i in range(0, cls_n):
+            for i in range(0, self.cls_n):
                 
                 # Fetch data from db1
                 cls_st = self.cls_st[i]
@@ -197,8 +192,8 @@ class NNdb(object):
             nndb_merged.finalize()
         return nndb_merged
         
-    def concat_features(self, nndb):
-        """Concat `nndb` instance features with `self` instance features.
+    def concat(self, nndb):
+        """Concat `nndb` instance features with `self` instance; stack the dbs.
             Both `nndb` and self instances must be in the db_format Format.H_N
             or Format.N_H (2D databases)
          
@@ -206,23 +201,45 @@ class NNdb(object):
         ----------
         nndb : :obj:`NNdb`
             NNdb object that represents the dataset.
+
+        Notes
+        -----
+        CONCAT can concatenate nndbs to a empty nndb as well.
         """
                     
-        assert(self.n == nndb.n)
-        assert(np.array_equal(self.n_per_class, nndb.n_per_class))
-        assert(self.cls_n == nndb.cls_n)
-        assert(self.db.dtype == nndb.db.dtype)
-        assert(self.db_format == nndb.format)
-        assert(self.db_format == Format.H_N or self.db_format == Format.N_H)
-
         db = None
-        if self.db_format == Format.H_N:
-            db = np.concatenate((self.db, nndb.db), axis=0)
+        nndb_concat = None
+
+        if self.db is not None and nndb.db is None:
+            nndb_concat = self.clone('concatenated')
+
+        if nndb.db is not None and self.db is None:
+            nndb_concat = nndb.clone('concatenated')
+
+        if self.db is None and nndb.db is None:
+            nndb_concat = self
+
+        if nndb_concat is None:
+
+            assert (np.array_equal(np.unique(self.n_per_class), np.unique(nndb.n_per_class)))
+            assert(self.db.dtype == nndb.db.dtype)
+            assert (self.db_format == nndb.db_format)
+
+            if self.db_format == Format.H_W_CH_N:
+                db = np.concatenate((self.db, nndb.db), axis=3)
+
+            elif self.db_format == Format.H_N:
+                db = np.concatenate((self.db, nndb.db), axis=1)
+
+            elif self.db_format == Format.N_H:
+                db = np.concatenate((self.db, nndb.db), axis=0)
+
+            elif self.db_format == Format.N_H_W_CH:
+                db = np.concatenate((self.db, nndb.db), axis=0)
             
-        elif self.db_format == Format.N_H:
-            db = np.concatenate((self.db, nndb.db), axis=1)
+            nndb_concat = NNdb('concatenated', db, np.unique(self.n_per_class)[0], True, db_format=self.db_format)
                         
-        return NNdb('features_augmented', db, self.n_per_class, True, db_format=self.db_format)
+        return nndb_concat
     
     def fliplr(self):
         """Flip the image order in each class of this `nndb` object."""
@@ -265,49 +282,74 @@ class NNdb(object):
             channels to be used when converting from Format.H_N to Format.H_W_CH_N.
         """
                                     
+        # IMPORTANT: Python's flatten() (required for reshape) operation is different from Matlab
+        # flatten() -> reshape(), following shows the order of the elements when flatten
+        # Matlab :  [ x1 x4         Python :  [ x1 x2
+        #             x2 x5                     x3 x4
+        #             x3 x6 ]                   x5 x6 ]
+
         # Fetch data type
         dtype = self.db.dtype
             
         if self.db_format == Format.H_W_CH_N or self.db_format == Format.N_H_W_CH:
+
+            if db_format == Format.H_W_CH_N:
+                self.db = self.db_matlab
+
             if db_format == Format.H_N:
                 self.db = self.features.astype(dtype)
                 self.h = self.db.shape[0]
                 self.w = 1
                 self.ch = 1
                     
-            elif db_format == Format.N_H:
+            if db_format == Format.N_H_W_CH:
+                self.db = self.db_scipy
+
+            if db_format == Format.N_H:
                 self.db = np.transpose(self.features).astype(dtype)
                 self.h = self.db.shape[1]
                 self.w = 1
                 self.ch = 1
                     
-            elif db_format == Format.H_W_CH_N:
-                self.db = self.db_matlab
+        elif self.db_format == Format.H_N:
                 
-            elif db_format == Format.N_H_W_CH:
-                self.db = self.db_scipy
+            if db_format == Format.H_W_CH_N:
+                self.db = self.db.reshape((h, w, ch, self.n))
+                self.h = h
+                self.w = w
+                self.ch = ch
+
+            if db_format == Format.N_H_W_CH:
+                self.db = self.db_scipy.reshape((self.n, h, w, ch))
+                self.h = h
+                self.w = w
+                self.ch = ch
                             
-            self.db_format = db_format
+            elif db_format == Format.N_H:
+                self.db = np.transpose(self.db)
+                self.h = self.db.shape[1]
+                self.w = 1
+                self.ch = 1
                 
-        elif self.db_format == Format.H_N or self.db_format == Format.N_H:
+        elif self.db_format == Format.N_H:
+                
+            if db_format == Format.N_H_W_CH:
+                self.db = self.db.reshape((self.n, h, w, ch))
+                self.h = h
+                self.w = w
+                self.ch = ch
                 
             if db_format == Format.H_W_CH_N:
                 self.db = self.db_matlab.reshape((h, w, ch, self.n))
                 self.h = h
                 self.w = w
                 self.ch = ch
-                
-            elif db_format == Format.N_H_W_CH:
-                self.db = self.db_matlab.reshape((self.n, h, w, ch))
-                self.h = h
-                self.w = w
-                self.ch = ch
                     
             elif db_format == Format.H_N:
-                self.db = self.db_matlab
-                    
-            elif db_format == Format.N_H:
-                self.db = self.db_scipy
+                self.db = np.transpose(self.db)
+                self.h = self.db.shape[0]
+                self.w = 1
+                self.ch = 1
                             
             self.db_format = db_format
 
@@ -919,20 +961,29 @@ class NNdb(object):
         -----
         db_format of the datafile loaded must be Matlab default db_format = Format.H_W_CH_N
         """
-        # squeeze_me=False => grayscale database compatibility
-        matStruct = scipy.io.loadmat(filepath, struct_as_record=False, squeeze_me=False)
-        imdb_obj = matStruct['imdb_obj'][0][0]
+        try:
+            # squeeze_me=False => grayscale database compatibility
+            matStruct = scipy.io.loadmat(filepath, struct_as_record=False, squeeze_me=False)
+            imdb_obj = matStruct['imdb_obj'][0][0]
 
-        # Defaults to matlab formats
-        if imdb_obj.db.ndim == 2:
-            db_format = Format.H_N
-        else:
-            db_format = Format.H_W_CH_N
+            # Defaults to matlab formats
+            if imdb_obj.db.ndim == 2:
+                db_format = Format.H_N
+            else:
+                db_format = Format.H_W_CH_N
 
-        if imdb_obj.cls_lbl is not None:
-            nndb = NNdb(db_name, imdb_obj.db, cls_lbl=imdb_obj.cls_lbl.squeeze(), db_format=db_format)
-        else:
-            nndb = NNdb(db_name, imdb_obj.db, imdb_obj.n_per_class, True, db_format=db_format)
+            if imdb_obj.cls_lbl is not None:
+                nndb = NNdb(db_name, imdb_obj.db, cls_lbl=imdb_obj.cls_lbl.squeeze(), db_format=db_format)
+            else:
+                nndb = NNdb(db_name, imdb_obj.db, imdb_obj.im_per_class, True, db_format=db_format)
+
+        except NotImplementedError:  # For matlab v7.3 files
+
+            try:
+                nndb = NNdb.__read_mat7_3_v1(filepath, db_name)
+
+            except RuntimeError:
+                nndb = NNdb.__read_mat7_3_v2(filepath, db_name)
 
         return nndb
 
@@ -1043,6 +1094,73 @@ class NNdb(object):
             self.__allocate_buf(data)
 
         return st_smpl_idx, en_sample_idx
+
+    @staticmethod
+    def __read_mat7_3_v1(filepath, db_name):
+
+        # Method 2
+        import h5py
+        with h5py.File(filepath, 'r') as file:
+            keys = list(file['imdb_obj'].keys())
+
+            # little-endian (H x N => N x H, H x W x CH x N => N x CH x W x H)
+            imdb = file['imdb_obj']['db'][:] if 'db' in keys else None
+            cls_lbl = file['imdb_obj']['class'][:] if 'class' in keys else None
+            n_per_class = file['imdb_obj']['im_per_class'][:] if 'im_per_class' in keys else None
+
+            # Defaults to matlab formats
+            if imdb.ndim == 2:
+                db_format = Format.H_N
+                imdb = imdb.transpose((1, 0))  # due to h5py default format (little-endian)
+
+            else:
+                db_format = Format.H_W_CH_N
+                imdb = imdb.transpose((3, 2, 1, 0))  # due to h5py default format (little-endian)
+
+            if cls_lbl is not None:
+                nndb = NNdb(db_name, imdb, cls_lbl=cls_lbl.squeeze(), db_format=db_format)
+            else:
+                nndb = NNdb(db_name, imdb, n_per_class, True, db_format=db_format)
+
+            return nndb
+
+    @staticmethod
+    def __read_mat7_3_v2(filepath, db_name):
+
+        # Method 1
+        import tables
+        file = tables.open_file(filepath)
+
+        imdb = None  # file.root.imdb_obj.db[:]
+        cls_lbl = None  # file.root.imdb_obj.class[:]
+        n_per_class = None  # file.root.imdb_obj.im_per_class[:]; file.getNode('/' + varname)[:]
+
+        for node in file.list_nodes('/imdb_obj'):
+            if node.name == 'db':
+                # little-endian (H x N => N x H, H x W x CH x N => N x CH x W x H)
+                imdb = node[:]
+
+            elif node.name == 'class':
+                cls_lbl = node[:]
+
+            elif node.name == 'im_per_class':
+                n_per_class = node[:]
+
+        # Defaults to matlab formats
+        if imdb.ndim == 2:
+            db_format = Format.H_N
+            imdb = imdb.transpose((1, 0))  # due to h5py default format (little-endian)
+
+        else:
+            db_format = Format.H_W_CH_N
+            imdb = imdb.transpose((3, 2, 1, 0))  # due to h5py default format (little-endian)
+
+        if cls_lbl is not None:
+            nndb = NNdb(db_name, imdb, cls_lbl=cls_lbl.squeeze(), db_format=db_format)
+        else:
+            nndb = NNdb(db_name, imdb, n_per_class, True, db_format=db_format)
+
+        return nndb
 
     ##########################################################################
     # Dependant Properties
