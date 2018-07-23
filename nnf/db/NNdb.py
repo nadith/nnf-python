@@ -695,6 +695,11 @@ class NNdb(object):
             self.n_per_class = np.tile(n_per_class, self.cls_n).astype('uint16')  # noqa: E501
             self.cls_st = (self.n_per_class * np.arange(0, self.cls_n, dtype='uint16')).astype('uint32')  # noqa: E501
         else:
+            # Validate database against n_per_class in case it is explicitly provided
+            if n_per_class is not None:
+                if self.n != np.sum(n_per_class):
+                    raise Exception('sum(n_per_class) do not match the no of the samples in the database')
+
             self.cls_n = np.size(n_per_class)
             self.n_per_class = n_per_class
 
@@ -708,8 +713,10 @@ class NNdb(object):
                         self.cls_st[i] = st 
                         st += n_per_class[i]
 
-        # Set class labels
-        self.cls_lbl = cls_lbl
+        # Validate database against cls_lbl in case it is explicitly provided
+        if cls_lbl is not None:
+            if self.n != cls_lbl.size:
+                raise Exception('cls_lbl do not match the no of the samples in the database')
 
         # Build uniform cls labels if cls_lbl is not given
         if build_cls_lbl and cls_lbl is None:
